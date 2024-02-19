@@ -1,0 +1,9 @@
+
+create base line blockchain node
+enable contracts pallet
+look into testing 
+create dummy smart contract using ink
+deploy contract to ink
+look into testing
+
+Look into how parachain nodes interact with relay chain (who does validation of transactions)
