@@ -1,8 +1,10 @@
-
+-------------------------------------
 create base line blockchain node
 enable contracts pallet
 look into testing 
+-------------------------------------
 create dummy smart contract using ink
+    - look into error handling
 deploy contract to ink
 look into testing
 
