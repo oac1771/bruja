@@ -97,9 +97,11 @@ mod catalog {
 
             let get = build_message::<CatalogRef>(contract_account_id.clone())
                 .call(|catalog| catalog.get_worker());
-            let get_result = client.call(&ink_e2e::bob(), get, 0, None).await.expect("get failed");
+            let get_result = client
+                .call(&ink_e2e::bob(), get, 0, None)
+                .await
+                .expect("get failed");
             assert_eq!(get_result.return_value(), None);
-
 
             let set = build_message::<CatalogRef>(contract_account_id.clone())
                 .call(|catalog| catalog.set_worker(worker_value));
@@ -110,7 +112,10 @@ mod catalog {
 
             let get = build_message::<CatalogRef>(contract_account_id.clone())
                 .call(|catalog| catalog.get_worker());
-            let get_result = client.call(&ink_e2e::bob(), get, 0, None).await.expect("get failed");
+            let get_result = client
+                .call(&ink_e2e::bob(), get, 0, None)
+                .await
+                .expect("get failed");
             assert_eq!(get_result.return_value(), Some(worker_value));
 
             Ok(())

@@ -6,6 +6,5 @@ look into testing
 create dummy smart contract using ink
     - look into error handling
 deploy contract to ink
-look into testing
 
 Look into how parachain nodes interact with relay chain (who does validation of transactions)

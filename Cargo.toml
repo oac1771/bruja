@@ -1,6 +1,8 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/contract"
+    "crates/contract", 
+    "crates/runtime", 
+    "crates/node"
 ]
 
