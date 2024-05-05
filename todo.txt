@@ -1,10 +1,6 @@
--------------------------------------
-create base line blockchain node
-enable contracts pallet
-look into testing 
--------------------------------------
-create dummy smart contract using ink
-    - look into error handling
-deploy contract to ink
+enable wasm build using build.rs in runtime
 
-Look into how parachain nodes interact with relay chain (who does validation of transactions)
+use node cli to start runtime
+
+deploy smart contract to bruja runtime
+
