@@ -11,7 +11,6 @@ rustup target add wasm32-unknown-unknown
 ```
 
 
-
 # Reference
 info on runtime development including crate strucutre: [here](https://docs.substrate.io/learn/runtime-development/)
 

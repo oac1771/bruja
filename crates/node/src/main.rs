@@ -1,3 +1,6 @@
+use runtime::WASM_BINARY;
+
 fn main() {
-    println!("Hello, world!");
+    println!("Binary: {:?}", WASM_BINARY);
+
 }
