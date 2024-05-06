@@ -1,8 +1,8 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![recursion_limit = "256"]
 
-// #[cfg(feature = "std")]
-// include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+#[cfg(feature = "std")]
+include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 mod configs;
 
@@ -15,6 +15,7 @@ use frame_support::{
 };
 use frame_system::limits::{BlockLength, BlockWeights};
 
+use sp_std::prelude::*;
 use sp_api::impl_runtime_apis;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::Perbill;

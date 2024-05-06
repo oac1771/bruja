@@ -1,3 +1,18 @@
+# Setup
+
+install project dependencies
+```
+mise install
+```
+
+Add wasm target:
+```
+rustup target add wasm32-unknown-unknown
+```
+
+
+
+# Reference
 info on runtime development including crate strucutre: [here](https://docs.substrate.io/learn/runtime-development/)
 
 info on architecture: [here](https://docs.substrate.io/learn/architecture/)
