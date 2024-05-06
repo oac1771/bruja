@@ -15,7 +15,6 @@ use frame_support::{
 };
 use frame_system::limits::{BlockLength, BlockWeights};
 
-use sp_std::prelude::*;
 use sp_api::impl_runtime_apis;
 use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::Perbill;
@@ -25,6 +24,7 @@ use sp_runtime::{
     transaction_validity::{TransactionSource, TransactionValidity},
     ApplyExtrinsicResult, MultiAddress, MultiSignature,
 };
+use sp_std::prelude::*;
 use sp_version::RuntimeVersion;
 use sp_weights::{IdentityFee, Weight};
 

@@ -1,6 +1,9 @@
-use runtime::WASM_BINARY;
+// use runtime::WASM_BINARY;
+// println!("Binary: {:?}", WASM_BINARY);
 
-fn main() {
-    println!("Binary: {:?}", WASM_BINARY);
+mod cli;
+mod command;
 
+fn main() -> cli::Result<()> {
+    cli::run()
 }
