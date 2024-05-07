@@ -1,6 +1,9 @@
 use super::commands::start::StartCmd;
 use clap::Parser;
 
+#[derive(Debug, thiserror::Error)]
+pub enum Error {}
+
 pub type Result<T> = std::result::Result<T, Error>;
 
 #[derive(Debug, clap::Parser)]
@@ -14,9 +17,6 @@ pub struct Cli {
 pub enum Command {
     Start(StartCmd),
 }
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {}
 
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
