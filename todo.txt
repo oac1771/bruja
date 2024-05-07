@@ -2,3 +2,9 @@ use node cli to start runtime
 
 deploy smart contract to bruja runtime
 
+
+larger refactor:
+    - create docker container to build artifacts
+        - see if this will let you run colima with aarch64 and 
+            use docker build --platform to build x86 for builder
+            and node/worker/requester containers
