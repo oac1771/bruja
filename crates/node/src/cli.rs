@@ -11,10 +11,7 @@ pub struct Cli {
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
-    Start {
-        #[arg(short, long)]
-        foo: String,
-    },
+    Start,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -24,8 +21,8 @@ pub fn run() -> Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Some(Command::Start { foo }) => {
-            println!("start val: {}", foo);
+        Some(Command::Start) => {
+            println!("inside start commmand");
         }
         None => {}
     }

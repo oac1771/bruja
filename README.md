@@ -4,10 +4,45 @@ install project dependencies
 ```
 mise install
 ```
+```
+brew install qemu lima docker
+```
 
 Add wasm target:
 ```
 rustup target add wasm32-unknown-unknown
+```
+
+Add x86_target
+```
+rustup target add x86_64-unknown-linux-musl
+```
+
+Install cross compiler toolchains
+```
+brew install filosottile/musl-cross/musl-cross
+```
+
+Add Cargo Make:
+```
+cargo install --no-default-features --force cargo-make
+```
+
+# Development
+
+Start docker daemon:
+```
+colima start --arch x86_64
+```
+
+Build Node Binary:
+```
+cargo build -p node --target x86_64-unknown-linux-musl
+```
+
+Build Docker images:
+```
+cargo make docker-build
 ```
 
 
