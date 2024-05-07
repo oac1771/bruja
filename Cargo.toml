@@ -6,3 +6,34 @@ members = [
     "crates/node"
 ]
 
+[workspace.dependencies]
+bounded-collections = {version = "0.2.0", default-features = false }
+
+pallet-contracts = { version = "30.0.0", default-features = false }
+pallet-timestamp = { version = "30.0.0", default-features = false }
+pallet-transaction-payment = { version = "31.0.0", default-features = false }
+pallet-transaction-payment-rpc-runtime-api = { version = "31.0.0", default-features = false }
+pallet-balances = { version = "31.0.0", default-features = false }
+pallet-insecure-randomness-collective-flip = { version = "19.0.0", default-features = false }
+
+frame-support = { version = "31.0.0", default-features = false }
+frame-system = { version = "31.0.0", default-features = false }
+frame-executive = { version = "31.0.0", default-features = false }
+frame-system-rpc-runtime-api = { version = "29.0.0", default-features = false }
+
+sp-runtime = { version = "34.0.0", default-features = false }
+sp-version = { version = "32.0.0", default-features = false }
+sp-api = { version = "29.0.0", default-features = false }
+sp-core = { version = "31.0.0", default-features = false }
+sp-std = { version = "14.0.0", default-features = false }
+sp-block-builder = { version = "29.0.0", default-features = false }
+sp-inherents = { version = "29.0.0", default-features = false }
+sp-transaction-pool = { version = "29.0.0", default-features = false }
+sp-offchain = { version = "29.0.0", default-features = false }
+sp-session = { version = "30.0.0", default-features = false }
+sp-weights = { version = "30.0.0", default-features = false }
+sp-genesis-builder = { version = "0.10.0", default-features = false }
+
+sc-service = "0.40.0"
+
+polkadot-runtime-common = { version = "10.0.0", default-features = false }
