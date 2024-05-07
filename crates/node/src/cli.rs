@@ -1,3 +1,4 @@
+use super::commands::start::StartCmd;
 use clap::Parser;
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -11,7 +12,7 @@ pub struct Cli {
 
 #[derive(Debug, clap::Subcommand)]
 pub enum Command {
-    Start,
+    Start(StartCmd),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -21,9 +22,7 @@ pub fn run() -> Result<()> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Some(Command::Start) => {
-            println!("inside start commmand");
-        }
+        Some(Command::Start(cmd)) => cmd.run(),
         None => {}
     }
     Ok(())
