@@ -1,3 +1,4 @@
+mod chain_spec;
 mod cli;
 mod commands;
 
