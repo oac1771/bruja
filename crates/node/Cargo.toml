@@ -17,3 +17,4 @@ sp-consensus-grandpa = "18.0.0"
 sp-consensus-aura = "0.37.0"
 
 sc-service = { workspace = true }
+sc-cli = "0.41.0"

@@ -30,17 +30,18 @@ where
     AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
-
 /// Generate an Aura authority key.
 pub fn authority_keys_from_seed(s: &str) -> Result<(AuraId, GrandpaId), String> {
     let aura_id = AuraId::try_from(s.as_bytes()).unwrap();
     let grandpa_id = GrandpaId::try_from(s.as_bytes()).unwrap();
 
-    match (AuraId::try_from(s.as_bytes()), GrandpaId::try_from(s.as_bytes())) {
+    match (
+        AuraId::try_from(s.as_bytes()),
+        GrandpaId::try_from(s.as_bytes()),
+    ) {
         (Ok(aura_id), Ok(grandpa_id)) => Ok((aura_id, grandpa_id)),
-        (_,_) => {Err("Unable to generate authority keys from seeds".to_string())}
+        (_, _) => Err("Unable to generate authority keys from seeds".to_string()),
     }
-
 }
 
 pub fn development_config() -> Result<ChainSpec, String> {
