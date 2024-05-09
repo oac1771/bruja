@@ -1,34 +1,38 @@
 use crate::chain_spec;
 
-use sc_cli::{CliConfiguration, SubstrateCli, ChainSpec};
+use sc_cli::{ChainSpec, CliConfiguration, SharedParams, SubstrateCli};
 
 #[derive(Debug, clap::Args)]
-pub struct StartCmd {}
+pub struct StartCmd {
+
+    #[command(flatten)]
+    shared_params: SharedParams
+}
 
 impl SubstrateCli for StartCmd {
     fn impl_name() -> String {
-        todo!()
+        "Node".into()
     }
 
-    fn impl_version() -> String {
-        todo!()
-    }
+	fn impl_version() -> String {
+		"0.1.0".into()
+	}
 
-    fn description() -> String {
-        todo!()
-    }
+	fn description() -> String {
+		env!("CARGO_PKG_DESCRIPTION").into()
+	}
 
-    fn author() -> String {
-        todo!()
-    }
+	fn author() -> String {
+		env!("CARGO_PKG_AUTHORS").into()
+	}
 
-    fn support_url() -> String {
-        todo!()
-    }
+	fn support_url() -> String {
+		"".into()
+	}
 
-    fn copyright_start_year() -> i32 {
-        todo!()
-    }
+	fn copyright_start_year() -> i32 {
+		2024
+	}
 
     fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String> {
         Ok(match id {
@@ -40,12 +44,13 @@ impl SubstrateCli for StartCmd {
 
 impl CliConfiguration for StartCmd {
     fn shared_params(&self) -> &sc_cli::SharedParams {
-        todo!()
+        &self.shared_params
     }
 }
 
 impl StartCmd {
     pub fn run(&self) {
         let runner = self.create_runner(self).unwrap();
+        println!("foo!")
     }
 }
