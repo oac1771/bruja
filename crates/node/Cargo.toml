@@ -13,8 +13,6 @@ serde_json = "1.0.117"
 
 sp-core = { workspace = true }
 sp-runtime = { workspace = true }
-sp-consensus-grandpa = "18.0.0"
-sp-consensus-aura = "0.37.0"
 
 sc-service = { workspace = true }
-sc-cli = "0.41.0"
+sc-cli = "0.39.0"

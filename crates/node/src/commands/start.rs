@@ -1,4 +1,6 @@
-use sc_cli::{CliConfiguration, SubstrateCli};
+use crate::chain_spec;
+
+use sc_cli::{CliConfiguration, SubstrateCli, ChainSpec};
 
 #[derive(Debug, clap::Args)]
 pub struct StartCmd {}
@@ -28,8 +30,11 @@ impl SubstrateCli for StartCmd {
         todo!()
     }
 
-    fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_cli::ChainSpec>, String> {
-        todo!()
+    fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String> {
+        Ok(match id {
+            "" | "dev" => Box::new(chain_spec::development_config().unwrap()),
+            path => Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path)).unwrap()),
+        })
     }
 }
 
@@ -41,10 +46,6 @@ impl CliConfiguration for StartCmd {
 
 impl StartCmd {
     pub fn run(&self) {
-        // let run_cmd = RunCmd{};
         let runner = self.create_runner(self).unwrap();
-        // runner.run_node_until_exit(|config| async move {
-
-        // });
     }
 }

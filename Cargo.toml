@@ -15,11 +15,13 @@ pallet-transaction-payment = { version = "31.0.0", default-features = false }
 pallet-transaction-payment-rpc-runtime-api = { version = "31.0.0", default-features = false }
 pallet-balances = { version = "31.0.0", default-features = false }
 pallet-insecure-randomness-collective-flip = { version = "19.0.0", default-features = false }
+pallet-grandpa = { version = "31.0.0", default-features = false }
+pallet-aura = { version = "30.0.0", default-features = false }
 
 frame-support = { version = "31.0.0", default-features = false }
 frame-system = { version = "31.0.0", default-features = false }
-frame-executive = { version = "31.0.0", default-features = false }
 frame-system-rpc-runtime-api = { version = "29.0.0", default-features = false }
+frame-executive = { version = "31.0.0", default-features = false }
 
 sp-runtime = { version = "34.0.0", default-features = false }
 sp-version = { version = "32.0.0", default-features = false }
@@ -31,9 +33,9 @@ sp-inherents = { version = "29.0.0", default-features = false }
 sp-transaction-pool = { version = "29.0.0", default-features = false }
 sp-offchain = { version = "29.0.0", default-features = false }
 sp-session = { version = "30.0.0", default-features = false }
-sp-weights = { version = "30.0.0", default-features = false }
+sp-weights = { version = "27.0.0", default-features = false }
 sp-genesis-builder = { version = "0.10.0", default-features = false }
 
-sc-service = "0.40.0"
+sc-service = "0.38.0"
 
 polkadot-runtime-common = { version = "10.0.0", default-features = false }

@@ -8,3 +8,6 @@ larger refactor:
         - see if this will let you run colima with aarch64 and 
             use docker build --platform to build x86 for builder
             and node/worker/requester containers
+
+    - add aura/grandpa consensus to mimick prod envionrment
+        - https://github.com/paritytech/substrate-contracts-node/pull/42

@@ -83,10 +83,10 @@ impl pallet_contracts::Config for Runtime {
 
     type Environment = ();
     type Debug = ();
-    type ApiVersion = ();
     type Migrations = ();
     type Xcm = ();
+    type ApiVersion = ();
 
     type UploadOrigin = EnsureSigned<Self::AccountId>;
-    type InstantiateOrigin = EnsureSigned<Self::AccountId>;
+	type InstantiateOrigin = EnsureSigned<Self::AccountId>;
 }
