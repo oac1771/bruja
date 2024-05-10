@@ -88,5 +88,5 @@ impl pallet_contracts::Config for Runtime {
     type ApiVersion = ();
 
     type UploadOrigin = EnsureSigned<Self::AccountId>;
-	type InstantiateOrigin = EnsureSigned<Self::AccountId>;
+    type InstantiateOrigin = EnsureSigned<Self::AccountId>;
 }

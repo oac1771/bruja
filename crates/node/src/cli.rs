@@ -1,4 +1,4 @@
-use super::commands::start::StartCmd;
+use crate::commands::start::StartCmd;
 use clap::Parser;
 
 #[derive(Debug, thiserror::Error)]
@@ -23,7 +23,6 @@ pub fn run() -> Result<()> {
 
     match &cli.command {
         Some(Command::Start(cmd)) => cmd.run(),
-        None => {}
+        None => Ok(()),
     }
-    Ok(())
 }
