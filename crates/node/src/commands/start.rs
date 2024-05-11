@@ -1,6 +1,6 @@
 use crate::{chain_spec, service};
 
-use sc_cli::{ChainSpec, CliConfiguration, Result, SharedParams, SubstrateCli};
+use sc_cli::{ChainSpec, CliConfiguration, SharedParams, SubstrateCli};
 
 #[derive(Debug, clap::Args)]
 pub struct StartCmd {
@@ -9,6 +9,13 @@ pub struct StartCmd {
 
     #[arg(long, default_value_t = 1)]
     pub finalize_delay_sec: u8,
+}
+
+
+#[derive(Debug, thiserror::Error)]
+pub enum StartCmdError {
+	#[error(transparent)]
+	ScCli(#[from] sc_cli::Error),
 }
 
 impl SubstrateCli for StartCmd {
@@ -53,13 +60,14 @@ impl CliConfiguration for StartCmd {
 }
 
 impl StartCmd {
-    pub fn run(&self) -> Result<()> {
-        let runner = self.create_runner(self).unwrap();
-        let foo = self.finalize_delay_sec;
+    pub fn run(&self) -> Result<(), StartCmdError> {
+        let runner = self.create_runner(self)?;
 
         runner.run_node_until_exit(|config| async move {
             service::new_full(config, self.finalize_delay_sec.into())
                 .map_err(sc_cli::Error::Service)
-        })
+        })?;
+
+        Ok(())
     }
 }

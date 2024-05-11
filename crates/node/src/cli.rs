@@ -1,8 +1,11 @@
-use crate::commands::start::StartCmd;
+use crate::commands::start::{StartCmd, StartCmdError};
 use clap::Parser;
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error {}
+pub enum Error {
+    #[error(transparent)]
+	StartCmdError(#[from] StartCmdError),
+}
 
 pub type Result<T> = std::result::Result<T, Error>;
 
@@ -21,8 +24,10 @@ pub enum Command {
 pub fn run() -> Result<()> {
     let cli = Cli::parse();
 
-    match &cli.command {
-        Some(Command::Start(cmd)) => cmd.run(),
-        None => Ok(()),
-    }
+    let result = match &cli.command {
+        Some(Command::Start(cmd)) => cmd.run()?,
+        None => {},
+    };
+
+    Ok(result)
 }
