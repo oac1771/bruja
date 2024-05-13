@@ -49,76 +49,97 @@ mod catalog {
         }
     }
 
-    #[cfg(all(test, feature = "e2e-tests"))]
+    // #[cfg(all(test, feature = "e2e-tests"))]
+    #[cfg(test)]
     mod e2e_tests {
-        use super::*;
-        use ink_e2e::build_message;
+        use subxt::{OnlineClient, SubstrateConfig};
 
-        type E2EResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+        // use super::*;
 
-        #[ink_e2e::test]
-        async fn default_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-            let constructor = CatalogRef::default();
+        // type E2EResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
-            let contract_account_id = client
-                .instantiate("contract", &ink_e2e::alice(), constructor, 0, None)
-                .await
-                .expect("instantiate failed")
-                .account_id;
+        #[subxt::subxt(runtime_metadata_path = "../../chain.scale")]
+        pub mod chain {}
 
-            let get_worker = build_message::<CatalogRef>(contract_account_id.clone())
-                .call(|catalog| catalog.get_worker());
-            let set_worker = build_message::<CatalogRef>(contract_account_id.clone())
-                .call(|catalog| catalog.set_worker(42));
+        #[tokio::test]
+        async fn default_works() {
+            // let alice = ink_e2e::alice();
+            // let mut constructor = CatalogRef::default();
+            // let foo = CatalogRef::default();
+            let foo = chain::tx();
 
-            let get_result = client
-                .call_dry_run(&ink_e2e::alice(), &get_worker, 0, None)
-                .await;
-            let set_result = client
-                .call_dry_run(&ink_e2e::alice(), &set_worker, 0, None)
-                .await;
+            let _client = OnlineClient::<SubstrateConfig>::new().await.unwrap();
 
-            assert_eq!(get_result.return_value(), None);
-            assert_eq!(set_result.return_value(), None);
+            assert!(false);
 
-            Ok(())
+            // let contracts = CatalogRef::default();
+            // let client = ink_e2e::Client::new(subxt_client, contracts).await.unwrap();
+
+            // let account_id = client
+            //     .instantiate("contract", &alice, &mut constructor)
+            //     .submit()
+            //     .await
+            //     .expect("Instantiating the contract failed")
+            //     .account_id;
+
+            // let get_worker_message = "foo";
+
+            // let get_worker = client
+            //     .call(&alice, get_worker_message)
+            //     .submit()
+            //     .await
+            //     .expect("Get worker call failed");
+
+            // let get_worker = build_message::<CatalogRef>(contract_account_id.clone())
+            //     .call(|catalog| catalog.get_worker());
+            // let set_worker = build_message::<CatalogRef>(contract_account_id.clone())
+            //     .call(|catalog| catalog.set_worker(42));
+
+            // let get_result = client
+            //     .call_dry_run(&ink_e2e::alice(), &get_worker, 0, None)
+            //     .await;
+            // let set_result = client
+            //     .call_dry_run(&ink_e2e::alice(), &set_worker, 0, None)
+            //     .await;
+
+            // assert_eq!(get_result.return_value(), None);
+            // assert_eq!(set_result.return_value(), None);
         }
 
-        #[ink_e2e::test]
-        async fn it_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
-            let worker_value: u32 = 42;
-            let constructor = CatalogRef::default();
+        // #[ink_e2e::test]
+        // async fn it_works(mut client: ink_e2e::Client<C, E>) -> E2EResult<()> {
+        //     let mut constructor = CatalogRef::default();
 
-            let contract_account_id = client
-                .instantiate("contract", &ink_e2e::bob(), constructor, 0, None)
-                .await
-                .expect("instantiate failed")
-                .account_id;
+        // let contract_account_id = client
+        //     .instantiate("foo", &ink_e2e::bob(), &mut constructor)
+        //     .submit()
+        //     .await
+        //     .expect("instantiate failed").account_id;
 
-            let get = build_message::<CatalogRef>(contract_account_id.clone())
-                .call(|catalog| catalog.get_worker());
-            let get_result = client
-                .call(&ink_e2e::bob(), get, 0, None)
-                .await
-                .expect("get failed");
-            assert_eq!(get_result.return_value(), None);
+        //     let get = build_message::<CatalogRef>(contract_account_id.clone())
+        //         .call(|catalog| catalog.get_worker());
+        //     let get_result = client
+        //         .call(&ink_e2e::bob(), get, 0, None)
+        //         .await
+        //         .expect("get failed");
+        //     assert_eq!(get_result.return_value(), None);
 
-            let set = build_message::<CatalogRef>(contract_account_id.clone())
-                .call(|catalog| catalog.set_worker(worker_value));
-            let _set_result = client
-                .call(&ink_e2e::bob(), set, 0, None)
-                .await
-                .expect("set failed");
+        //     let set = build_message::<CatalogRef>(contract_account_id.clone())
+        //         .call(|catalog| catalog.set_worker(worker_value));
+        //     let _set_result = client
+        //         .call(&ink_e2e::bob(), set, 0, None)
+        //         .await
+        //         .expect("set failed");
 
-            let get = build_message::<CatalogRef>(contract_account_id.clone())
-                .call(|catalog| catalog.get_worker());
-            let get_result = client
-                .call(&ink_e2e::bob(), get, 0, None)
-                .await
-                .expect("get failed");
-            assert_eq!(get_result.return_value(), Some(worker_value));
+        //     let get = build_message::<CatalogRef>(contract_account_id.clone())
+        //         .call(|catalog| catalog.get_worker());
+        //     let get_result = client
+        //         .call(&ink_e2e::bob(), get, 0, None)
+        //         .await
+        //         .expect("get failed");
+        //     assert_eq!(get_result.return_value(), Some(worker_value));
 
-            Ok(())
-        }
+        // Ok(())
+        // }
     }
 }

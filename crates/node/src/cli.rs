@@ -4,7 +4,7 @@ use clap::Parser;
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error(transparent)]
-	StartCmdError(#[from] StartCmdError),
+    StartCmdError(#[from] StartCmdError),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -26,7 +26,7 @@ pub fn run() -> Result<()> {
 
     let result = match &cli.command {
         Some(Command::Start(cmd)) => cmd.run()?,
-        None => {},
+        None => {}
     };
 
     Ok(result)

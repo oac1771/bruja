@@ -28,23 +28,6 @@ Add Cargo Make:
 cargo install --no-default-features --force cargo-make
 ```
 
-# Development
-
-Start docker daemon:
-```
-colima start --arch x86_64
-```
-
-Build Node Binary:
-```
-cargo build -p node --target x86_64-unknown-linux-musl
-```
-
-Build Docker images:
-```
-cargo make docker-build
-```
-
 
 # Reference
 info on runtime development including crate strucutre: [here](https://docs.substrate.io/learn/runtime-development/)

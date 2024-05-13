@@ -9,3 +9,7 @@ default_to_workspace = false
 
 [tasks.docker-build]
 command = "docker/build.sh"
+
+[tasks.test-contract]
+command = "cargo"
+args = ["test", "--features", "e2e-tests"]

@@ -11,11 +11,10 @@ pub struct StartCmd {
     pub finalize_delay_sec: u8,
 }
 
-
 #[derive(Debug, thiserror::Error)]
 pub enum StartCmdError {
-	#[error(transparent)]
-	ScCli(#[from] sc_cli::Error),
+    #[error(transparent)]
+    ScCli(#[from] sc_cli::Error),
 }
 
 impl SubstrateCli for StartCmd {

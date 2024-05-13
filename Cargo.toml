@@ -12,7 +12,8 @@ resolver = "2"
 members = [
 	"crates/node",
 	"crates/runtime",
-	"crates/contract"
+	"crates/contract",
+	"crates/foo"
 ]
 
 [profile.release]
