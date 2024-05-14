@@ -1358,8 +1358,6 @@ version = "0.1.0"
 dependencies = [
  "ink",
  "ink_e2e",
- "parity-scale-codec",
- "scale-info",
  "subxt 0.35.3",
  "tokio",
  "wabt",
@@ -2530,7 +2528,6 @@ name = "foo"
 version = "0.40.0"
 dependencies = [
  "ink_e2e",
- "runtime",
  "subxt 0.35.3",
  "subxt-signer 0.35.3",
  "tokio",

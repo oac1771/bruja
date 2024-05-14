@@ -28,6 +28,11 @@ Add Cargo Make:
 cargo install --no-default-features --force cargo-make
 ```
 
+Add Cargo Contract for ink development
+```
+cargo install --force --locked cargo-contract
+```
+
 
 # Reference
 info on runtime development including crate strucutre: [here](https://docs.substrate.io/learn/runtime-development/)
