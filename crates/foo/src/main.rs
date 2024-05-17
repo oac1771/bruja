@@ -1,14 +1,10 @@
-use subxt::{Error, OnlineClient, SubstrateConfig};
+use subxt::{utils::MultiAddress, Error, OnlineClient, SubstrateConfig};
 use subxt_signer::sr25519;
 
 #[subxt::subxt(runtime_metadata_path = "../../chain.scale")]
 pub mod chain {}
 
-use chain::{
-    contracts::events::Instantiated,
-    runtime_types::sp_weights::weight_v2::Weight,
-};
-
+use chain::{contracts::events::Instantiated, runtime_types::sp_weights::weight_v2::Weight};
 
 use rand::Rng;
 
@@ -26,26 +22,22 @@ const CONTRACT: &str = r#"
 
 #[tokio::main]
 async fn main() {
-
-    // let contract_wasm = read_wasm().await;
     let code = wabt::wat2wasm(CONTRACT).expect("invalid wabt");
     let alice = sr25519::dev::alice();
     let salt: u8 = rand::thread_rng().gen();
 
-    println!("Salt {}", salt);
-
     let client = OnlineClient::<SubstrateConfig>::new().await.unwrap();
 
     let instantiate_tx = chain::tx().contracts().instantiate_with_code(
-        100_000_000_000_000_000, // endowment
+        0,
         Weight {
             ref_time: 500_000_000_000,
             proof_size: PROOF_SIZE,
-        }, // gas_limit
+        },
         None,
         code,
-        vec![], // data
-        vec![salt], // salt
+        vec![],
+        vec![salt],
     );
 
     let signed_extrinsic = client
@@ -65,10 +57,25 @@ async fn main() {
     let instantiated = events
         .find_first::<Instantiated>()
         .unwrap()
-        .ok_or_else(|| Error::Other("Failed to find a Instantiated event".into())).unwrap();
+        .ok_or_else(|| Error::Other("Failed to find a Instantiated event".into()))
+        .unwrap();
 
-    println!("Contract ID: {:?}", instantiated.contract)
+    let call_tx = chain::tx().contracts().call(
+        MultiAddress::Id(instantiated.contract),
+        0,
+        Weight {
+            ref_time: 500_000_000,
+            proof_size: PROOF_SIZE,
+        },
+        None,
+        vec![],
+    );
 
+    let _result = client
+        .tx()
+        .sign_and_submit_then_watch_default(&call_tx, &alice)
+        .await
+        .unwrap();
 }
 
 // async fn read_wasm() -> Vec<u8> {
