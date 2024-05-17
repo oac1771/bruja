@@ -1358,6 +1358,7 @@ version = "0.1.0"
 dependencies = [
  "ink",
  "rand",
+ "substrate-wasm-builder",
  "subxt 0.35.3",
  "subxt-signer 0.35.3",
  "tokio",

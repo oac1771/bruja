@@ -14,13 +14,14 @@ wabt = "0.10.0"
 subxt-signer = "0.35.3"
 rand = "0.8.5"
 
-[lib]
-path = "lib.rs"
+[build-dependencies]
+substrate-wasm-builder = { workspace = true, optional = true }
 
 [features]
 default = ["std"]
 std = [
     "ink/std",
+	"substrate-wasm-builder",
 ]
 ink-as-dependency = []
 e2e-tests = []

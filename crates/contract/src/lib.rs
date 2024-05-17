@@ -2,6 +2,9 @@
 #[ink::contract]
 mod catalog {
 
+    #[cfg(feature = "std")]
+    include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+
     use ink::storage::Mapping;
 
     #[derive(Default)]
@@ -44,7 +47,7 @@ mod catalog {
     // #[cfg(all(test, feature = "e2e-tests"))]
     #[cfg(test)]
     mod e2e_tests {
-        // use super::*;
+        use super::WASM_BINARY;
         use rand::Rng;
         use subxt::{utils::AccountId32, Error, OnlineClient, SubstrateConfig};
         use subxt_signer::sr25519::{dev, Keypair};
@@ -80,7 +83,9 @@ mod catalog {
             }
 
             async fn deploy_contract(&self) -> AccountId32 {
-                let code = wabt::wat2wasm(CONTRACT).expect("invalid wabt");
+                // let code = wabt::wat2wasm(CONTRACT).expect("invalid wabt");
+                let code = WASM_BINARY.unwrap().to_vec();
+
                 let salt: u8 = rand::thread_rng().gen();
 
                 let instantiate_tx = chain::tx().contracts().instantiate_with_code(
