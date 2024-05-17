@@ -8,10 +8,11 @@ authors = ["foo"]
 ink = { version = "5.0.0", default-features = false }
 
 [dev-dependencies]
-ink_e2e = "5.0.0"
-tokio = "1.37.0"
-subxt = "0.35.3"
+tokio = { version = "1.37.0", features = ["fs"] }
+subxt = { version = "0.35.3" }
 wabt = "0.10.0"
+subxt-signer = "0.35.3"
+rand = "0.8.5"
 
 [lib]
 path = "lib.rs"
