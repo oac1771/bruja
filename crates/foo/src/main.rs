@@ -1,17 +1,16 @@
-use subxt::{storage::StorageAddress, Error, OnlineClient, SubstrateConfig};
+use subxt::{Error, OnlineClient, SubstrateConfig};
 use subxt_signer::sr25519;
 
 #[subxt::subxt(runtime_metadata_path = "../../chain.scale")]
 pub mod chain {}
 
 use chain::{
-    contracts::events::{CodeStored, Instantiated},
+    contracts::events::Instantiated,
     runtime_types::sp_weights::weight_v2::Weight,
-    runtime_apis::contracts_api::types::upload_code::Determinism
 };
 
-use subxt::ext::futures::StreamExt;
-use subxt::storage::address::Address;
+
+use rand::Rng;
 
 // use tokio::{fs::File, io::AsyncReadExt};
 
@@ -30,14 +29,12 @@ async fn main() {
 
     // let contract_wasm = read_wasm().await;
     let code = wabt::wat2wasm(CONTRACT).expect("invalid wabt");
+    let alice = sr25519::dev::alice();
+    let salt: u8 = rand::thread_rng().gen();
+
+    println!("Salt {}", salt);
 
     let client = OnlineClient::<SubstrateConfig>::new().await.unwrap();
-
-    let alice = sr25519::dev::alice();
-
-    // let upload_tx = chain::tx()
-    //     .contracts()
-    //     .upload_code(code, None, Determinism::Enforced);
 
     let instantiate_tx = chain::tx().contracts().instantiate_with_code(
         100_000_000_000_000_000, // endowment
@@ -48,7 +45,7 @@ async fn main() {
         None,
         code,
         vec![], // data
-        vec![4], // salt
+        vec![salt], // salt
     );
 
     let signed_extrinsic = client
@@ -65,13 +62,12 @@ async fn main() {
         .await
         .unwrap();
 
-
     let instantiated = events
         .find_first::<Instantiated>()
         .unwrap()
         .ok_or_else(|| Error::Other("Failed to find a Instantiated event".into())).unwrap();
 
-
+    println!("Contract ID: {:?}", instantiated.contract)
 
 }
 
