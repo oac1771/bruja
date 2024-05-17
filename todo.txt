@@ -1,6 +1,4 @@
-use node cli to start runtime
-
-deploy smart contract to bruja runtime
+make default location of db data in project root not default location
 
 
 larger refactor:
@@ -9,5 +7,5 @@ larger refactor:
             use docker build --platform to build x86 for builder
             and node/worker/requester containers
 
-    - add aura/grandpa consensus to mimick prod envionrment
-        - https://github.com/paritytech/substrate-contracts-node/pull/42
+    - figure out how to use substrate wasm builder for ink contract to not need to use cargo contract cli
+        to build wasm binary
