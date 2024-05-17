@@ -45,14 +45,16 @@ mod catalog {
     #[cfg(test)]
     mod e2e_tests {
         // use super::*;
-        use subxt::{utils::{AccountId32, MultiAddress}, Error, OnlineClient, SubstrateConfig};
-        use subxt_signer::sr25519;
         use rand::Rng;
+        use subxt::{utils::AccountId32, Error, OnlineClient, SubstrateConfig};
+        use subxt_signer::sr25519::{dev, Keypair};
 
         #[subxt::subxt(runtime_metadata_path = "../../chain.scale")]
         pub mod chain {}
 
-        use chain::{contracts::events::Instantiated, runtime_types::sp_weights::weight_v2::Weight};
+        use chain::{
+            contracts::events::Instantiated, runtime_types::sp_weights::weight_v2::Weight,
+        };
 
         const PROOF_SIZE: u64 = u64::MAX / 2;
 
@@ -64,51 +66,70 @@ mod catalog {
             )
         "#;
 
-        async fn deploy_contract() -> AccountId32 {
-            let code = wabt::wat2wasm(CONTRACT).expect("invalid wabt");
-            let alice = sr25519::dev::alice();
-            let salt: u8 = rand::thread_rng().gen();
-        
-            let client = OnlineClient::<SubstrateConfig>::new().await.unwrap();
-        
-            let instantiate_tx = chain::tx().contracts().instantiate_with_code(
-                0,
-                Weight {
-                    ref_time: 500_000_000_000,
-                    proof_size: PROOF_SIZE,
-                },
-                None,
-                code,
-                vec![],
-                vec![salt],
-            );
-        
-            let signed_extrinsic = client
-                .tx()
-                .create_signed(&instantiate_tx, &alice, Default::default())
-                .await
-                .unwrap();
-        
-            let events = signed_extrinsic
-                .submit_and_watch()
-                .await
-                .unwrap()
-                .wait_for_finalized_success()
-                .await
-                .unwrap();
-        
-            let instantiated = events
-                .find_first::<Instantiated>()
-                .unwrap()
-                .ok_or_else(|| Error::Other("Failed to find a Instantiated event".into()))
-                .unwrap();
+        struct TestCtx {
+            client: OnlineClient<SubstrateConfig>,
+            signer: Keypair
+        }
 
-            instantiated.contract
+        impl TestCtx {
+            async fn new(signer: Keypair) -> Self {
+                Self {
+                    client: OnlineClient::<SubstrateConfig>::new().await.unwrap(),
+                    signer
+                }
+            }
+
+            async fn deploy_contract(&self) -> AccountId32 {
+                let code = wabt::wat2wasm(CONTRACT).expect("invalid wabt");
+                let salt: u8 = rand::thread_rng().gen();
+
+                let instantiate_tx = chain::tx().contracts().instantiate_with_code(
+                    0,
+                    Weight {
+                        ref_time: 500_000_000_000,
+                        proof_size: PROOF_SIZE,
+                    },
+                    None,
+                    code,
+                    vec![],
+                    vec![salt],
+                );
+
+                let signed_extrinsic = self
+                    .client
+                    .tx()
+                    .create_signed(&instantiate_tx, &self.signer, Default::default())
+                    .await
+                    .unwrap();
+
+                let events = signed_extrinsic
+                    .submit_and_watch()
+                    .await
+                    .unwrap()
+                    .wait_for_finalized_success()
+                    .await
+                    .unwrap();
+
+                let instantiated = events
+                    .find_first::<Instantiated>()
+                    .unwrap()
+                    .ok_or_else(|| Error::Other("Failed to find a Instantiated event".into()))
+                    .unwrap();
+
+                instantiated.contract
+            }
         }
 
         #[tokio::test]
         async fn default_works() {
-            let contract_id = deploy_contract().await;
+            let contract_id = TestCtx::new(dev::alice()).await.deploy_contract().await;
+
+            assert_ne!(contract_id.0.len(), 0)
+        }
+
+        #[tokio::test]
+        async fn default_works_2() {
+            let contract_id = TestCtx::new(dev::bob()).await.deploy_contract().await;
 
             assert_ne!(contract_id.0.len(), 0)
         }
