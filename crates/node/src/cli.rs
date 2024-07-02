@@ -1,33 +1,51 @@
-use crate::commands::start::{StartCmd, StartCmdError};
-use clap::Parser;
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error(transparent)]
-    StartCmdError(#[from] StartCmdError),
-}
-
-pub type Result<T> = std::result::Result<T, Error>;
+use sc_cli::RunCmd;
 
 #[derive(Debug, clap::Parser)]
-#[command(version, about, long_about = None)]
 pub struct Cli {
-    #[command(subcommand)]
-    pub command: Option<Command>,
+	#[command(subcommand)]
+	pub subcommand: Option<Subcommand>,
+
+	#[clap(flatten)]
+	pub run: RunCmd,
 }
 
 #[derive(Debug, clap::Subcommand)]
-pub enum Command {
-    Start(StartCmd),
-}
+#[allow(clippy::large_enum_variant)]
+pub enum Subcommand {
+	/// Key management cli utilities
+	#[command(subcommand)]
+	Key(sc_cli::KeySubcommand),
 
-pub fn run() -> Result<()> {
-    let cli = Cli::parse();
+	/// Build a chain specification.
+	BuildSpec(sc_cli::BuildSpecCmd),
 
-    let result = match &cli.command {
-        Some(Command::Start(cmd)) => cmd.run()?,
-        None => {}
-    };
+	/// Validate blocks.
+	CheckBlock(sc_cli::CheckBlockCmd),
 
-    Ok(result)
+	/// Export blocks.
+	ExportBlocks(sc_cli::ExportBlocksCmd),
+
+	/// Export the state of a given block into a chain spec.
+	ExportState(sc_cli::ExportStateCmd),
+
+	/// Import blocks.
+	ImportBlocks(sc_cli::ImportBlocksCmd),
+
+	/// Remove the whole chain.
+	PurgeChain(sc_cli::PurgeChainCmd),
+
+	/// Revert the chain to a previous state.
+	Revert(sc_cli::RevertCmd),
+
+	/// Sub-commands concerned with benchmarking.
+	#[command(subcommand)]
+	Benchmark(frame_benchmarking_cli::BenchmarkCmd),
+
+	/// Try-runtime has migrated to a standalone CLI
+	/// (<https://github.com/paritytech/try-runtime-cli>). The subcommand exists as a stub and
+	/// deprecation notice. It will be removed entirely some time after January 2024.
+	TryRuntime,
+
+	/// Db meta columns information.
+	ChainInfo(sc_cli::ChainInfoCmd),
 }

@@ -2,5 +2,8 @@ target/
 bin/
 *.scale
 local/*
+**/.DS_Store
+.vscode/**
 
 interface.rs
+foo/**

@@ -1,8 +1,6 @@
-make default location of db data in project root not default location
-
-
 larger refactor:
     - create docker container to build artifacts
+        - use academy PoW repo that has builder pattern in layers
         - see if this will let you run colima with aarch64 and 
             use docker build --platform to build x86 for builder
             and node/worker/requester containers

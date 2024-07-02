@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 #[ink::contract]
-mod catalog {
+pub mod catalog {
 
     #[cfg(feature = "std")]
     include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
@@ -71,14 +71,14 @@ mod catalog {
 
         struct TestCtx {
             client: OnlineClient<SubstrateConfig>,
-            signer: Keypair
+            signer: Keypair,
         }
 
         impl TestCtx {
             async fn new(signer: Keypair) -> Self {
                 Self {
                     client: OnlineClient::<SubstrateConfig>::new().await.unwrap(),
-                    signer
+                    signer,
                 }
             }
 
