@@ -16,5 +16,5 @@ args = ["test", "--features", "e2e-tests"]
 
 [tasks.local-node]
 script='''
-./target/debug/node start --dev --base-path ./local/$(uuidgen)
+./target/debug/node --dev --base-path ./local/$(uuidgen)
 '''
