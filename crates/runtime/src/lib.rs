@@ -21,7 +21,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-mod runtime_apis;
+pub mod runtime_apis;
 
 use frame::{
     deps::frame_support::{
@@ -55,6 +55,27 @@ pub fn native_version() -> NativeVersion {
         can_author_with: Default::default(),
     }
 }
+
+fn schedule<T: pallet_contracts::Config>() -> pallet_contracts::Schedule<T> {
+	pallet_contracts::Schedule {
+		limits: pallet_contracts::Limits {
+			runtime_memory: 1024 * 1024 * 1024,
+			..Default::default()
+		},
+		..Default::default()
+	}
+}
+
+parameter_types! {
+    pub const Version: RuntimeVersion = VERSION;
+    pub Schedule: pallet_contracts::Schedule<Runtime> = schedule::<Runtime>();
+}
+
+type Block = frame::runtime::types_common::BlockOf<Runtime, SignedExtra>;
+type Header = HeaderFor<Runtime>;
+
+type RuntimeExecutive =
+    Executive<Runtime, Block, frame_system::ChainContext<Runtime>, Runtime, AllPalletsWithSystem>;
 
 /// The signed extensions that are added to the runtime.
 type SignedExtra = (
@@ -114,10 +135,9 @@ mod runtime {
     /// Provides the ability to charge for extrinsic execution.
     #[runtime::pallet_index(4)]
     pub type TransactionPayment = pallet_transaction_payment;
-}
 
-parameter_types! {
-    pub const Version: RuntimeVersion = VERSION;
+    #[runtime::pallet_index(5)]
+    pub type Contracts = pallet_contracts;
 }
 
 /// Implements the types required for the system pallet.
@@ -153,11 +173,12 @@ impl pallet_transaction_payment::Config for Runtime {
     type LengthToFee = FixedFee<1, <Self as pallet_balances::Config>::Balance>;
 }
 
-type Block = frame::runtime::types_common::BlockOf<Runtime, SignedExtra>;
-type Header = HeaderFor<Runtime>;
-
-type RuntimeExecutive =
-    Executive<Runtime, Block, frame_system::ChainContext<Runtime>, Runtime, AllPalletsWithSystem>;
+#[derive_impl(pallet_contracts::config_preludes::TestDefaultConfig)]
+impl pallet_contracts::Config for Runtime {
+    type Currency = Balances;
+    type Schedule = Schedule;
+    type CallStack = [pallet_contracts::Frame<Self>; 23];
+}
 
 /// Some re-exports that the node side code needs to know. Some are useful in this context as well.
 ///

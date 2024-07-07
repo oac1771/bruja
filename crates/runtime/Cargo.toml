@@ -25,6 +25,7 @@ pallet-sudo = { workspace = true }
 pallet-timestamp = { workspace = true }
 pallet-transaction-payment = { workspace = true }
 pallet-transaction-payment-rpc-runtime-api = { workspace = true }
+pallet-contracts = { workspace = true }
 
 # genesis builder that allows us to interact with runtime genesis config
 sp-genesis-builder = { workspace = true }
@@ -46,8 +47,10 @@ std = [
 	"pallet-timestamp/std",
 	"pallet-transaction-payment-rpc-runtime-api/std",
 	"pallet-transaction-payment/std",
+	"pallet-contracts/std",
 
 	"sp-genesis-builder/std",
 	"sp-runtime/std",
+
 	"substrate-wasm-builder",
 ]

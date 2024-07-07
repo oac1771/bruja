@@ -55,6 +55,7 @@ pallet-sudo = { version = "35.0.0", default-features = false}
 pallet-timestamp = { version = "34.0.0", default-features = false }
 pallet-transaction-payment = { version = "35.0.0", default-features = false }
 pallet-transaction-payment-rpc-runtime-api = { version = "35.0.0", default-features = false }
+pallet-contracts = { version = "34.0.0", default-features = false }
 
 substrate-frame-rpc-system = { version = "35.0.0", default-features = false }
 substrate-build-script-utils = { version = "11.0.0", default-features = false }

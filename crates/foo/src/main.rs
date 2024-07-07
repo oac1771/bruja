@@ -8,7 +8,7 @@ use subxt_signer::sr25519;
 pub mod chain {}
 
 use chain::{contracts::events::Instantiated, runtime_types::sp_weights::weight_v2::Weight};
-use tokio::{fs::File, io::AsyncReadExt};
+// use tokio::{fs::File, io::AsyncReadExt};
 
 const PROOF_SIZE: u64 = u64::MAX / 2;
 
@@ -22,9 +22,9 @@ async fn main() {
 
     let client = OnlineClient::<SubstrateConfig>::new().await.unwrap();
 
-    let upload_tx = chain::tx()
-        .contracts()
-        .upload_code(code, storage_deposit_limit, determinism);
+    // let upload_tx = chain::tx()
+    //     .contracts()
+    //     .upload_code(code, storage_deposit_limit, determinism);
 
     let instantiate_tx = chain::tx().contracts().instantiate_with_code(
         0,
