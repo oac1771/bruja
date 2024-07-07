@@ -1,4 +1,4 @@
-// This file is part of Substrate.
+// This file is part of Polkadot Sdk.
 
 // Copyright (C) Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
@@ -15,15 +15,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Substrate Node Template CLI library.
-#![warn(missing_docs)]
-
-mod chain_spec;
-mod cli;
-mod command;
-mod rpc;
-mod service;
-
-fn main() -> sc_cli::Result<()> {
-	command::run()
-}
+pub mod chain_spec;
+pub(crate) mod cli;
+pub mod rpc;
+pub mod service;

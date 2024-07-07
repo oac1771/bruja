@@ -1,8 +1,10 @@
 [package]
 name = "contract"
 version = "0.1.0"
-edition = "2021"
-authors = ["foo"]
+authors.workspace = true
+homepage.workspace = true
+repository.workspace = true
+edition.workspace = true
 
 [dependencies]
 ink = { version = "5.0.0", default-features = false }
