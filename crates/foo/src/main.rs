@@ -22,7 +22,9 @@ async fn main() {
 
     let client = OnlineClient::<SubstrateConfig>::new().await.unwrap();
 
-    let upload_tx = chain::tx().contracts().upload_code(code, storage_deposit_limit, determinism);
+    let upload_tx = chain::tx()
+        .contracts()
+        .upload_code(code, storage_deposit_limit, determinism);
 
     let instantiate_tx = chain::tx().contracts().instantiate_with_code(
         0,

@@ -24,32 +24,35 @@ use sp_keyring::AccountKeyring;
 pub type ChainSpec = sc_service::GenericChainSpec;
 
 fn props() -> Properties {
-	let mut properties = Properties::new();
-	properties.insert("tokenDecimals".to_string(), 0.into());
-	properties.insert("tokenSymbol".to_string(), "MINI".into());
-	properties
+    let mut properties = Properties::new();
+    properties.insert("tokenDecimals".to_string(), 0.into());
+    properties.insert("tokenSymbol".to_string(), "MINI".into());
+    properties
 }
 
 pub fn development_config() -> Result<ChainSpec, String> {
-	Ok(ChainSpec::builder(WASM_BINARY.expect("Development wasm not available"), Default::default())
-		.with_name("Development")
-		.with_id("dev")
-		.with_chain_type(ChainType::Development)
-		.with_genesis_config_patch(testnet_genesis())
-		.with_properties(props())
-		.build())
+    Ok(ChainSpec::builder(
+        WASM_BINARY.expect("Development wasm not available"),
+        Default::default(),
+    )
+    .with_name("Development")
+    .with_id("dev")
+    .with_chain_type(ChainType::Development)
+    .with_genesis_config_patch(testnet_genesis())
+    .with_properties(props())
+    .build())
 }
 
 /// Configure initial storage state for FRAME pallets.
 fn testnet_genesis() -> Value {
-	use frame::traits::Get;
-	use runtime::interface::{Balance, MinimumBalance};
-	let endowment = <MinimumBalance as Get<Balance>>::get().max(1) * 1000;
-	let balances = AccountKeyring::iter()
-		.map(|a| (a.to_account_id(), endowment))
-		.collect::<Vec<_>>();
-	json!({
-		"balances": BalancesConfig { balances },
-		"sudo": SudoConfig { key: Some(AccountKeyring::Alice.to_account_id()) },
-	})
+    use frame::traits::Get;
+    use runtime::interface::{Balance, MinimumBalance};
+    let endowment = <MinimumBalance as Get<Balance>>::get().max(1) * 1000;
+    let balances = AccountKeyring::iter()
+        .map(|a| (a.to_account_id(), endowment))
+        .collect::<Vec<_>>();
+    json!({
+        "balances": BalancesConfig { balances },
+        "sudo": SudoConfig { key: Some(AccountKeyring::Alice.to_account_id()) },
+    })
 }
