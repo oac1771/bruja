@@ -34,9 +34,14 @@ cargo install --force --locked cargo-contract
 ```
 
 
+
 # Reference
 info on runtime development including crate strucutre: [here](https://docs.substrate.io/learn/runtime-development/)
 
 info on architecture: [here](https://docs.substrate.io/learn/architecture/)
 
 info on build: [here](https://docs.substrate.io/build/build-process/)
+
+info on subxt codegen: [here](https://docs.rs/subxt/0.37.0/subxt/book/setup/codegen/index.html)
+
+info on cargo-contract: [here](https://use.ink/cargo-contract-cli/)

@@ -1280,7 +1280,6 @@ dependencies = [
  "ink",
  "rand 0.8.5",
  "scale-info",
- "substrate-wasm-builder 22.0.1",
  "subxt",
  "subxt-signer",
  "tokio",
@@ -2370,6 +2369,7 @@ dependencies = [
  "subxt",
  "subxt-signer",
  "tokio",
+ "wabt",
 ]
 
 [[package]]
@@ -6769,7 +6769,7 @@ dependencies = [
  "scale-info",
  "sp-genesis-builder",
  "sp-runtime",
- "substrate-wasm-builder 23.0.0",
+ "substrate-wasm-builder",
 ]
 
 [[package]]
@@ -9824,26 +9824,6 @@ dependencies = [
  "prometheus",
  "thiserror",
  "tokio",
-]
-
-[[package]]
-name = "substrate-wasm-builder"
-version = "22.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6567b61eca9459dbe71385caef9f6eab826abbd4a0743abf27034d96d34b9062"
-dependencies = [
- "build-helper",
- "cargo_metadata",
- "console",
- "filetime",
- "parity-wasm",
- "polkavm-linker",
- "sp-maybe-compressed-blob",
- "strum 0.26.3",
- "tempfile",
- "toml 0.8.12",
- "walkdir",
- "wasm-opt",
 ]
 
 [[package]]

@@ -57,13 +57,13 @@ pub fn native_version() -> NativeVersion {
 }
 
 fn schedule<T: pallet_contracts::Config>() -> pallet_contracts::Schedule<T> {
-	pallet_contracts::Schedule {
-		limits: pallet_contracts::Limits {
-			runtime_memory: 1024 * 1024 * 1024,
-			..Default::default()
-		},
-		..Default::default()
-	}
+    pallet_contracts::Schedule {
+        limits: pallet_contracts::Limits {
+            runtime_memory: 1024 * 1024 * 1024,
+            ..Default::default()
+        },
+        ..Default::default()
+    }
 }
 
 parameter_types! {
@@ -178,6 +178,7 @@ impl pallet_contracts::Config for Runtime {
     type Currency = Balances;
     type Schedule = Schedule;
     type CallStack = [pallet_contracts::Frame<Self>; 23];
+    type Time = Timestamp;
 }
 
 /// Some re-exports that the node side code needs to know. Some are useful in this context as well.

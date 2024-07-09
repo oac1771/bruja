@@ -16,5 +16,6 @@ args = ["test", "--features", "e2e-tests"]
 
 [tasks.local-node]
 script='''
+cargo build -p node
 ./target/debug/node --dev --base-path ./local/$(uuidgen)
 '''

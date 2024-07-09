@@ -1,6 +1,6 @@
 use crate::{
-    Block, Header, Runtime, RuntimeExecutive, RuntimeGenesisConfig, System, TransactionPayment,
-    VERSION, InherentDataExt, interface
+    interface, Block, Header, InherentDataExt, Runtime, RuntimeExecutive, RuntimeGenesisConfig,
+    System, TransactionPayment, VERSION,
 };
 
 use frame::{
@@ -130,4 +130,6 @@ impl_runtime_apis! {
             vec![]
         }
     }
+
+    // add contracts runtime apis
 }
