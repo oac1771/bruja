@@ -17,3 +17,7 @@ subxt = { version = "0.35.3" }
 subxt-signer = "0.35.3"
 rand = "0.8.5"
 wabt = "0.10.0"
+reqwest = "0.12.5"
+serde_json.workspace = true
+serde = "1.0.204"
+hex = "0.4.3"

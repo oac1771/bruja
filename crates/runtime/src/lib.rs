@@ -24,9 +24,18 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 pub mod runtime_apis;
 
 use frame::{
-    deps::frame_support::{
-        runtime,
-        weights::{FixedFee, NoFee},
+    deps::{
+        frame_support::{
+            runtime,
+            weights::{
+                constants::{
+                    BlockExecutionWeight, ExtrinsicBaseWeight, WEIGHT_REF_TIME_PER_SECOND,
+                },
+                FixedFee, NoFee,
+            },
+        },
+        frame_system::limits::BlockWeights,
+        sp_runtime::Perbill,
     },
     prelude::*,
     runtime::prelude::*,
@@ -69,10 +78,43 @@ fn schedule<T: pallet_contracts::Config>() -> pallet_contracts::Schedule<T> {
 parameter_types! {
     pub const Version: RuntimeVersion = VERSION;
     pub Schedule: pallet_contracts::Schedule<Runtime> = schedule::<Runtime>();
+    pub RuntimeBlockWeights: BlockWeights = BlockWeights::builder()
+    .base_block(BlockExecutionWeight::get())
+    .for_class(DispatchClass::all(), |weights| {
+        weights.base_extrinsic = ExtrinsicBaseWeight::get();
+    })
+    .for_class(DispatchClass::Normal, |weights| {
+        weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT);
+    })
+    .for_class(DispatchClass::Operational, |weights| {
+        weights.max_total = Some(MAXIMUM_BLOCK_WEIGHT);
+        // Operational transactions have some extra reserved space, so that they
+        // are included even if block reached `MAXIMUM_BLOCK_WEIGHT`.
+        weights.reserved = Some(
+            MAXIMUM_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT
+        );
+    })
+    .avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
+    .build_or_panic();
+
 }
+
+pub const CONTRACTS_DEBUG_OUTPUT: pallet_contracts::DebugInfo =
+    pallet_contracts::DebugInfo::UnsafeDebug;
+pub const CONTRACTS_EVENTS: pallet_contracts::CollectEvents =
+    pallet_contracts::CollectEvents::UnsafeCollect;
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
+const MAXIMUM_BLOCK_WEIGHT: Weight =
+    Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND.saturating_mul(2), u64::MAX);
+const AVERAGE_ON_INITIALIZE_RATIO: Perbill = Perbill::from_percent(10);
 
 type Block = frame::runtime::types_common::BlockOf<Runtime, SignedExtra>;
 type Header = HeaderFor<Runtime>;
+type BlockNumber = BlockNumberFor<Runtime>;
+type EventRecord = frame_system::EventRecord<
+    <Runtime as frame_system::Config>::RuntimeEvent,
+    <Runtime as frame_system::Config>::Hash,
+>;
 
 type RuntimeExecutive =
     Executive<Runtime, Block, frame_system::ChainContext<Runtime>, Runtime, AllPalletsWithSystem>;
@@ -153,6 +195,9 @@ impl frame_system::Config for Runtime {
 #[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Runtime {
     type AccountStore = System;
+	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
+    type Balance = u128;
+    type ExistentialDeposit = ConstU128<1>;
 }
 
 // Implements the types required for the sudo pallet.
@@ -197,4 +242,5 @@ pub mod interface {
     pub type Hash = <Runtime as frame_system::Config>::Hash;
     pub type Balance = <Runtime as pallet_balances::Config>::Balance;
     pub type MinimumBalance = <Runtime as pallet_balances::Config>::ExistentialDeposit;
+    pub type EventRecord = super::EventRecord;
 }
