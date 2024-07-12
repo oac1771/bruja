@@ -4,16 +4,23 @@ pub mod catalog {
 
     use ink::storage::Mapping;
 
-    #[derive(Default)]
     #[ink(storage)]
     pub struct Catalog {
         workers: Mapping<AccountId, u32>,
     }
 
+    impl Default for Catalog {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
     impl Catalog {
         #[ink(constructor)]
         pub fn new() -> Self {
-            Self::default()
+            Self {
+                workers: Mapping::new(),
+            }
         }
 
         #[ink(message)]

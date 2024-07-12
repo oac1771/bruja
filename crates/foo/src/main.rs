@@ -1,15 +1,18 @@
 use rand::Rng;
-use subxt::{utils::MultiAddress, Error, OnlineClient, SubstrateConfig};
+use subxt::{Error, OnlineClient, SubstrateConfig};
 use subxt_signer::sr25519;
 
 #[subxt::subxt(runtime_metadata_path = "../../chain.scale")]
 pub mod chain {}
 
-use chain::{contracts::events::Instantiated, runtime_types::sp_weights::weight_v2::Weight};
+use chain::{
+    contracts::events::Instantiated,
+    runtime_types::sp_weights::weight_v2::Weight,
+};
 
 const PROOF_SIZE: u64 = u64::MAX / 2;
 
-const CONTRACT: &str = r#"
+const _CONTRACT: &str = r#"
 (module
     (import "env" "memory" (memory 1 1))
     (func (export "deploy"))
@@ -20,45 +23,7 @@ const CONTRACT: &str = r#"
 #[tokio::main]
 async fn main() {
     deploy_conract().await
-    // get_metadata().await
 }
-
-// async fn get_metadata() {
-//     use serde_json::json;
-//     use serde::Deserialize;
-
-//     #[derive(Deserialize)]
-//     struct MetaData {
-//         id: u8,
-//         jsonrpc: String,
-//         result: String 
-//     }
-
-//     let client = reqwest::Client::new();
-//     let res = client
-//         .post("http://localhost:9944/")
-//         .body(
-//             json!({
-//                 "id": 1,
-//                 "jsonrpc": "2.0",
-//                 "method": "state_getMetadata",
-//             })
-//             .to_string(),
-//         )
-//         .header("Content-Type", "application/json")
-//         .send()
-//         .await
-//         .unwrap()
-//         .text()
-//         .await
-//         .unwrap();
-
-//     let metadata: MetaData = serde_json::from_str(&res).unwrap();
-//     let decoded = hex::decode(metadata.result.to_string()[2..].to_string()).unwrap();
-//     println!("{:?}", decoded);
-
-//     println!("{:?}", std::str::from_utf8(decoded.as_slice()));
-// }
 
 fn read_wasm() -> Vec<u8> {
     let path = "./target/ink/contract/contract.wasm";
@@ -68,13 +33,11 @@ fn read_wasm() -> Vec<u8> {
 }
 
 async fn deploy_conract() {
-    let alice = sr25519::dev::alice();
-    let salt: u8 = rand::thread_rng().gen();
-
     let code = read_wasm();
-    // let code = wabt::wat2wasm(CONTRACT).expect("invalid wabt");
 
     let client = OnlineClient::<SubstrateConfig>::new().await.unwrap();
+    let salt: u8 = rand::thread_rng().gen();
+    let alice = sr25519::dev::alice();
 
     let instantiate_tx = chain::tx().contracts().instantiate_with_code(
         0,
@@ -84,7 +47,7 @@ async fn deploy_conract() {
         },
         None,
         code,
-        vec![],
+        vec![155, 174, 157, 94],
         vec![salt],
     );
 
@@ -100,7 +63,7 @@ async fn deploy_conract() {
         .unwrap()
         .wait_for_finalized_success()
         .await
-        .unwrap();
+        .unwrap();    
 
     let instantiated = events
         .find_first::<Instantiated>()

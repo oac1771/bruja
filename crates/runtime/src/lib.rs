@@ -195,7 +195,7 @@ impl frame_system::Config for Runtime {
 #[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Runtime {
     type AccountStore = System;
-	type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
     type Balance = u128;
     type ExistentialDeposit = ConstU128<1>;
 }
