@@ -33,6 +33,12 @@ fn read_wasm() -> Vec<u8> {
 }
 
 async fn deploy_conract() {
+
+    let hex_str = "0x9bae9d5e";
+    let trimmed_str = &hex_str[2..];    
+    let bytes_vec = hex::decode(trimmed_str).expect("Decoding failed");    
+    let new_selector: [u8; 4] = bytes_vec.try_into().expect("Wrong length");
+
     let code = read_wasm();
 
     let client = OnlineClient::<SubstrateConfig>::new().await.unwrap();
@@ -47,7 +53,7 @@ async fn deploy_conract() {
         },
         None,
         code,
-        vec![155, 174, 157, 94],
+        new_selector.to_vec(),
         vec![salt],
     );
 
