@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use hex::FromHexError;
 
 #[derive(Deserialize, Serialize)]
 pub struct Contract {
@@ -7,7 +8,7 @@ pub struct Contract {
     #[serde(alias = "contract")]
     meta_data: MetaData,
 
-    spec: Spec
+    pub spec: Spec
 }
 
 #[derive(Deserialize, Serialize)]
@@ -21,14 +22,20 @@ struct MetaData {
 }
 
 #[derive(Deserialize, Serialize)]
-struct Spec {
-    constructors: Vec<Constructor>
+pub struct Spec {
+    pub constructors: Vec<Constructor>
 }
 
 #[derive(Deserialize, Serialize)]
-struct Constructor {
+pub struct Constructor {
     label: String,
     selector: String,
     payable: bool,
-    mutates: bool
+}
+
+impl Constructor {
+    pub fn get_selector_bytes(&self) -> Result<Vec<u8>, FromHexError> {
+        let bytes = hex::decode(&self.selector[2..])?;
+        Ok(bytes)
+    }
 }

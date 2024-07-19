@@ -28,6 +28,7 @@ serde = { version = "1.0.204", default-features = false }
 frame = { version = "0.4.0", default-features = false, package = "polkadot-sdk-frame" }
 codec = { version = "3.6.12", default-features = false, package = "parity-scale-codec" }
 scale-info = { version = "2.11.1", default-features = false }
+hex = { version = "0.4.3", default-features = false }
 
 sc-cli = { version = "0.43.0", default-features = false }
 sc-executor = { version = "0.39.0", default-features = false }

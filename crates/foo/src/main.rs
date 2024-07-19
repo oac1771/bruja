@@ -17,18 +17,19 @@ const PROOF_SIZE: u64 = u64::MAX / 2;
 
 #[tokio::main]
 async fn main() {
-    load_abi();
-    // deploy_conract().await
+    deploy_conract().await
 }
 
 
-fn load_abi() {
+fn load_abi() -> Contract {
     let metadata_file = std::fs::File::open("./target/ink/contract/contract.json").unwrap();
     let abi: Contract = serde_json::from_reader(metadata_file).unwrap();
 
     let json = serde_json::to_string_pretty(&abi).unwrap();
 
     println!("{}", json);
+
+    abi
 }
 
 
@@ -39,13 +40,11 @@ fn read_wasm() -> Vec<u8> {
     file
 }
 
-async fn deploy_conract() {
-
-    let hex_str = "0x9bae9d5e";
-    let trimmed_str = &hex_str[2..];    
-    let new_selector = hex::decode(trimmed_str).expect("Decoding failed");   
+async fn deploy_conract() { 
 
     let code = read_wasm();
+    let abi = load_abi();
+    let selector_bytes = abi.spec.constructors[0].get_selector_bytes().unwrap();
 
     let client = OnlineClient::<SubstrateConfig>::new().await.unwrap();
     let salt: u8 = rand::thread_rng().gen();
@@ -59,7 +58,7 @@ async fn deploy_conract() {
         },
         None,
         code,
-        new_selector,
+        selector_bytes,
         vec![salt],
     );
 
