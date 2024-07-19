@@ -10,20 +10,27 @@ use chain::{
     runtime_types::sp_weights::weight_v2::Weight,
 };
 
+use contract_abi::Contract;
+
 const PROOF_SIZE: u64 = u64::MAX / 2;
 
-const _CONTRACT: &str = r#"
-(module
-    (import "env" "memory" (memory 1 1))
-    (func (export "deploy"))
-    (func (export "call"))
-)
-"#;
 
 #[tokio::main]
 async fn main() {
-    deploy_conract().await
+    load_abi();
+    // deploy_conract().await
 }
+
+
+fn load_abi() {
+    let metadata_file = std::fs::File::open("./target/ink/contract/contract.json").unwrap();
+    let abi: Contract = serde_json::from_reader(metadata_file).unwrap();
+
+    let json = serde_json::to_string_pretty(&abi).unwrap();
+
+    println!("{}", json);
+}
+
 
 fn read_wasm() -> Vec<u8> {
     let path = "./target/ink/contract/contract.wasm";
@@ -36,8 +43,7 @@ async fn deploy_conract() {
 
     let hex_str = "0x9bae9d5e";
     let trimmed_str = &hex_str[2..];    
-    let bytes_vec = hex::decode(trimmed_str).expect("Decoding failed");    
-    let new_selector: [u8; 4] = bytes_vec.try_into().expect("Wrong length");
+    let new_selector = hex::decode(trimmed_str).expect("Decoding failed");   
 
     let code = read_wasm();
 
@@ -53,7 +59,7 @@ async fn deploy_conract() {
         },
         None,
         code,
-        new_selector.to_vec(),
+        new_selector,
         vec![salt],
     );
 

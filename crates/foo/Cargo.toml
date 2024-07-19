@@ -11,13 +11,13 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-contract = { workspace = true}
+catalog = { workspace = true}
+contract_abi = { workspace = true}
+
 tokio = { version = "1.37.0" , features = ["rt-multi-thread", "fs", "io-util"]}
 subxt = { version = "0.35.3" }
 subxt-signer = "0.35.3"
 rand = "0.8.5"
-wabt = "0.10.0"
-reqwest = "0.12.5"
 serde_json.workspace = true
-serde = "1.0.204"
+serde.workspace = true
 hex = "0.4.3"

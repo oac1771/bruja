@@ -12,8 +12,9 @@ resolver = "2"
 members = [
 	"crates/node",
 	"crates/runtime",
-	"crates/contract",
-	"crates/foo"
+	"crates/catalog",
+	"crates/foo",
+	"crates/contract_abi"
 ]
 
 [workspace.dependencies]
@@ -23,6 +24,7 @@ futures = { version = "0.3.30" }
 futures-timer = { version = "3.0.2" }
 jsonrpsee = { version = "0.22.0" }
 serde_json = { version = "1.0.114", default-features = false }
+serde = { version = "1.0.204", default-features = false }
 frame = { version = "0.4.0", default-features = false, package = "polkadot-sdk-frame" }
 codec = { version = "3.6.12", default-features = false, package = "parity-scale-codec" }
 scale-info = { version = "2.11.1", default-features = false }
@@ -63,5 +65,7 @@ substrate-build-script-utils = { version = "11.0.0", default-features = false }
 substrate-wasm-builder = { version = "23.0.0", default-features = false }
 
 runtime = { path = "crates/runtime" }
-contract = { path = "crates/contract"}
+catalog = { path = "crates/catalog"}
+contract_abi = { path = "crates/contract_abi"}
+
 
