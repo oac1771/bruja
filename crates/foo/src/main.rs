@@ -1,6 +1,8 @@
+use contract_abi::{Contract, Message};
 use rand::Rng;
 use scale::Encode;
 use subxt::{
+    backend::{legacy::LegacyRpcMethods, rpc::RpcClient},
     utils::{AccountId32, MultiAddress},
     Error, OnlineClient, SubstrateConfig,
 };
@@ -8,12 +10,19 @@ use subxt_signer::sr25519::{self, Keypair};
 
 #[subxt::subxt(runtime_metadata_path = "../../chain.scale")]
 pub mod chain {}
-
 use chain::{contracts::events::Instantiated, runtime_types::sp_weights::weight_v2::Weight};
 
-use contract_abi::{Contract, Message};
-
 const PROOF_SIZE: u64 = u64::MAX / 2;
+
+#[derive(Encode)]
+struct CallRequest<AccountId, Balance> {
+    origin: AccountId,
+    dest: AccountId,
+    value: Balance,
+    gas_limit: Option<Weight>,
+    storage_deposit_limit: Option<Balance>,
+    input_data: Vec<u8>,
+}
 
 #[tokio::main]
 async fn main() {
@@ -43,7 +52,11 @@ fn read_wasm() -> Vec<u8> {
     file
 }
 
-async fn deploy_conract(contract: &Contract, client: &OnlineClient<SubstrateConfig>, signer: &Keypair) -> AccountId32 {
+async fn deploy_conract(
+    contract: &Contract,
+    client: &OnlineClient<SubstrateConfig>,
+    signer: &Keypair,
+) -> AccountId32 {
     let code = read_wasm();
     let selector_bytes = contract.spec.constructors[0].get_selector_bytes().unwrap();
 
@@ -84,8 +97,17 @@ async fn deploy_conract(contract: &Contract, client: &OnlineClient<SubstrateConf
     instantiated.contract
 }
 
-async fn get_worker(contract: &Contract, address: &AccountId32, client: &OnlineClient<SubstrateConfig>, signer: &Keypair) {
-    let data = contract
+async fn get_worker(
+    contract: &Contract,
+    address: &AccountId32,
+    _client: &OnlineClient<SubstrateConfig>,
+    signer: &Keypair,
+) {
+    let function = "ContractsApi_call";
+    let rpc: LegacyRpcMethods<SubstrateConfig> =
+        LegacyRpcMethods::new(RpcClient::from_url("ws://127.0.0.1:9944").await.unwrap());
+
+    let call_data = contract
         .spec
         .messages
         .iter()
@@ -94,25 +116,30 @@ async fn get_worker(contract: &Contract, address: &AccountId32, client: &OnlineC
         .get_selector_bytes()
         .unwrap();
 
-    let call_tx = chain::tx().contracts().call(
-        MultiAddress::Id(address.clone()),
-        0,
-        Weight {
-            ref_time: 500_000_000,
-            proof_size: PROOF_SIZE,
-        },
-        None,
-        data,
-    );
+    let value: u128 = 0;
 
-    let _result = client
-        .tx()
-        .sign_and_submit_then_watch_default(&call_tx, signer)
-        .await
-        .unwrap();
+    let call_request = CallRequest {
+        origin: signer.public_key().to_account_id(),
+        dest: address.clone(),
+        value: value,
+        gas_limit: None,
+        storage_deposit_limit: None,
+        input_data: call_data,
+    };
+
+    let args = call_request.encode();
+
+    let foo = rpc.state_call(function, Some(&args), None).await.unwrap();
+
+    println!("{:?}", foo);
 }
 
-async fn _set_worker(contract: &Contract, address: &AccountId32, client: &OnlineClient<SubstrateConfig>, signer: &Keypair) {
+async fn _set_worker(
+    contract: &Contract,
+    address: &AccountId32,
+    client: &OnlineClient<SubstrateConfig>,
+    signer: &Keypair,
+) {
     let mut data = contract
         .spec
         .messages
