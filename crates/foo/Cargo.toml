@@ -21,3 +21,4 @@ rand = "0.8.5"
 serde_json.workspace = true
 serde.workspace = true
 hex = "0.4.3"
+scale = { package = "parity-scale-codec", version = "3.6.12" }

@@ -2,7 +2,14 @@
 #[ink::contract]
 pub mod catalog {
 
+    use codec::{Decode, Encode};
     use ink::storage::Mapping;
+
+    #[derive(Debug, PartialEq, Eq, Encode, Decode)]
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    pub enum CatalogError {
+        WorkerNotFound,
+    }
 
     #[ink(storage)]
     pub struct Catalog {
@@ -24,15 +31,24 @@ pub mod catalog {
         }
 
         #[ink(message)]
-        pub fn get_worker(&self) -> Option<u32> {
+        pub fn get_worker(&self) -> Result<u32, CatalogError> {
             let caller = self.env().caller();
-            self.workers.get(caller)
+            let result = self
+                .workers
+                .get(caller)
+                .ok_or(CatalogError::WorkerNotFound)?;
+
+            Ok(result)
         }
 
         #[ink(message)]
-        pub fn set_worker(&mut self, val: u32) -> Option<u32> {
+        pub fn set_worker(&mut self, val: u32) -> bool {
             let caller = self.env().caller();
-            self.workers.insert(caller, &val)
+            self.workers.insert(caller, &val);
+
+            // so it can be checked by 3rd party
+
+            true
         }
     }
 
@@ -42,9 +58,8 @@ pub mod catalog {
 
         #[ink::test]
         fn default_works() {
-            let mut catalog = Catalog::default();
-            assert_eq!(catalog.get_worker(), None);
-            assert_eq!(catalog.set_worker(10), None);
+            let catalog = Catalog::default();
+            assert_eq!(catalog.get_worker(), Err(CatalogError::WorkerNotFound));
         }
     }
 

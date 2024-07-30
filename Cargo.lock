@@ -964,6 +964,7 @@ name = "catalog"
 version = "0.1.0"
 dependencies = [
  "ink",
+ "parity-scale-codec",
  "rand 0.8.5",
  "scale-info",
  "subxt",
@@ -2375,6 +2376,7 @@ dependencies = [
  "catalog",
  "contract_abi",
  "hex",
+ "parity-scale-codec",
  "rand 0.8.5",
  "serde",
  "serde_json",

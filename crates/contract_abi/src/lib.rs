@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use hex::FromHexError;
+use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 pub struct Contract {
@@ -8,22 +8,23 @@ pub struct Contract {
     #[serde(alias = "contract")]
     meta_data: MetaData,
 
-    pub spec: Spec
+    pub spec: Spec,
 }
 
 #[derive(Deserialize, Serialize)]
 struct Source {
-    hash: String
+    hash: String,
 }
 
 #[derive(Deserialize, Serialize)]
 struct MetaData {
-    name: String
+    name: String,
 }
 
 #[derive(Deserialize, Serialize)]
 pub struct Spec {
-    pub constructors: Vec<Constructor>
+    pub constructors: Vec<Constructor>,
+    pub messages: Vec<Message>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -37,5 +38,23 @@ impl Constructor {
     pub fn get_selector_bytes(&self) -> Result<Vec<u8>, FromHexError> {
         let bytes = hex::decode(&self.selector[2..])?;
         Ok(bytes)
+    }
+}
+
+#[derive(Deserialize, Serialize)]
+pub struct Message {
+    label: String,
+    selector: String,
+    payable: bool,
+}
+
+impl Message {
+    pub fn get_selector_bytes(&self) -> Result<Vec<u8>, FromHexError> {
+        let bytes = hex::decode(&self.selector[2..])?;
+        Ok(bytes)
+    }
+
+    pub fn label(&self) -> String {
+        self.label.clone()
     }
 }
