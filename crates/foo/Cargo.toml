@@ -12,7 +12,6 @@ rust-version.workspace = true
 
 [dependencies]
 catalog = { workspace = true}
-contract_abi = { workspace = true}
 
 tokio = { version = "1.37.0" , features = ["rt-multi-thread", "fs", "io-util"]}
 subxt = { version = "0.35.3" }
@@ -21,4 +20,20 @@ rand = "0.8.5"
 serde_json.workspace = true
 serde.workspace = true
 hex = "0.4.3"
+ink_metadata = "5.0.0"
 scale = { package = "parity-scale-codec", version = "3.6.12" }
+scale-info = { workspace = true }
+
+frame = { features = [
+	"experimental",
+	"runtime",
+], workspace = true }
+
+sp-runtime = { workspace = true, default-features = true }
+pallet-contracts-uapi = { package = "pallet-contracts-uapi-next", version = "=6.0.3", features = ["scale"] }
+
+[features]
+default = ["std"]
+std = [
+	"frame/std",
+]

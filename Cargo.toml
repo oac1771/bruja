@@ -14,7 +14,6 @@ members = [
 	"crates/runtime",
 	"crates/catalog",
 	"crates/foo",
-	"crates/contract_abi"
 ]
 
 [workspace.dependencies]
@@ -67,6 +66,3 @@ substrate-wasm-builder = { version = "23.0.0", default-features = false }
 
 runtime = { path = "crates/runtime" }
 catalog = { path = "crates/catalog"}
-contract_abi = { path = "crates/contract_abi"}
-
-

@@ -1,16 +1,21 @@
-use contract_abi::{Contract, Message};
+mod primitives;
+
 use rand::Rng;
-use scale::Encode;
+use scale::{Decode, Encode};
 use subxt::{
     backend::{legacy::LegacyRpcMethods, rpc::RpcClient},
     utils::{AccountId32, MultiAddress},
     Error, OnlineClient, SubstrateConfig,
 };
 use subxt_signer::sr25519::{self, Keypair};
+use primitives::ContractExecResult;
+use ink_metadata::InkProject;
 
 #[subxt::subxt(runtime_metadata_path = "../../chain.scale")]
 pub mod chain {}
-use chain::{contracts::events::Instantiated, runtime_types::sp_weights::weight_v2::Weight};
+use chain::{
+    contracts::events::Instantiated, runtime_types::sp_weights::weight_v2::Weight,
+};
 
 const PROOF_SIZE: u64 = u64::MAX / 2;
 
@@ -31,13 +36,14 @@ async fn main() {
     let signer = sr25519::dev::alice();
 
     let address = deploy_conract(&contract, &client, &signer).await;
-    get_worker(&contract, &address, &client, &signer).await;
+    println!("Address {}", address);
+    // get_worker(&contract, &address, &client, &signer).await;
     // set_worker(&contract, &address, &client);
 }
 
-fn load_abi() -> Contract {
+fn load_abi() -> InkProject {
     let metadata_file = std::fs::File::open("./target/ink/contract/contract.json").unwrap();
-    let abi: Contract = serde_json::from_reader(metadata_file).unwrap();
+    let abi: InkProject = serde_json::from_reader(metadata_file).unwrap();
 
     // let json = serde_json::to_string_pretty(&abi).unwrap();
     // println!("{}", json);
@@ -53,12 +59,12 @@ fn read_wasm() -> Vec<u8> {
 }
 
 async fn deploy_conract(
-    contract: &Contract,
+    contract: &InkProject,
     client: &OnlineClient<SubstrateConfig>,
     signer: &Keypair,
 ) -> AccountId32 {
     let code = read_wasm();
-    let selector_bytes = contract.spec.constructors[0].get_selector_bytes().unwrap();
+    let selector_bytes = contract.spec().constructors()[0].selector().to_bytes().to_vec();
 
     let salt: u8 = rand::thread_rng().gen();
 
@@ -97,75 +103,79 @@ async fn deploy_conract(
     instantiated.contract
 }
 
-async fn get_worker(
-    contract: &Contract,
-    address: &AccountId32,
-    _client: &OnlineClient<SubstrateConfig>,
-    signer: &Keypair,
-) {
-    let function = "ContractsApi_call";
-    let rpc: LegacyRpcMethods<SubstrateConfig> =
-        LegacyRpcMethods::new(RpcClient::from_url("ws://127.0.0.1:9944").await.unwrap());
+// async fn get_worker(
+//     contract: &InkProject,
+//     address: &AccountId32,
+//     _client: &OnlineClient<SubstrateConfig>,
+//     signer: &Keypair,
+// ) {
+//     let function = "ContractsApi_call";
+//     let rpc: LegacyRpcMethods<SubstrateConfig> =
+//         LegacyRpcMethods::new(RpcClient::from_url("ws://127.0.0.1:9944").await.unwrap());
 
-    let call_data = contract
-        .spec
-        .messages
-        .iter()
-        .filter(|msg| &msg.label() == "get_worker")
-        .collect::<Vec<&Message>>()[0]
-        .get_selector_bytes()
-        .unwrap();
+//     let call_data = contract
+//         .spec
+//         .messages
+//         .iter()
+//         .filter(|msg| &msg.label() == "get_worker")
+//         .collect::<Vec<&Message>>()[0]
+//         .get_selector_bytes()
+//         .unwrap();
 
-    let value: u128 = 0;
+//     let value: u128 = 0;
 
-    let call_request = CallRequest {
-        origin: signer.public_key().to_account_id(),
-        dest: address.clone(),
-        value: value,
-        gas_limit: None,
-        storage_deposit_limit: None,
-        input_data: call_data,
-    };
+//     let call_request = CallRequest {
+//         origin: signer.public_key().to_account_id(),
+//         dest: address.clone(),
+//         value: value,
+//         gas_limit: None,
+//         storage_deposit_limit: None,
+//         input_data: call_data,
+//     };
 
-    let args = call_request.encode();
+//     let args = call_request.encode();
 
-    let foo = rpc.state_call(function, Some(&args), None).await.unwrap();
+//     let response = rpc.state_call(function, Some(&args), None).await.unwrap();
+//     let result: ContractExecResult<u128> = ContractExecResult::decode(&mut response.as_slice()).unwrap();
 
-    println!("{:?}", foo);
-}
+//     if let Ok(val) = result.result {
+//         println!("{:?}", val.data);
+//     }
 
-async fn _set_worker(
-    contract: &Contract,
-    address: &AccountId32,
-    client: &OnlineClient<SubstrateConfig>,
-    signer: &Keypair,
-) {
-    let mut data = contract
-        .spec
-        .messages
-        .iter()
-        .filter(|msg| &msg.label() == "set_worker")
-        .collect::<Vec<&Message>>()[0]
-        .get_selector_bytes()
-        .unwrap();
+// }
 
-    let id: u32 = 10;
-    id.encode_to(&mut data);
+// async fn _set_worker(
+//     contract: &InkProject,
+//     address: &AccountId32,
+//     client: &OnlineClient<SubstrateConfig>,
+//     signer: &Keypair,
+// ) {
+//     let mut data = contract
+//         .spec
+//         .messages
+//         .iter()
+//         .filter(|msg| &msg.label() == "set_worker")
+//         .collect::<Vec<&Message>>()[0]
+//         .get_selector_bytes()
+//         .unwrap();
 
-    let call_tx = chain::tx().contracts().call(
-        MultiAddress::Id(address.clone()),
-        0,
-        Weight {
-            ref_time: 500_000_000,
-            proof_size: PROOF_SIZE,
-        },
-        None,
-        data,
-    );
+//     let id: u32 = 10;
+//     id.encode_to(&mut data);
 
-    let _result = client
-        .tx()
-        .sign_and_submit_then_watch_default(&call_tx, signer)
-        .await
-        .unwrap();
-}
+//     let call_tx = chain::tx().contracts().call(
+//         MultiAddress::Id(address.clone()),
+//         0,
+//         Weight {
+//             ref_time: 500_000_000,
+//             proof_size: PROOF_SIZE,
+//         },
+//         None,
+//         data,
+//     );
+
+//     let _result = client
+//         .tx()
+//         .sign_and_submit_then_watch_default(&call_tx, signer)
+//         .await
+//         .unwrap();
+// }
