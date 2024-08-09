@@ -1,8 +1,8 @@
 use frame::deps::frame_support::weights::Weight;
+use pallet_contracts_uapi::ReturnFlags;
 use scale::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::{RuntimeDebug, DispatchError};
-use pallet_contracts_uapi::ReturnFlags;
+use sp_runtime::{DispatchError, RuntimeDebug};
 
 // A copy of primitive types defined within `pallet_contracts`, required for RPC calls.
 

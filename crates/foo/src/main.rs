@@ -1,5 +1,7 @@
 mod primitives;
 
+use ink_metadata::InkProject;
+use primitives::ContractExecResult;
 use rand::Rng;
 use scale::{Decode, Encode};
 use subxt::{
@@ -8,14 +10,10 @@ use subxt::{
     Error, OnlineClient, SubstrateConfig,
 };
 use subxt_signer::sr25519::{self, Keypair};
-use primitives::ContractExecResult;
-use ink_metadata::InkProject;
 
 #[subxt::subxt(runtime_metadata_path = "../../chain.scale")]
 pub mod chain {}
-use chain::{
-    contracts::events::Instantiated, runtime_types::sp_weights::weight_v2::Weight,
-};
+use chain::{contracts::events::Instantiated, runtime_types::sp_weights::weight_v2::Weight};
 
 const PROOF_SIZE: u64 = u64::MAX / 2;
 
@@ -35,9 +33,8 @@ async fn main() {
     let client = OnlineClient::<SubstrateConfig>::new().await.unwrap();
     let signer = sr25519::dev::alice();
 
-    let address = deploy_conract(&contract, &client, &signer).await;
-    println!("Address {}", address);
-    // get_worker(&contract, &address, &client, &signer).await;
+    let address = deploy_contract(&contract, &client, &signer).await;
+    get_worker(&contract, &address, &signer).await;
     // set_worker(&contract, &address, &client);
 }
 
@@ -58,13 +55,22 @@ fn read_wasm() -> Vec<u8> {
     file
 }
 
-async fn deploy_conract(
+async fn deploy_contract(
     contract: &InkProject,
     client: &OnlineClient<SubstrateConfig>,
     signer: &Keypair,
 ) -> AccountId32 {
     let code = read_wasm();
-    let selector_bytes = contract.spec().constructors()[0].selector().to_bytes().to_vec();
+    let label = "new";
+    let selector_bytes = contract
+        .spec()
+        .constructors()
+        .iter()
+        .find(|val| val.label() == label)
+        .unwrap()
+        .selector()
+        .to_bytes()
+        .to_vec();
 
     let salt: u8 = rand::thread_rng().gen();
 
@@ -103,46 +109,43 @@ async fn deploy_conract(
     instantiated.contract
 }
 
-// async fn get_worker(
-//     contract: &InkProject,
-//     address: &AccountId32,
-//     _client: &OnlineClient<SubstrateConfig>,
-//     signer: &Keypair,
-// ) {
-//     let function = "ContractsApi_call";
-//     let rpc: LegacyRpcMethods<SubstrateConfig> =
-//         LegacyRpcMethods::new(RpcClient::from_url("ws://127.0.0.1:9944").await.unwrap());
+async fn get_worker(contract: &InkProject, address: &AccountId32, signer: &Keypair) {
+    let function = "ContractsApi_call";
+    let label = "get_worker";
+    let rpc: LegacyRpcMethods<SubstrateConfig> =
+        LegacyRpcMethods::new(RpcClient::from_url("ws://127.0.0.1:9944").await.unwrap());
 
-//     let call_data = contract
-//         .spec
-//         .messages
-//         .iter()
-//         .filter(|msg| &msg.label() == "get_worker")
-//         .collect::<Vec<&Message>>()[0]
-//         .get_selector_bytes()
-//         .unwrap();
+    let call_data = contract
+        .spec()
+        .messages()
+        .iter()
+        .find(|msg| msg.label() == label)
+        .unwrap()
+        .selector()
+        .to_bytes()
+        .to_vec();
 
-//     let value: u128 = 0;
+    let value: u128 = 0;
 
-//     let call_request = CallRequest {
-//         origin: signer.public_key().to_account_id(),
-//         dest: address.clone(),
-//         value: value,
-//         gas_limit: None,
-//         storage_deposit_limit: None,
-//         input_data: call_data,
-//     };
+    let call_request = CallRequest {
+        origin: signer.public_key().to_account_id(),
+        dest: address.clone(),
+        value: value,
+        gas_limit: None,
+        storage_deposit_limit: None,
+        input_data: call_data,
+    };
 
-//     let args = call_request.encode();
+    let args = call_request.encode();
 
-//     let response = rpc.state_call(function, Some(&args), None).await.unwrap();
-//     let result: ContractExecResult<u128> = ContractExecResult::decode(&mut response.as_slice()).unwrap();
+    let response = rpc.state_call(function, Some(&args), None).await.unwrap();
+    let result: ContractExecResult<u128> =
+        ContractExecResult::decode(&mut response.as_slice()).unwrap();
 
-//     if let Ok(val) = result.result {
-//         println!("{:?}", val.data);
-//     }
-
-// }
+    if let Ok(val) = result.result {
+        println!("{:?}", val.data);
+    }
+}
 
 // async fn _set_worker(
 //     contract: &InkProject,
