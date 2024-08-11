@@ -19,8 +19,6 @@ subxt-signer = "0.35.3"
 rand = "0.8.5"
 serde_json.workspace = true
 serde.workspace = true
-hex = "0.4.3"
-ink_metadata = "5.0.0"
 scale = { package = "parity-scale-codec", version = "3.6.12" }
 scale-info = { workspace = true }
 
@@ -31,6 +29,7 @@ frame = { features = [
 
 sp-runtime = { workspace = true, default-features = true }
 pallet-contracts-uapi = { package = "pallet-contracts-uapi-next", version = "=6.0.3", features = ["scale"] }
+contract-transcode = "4.1.1"
 
 [features]
 default = ["std"]

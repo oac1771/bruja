@@ -1,6 +1,6 @@
 mod primitives;
 
-use ink_metadata::InkProject;
+use contract_transcode::{ink_metadata::InkProject, ContractMessageTranscoder};
 use primitives::ContractExecResult;
 use rand::Rng;
 use scale::{Decode, Encode};
@@ -29,27 +29,29 @@ struct CallRequest<AccountId, Balance> {
 
 #[tokio::main]
 async fn main() {
-    let contract = load_abi();
+    let transcoder = load_abi();
     let client = OnlineClient::<SubstrateConfig>::new().await.unwrap();
     let signer = sr25519::dev::alice();
 
-    let address = deploy_contract(&contract, &client, &signer).await;
-    get_worker(&contract, &address, &signer).await;
+    let address = deploy_contract(transcoder.metadata(), &client, &signer).await;
+    get_worker(&transcoder, &address, &signer).await;
     // set_worker(&contract, &address, &client);
 }
 
-fn load_abi() -> InkProject {
-    let metadata_file = std::fs::File::open("./target/ink/contract/contract.json").unwrap();
+fn load_abi() -> ContractMessageTranscoder {
+    let metadata_file = std::fs::File::open("./target/ink/catalog/catalog.json").unwrap();
     let abi: InkProject = serde_json::from_reader(metadata_file).unwrap();
+
+    let transcoder = ContractMessageTranscoder::new(abi);
 
     // let json = serde_json::to_string_pretty(&abi).unwrap();
     // println!("{}", json);
 
-    abi
+    transcoder
 }
 
 fn read_wasm() -> Vec<u8> {
-    let path = "./target/ink/contract/contract.wasm";
+    let path = "./target/ink/catalog/catalog.wasm";
     let file = std::fs::read(path).unwrap();
 
     file
@@ -109,13 +111,18 @@ async fn deploy_contract(
     instantiated.contract
 }
 
-async fn get_worker(contract: &InkProject, address: &AccountId32, signer: &Keypair) {
+async fn get_worker(
+    transcoder: &ContractMessageTranscoder,
+    address: &AccountId32,
+    signer: &Keypair,
+) {
     let function = "ContractsApi_call";
     let label = "get_worker";
     let rpc: LegacyRpcMethods<SubstrateConfig> =
         LegacyRpcMethods::new(RpcClient::from_url("ws://127.0.0.1:9944").await.unwrap());
 
-    let call_data = contract
+    let call_data = transcoder
+        .metadata()
         .spec()
         .messages()
         .iter()
@@ -143,7 +150,11 @@ async fn get_worker(contract: &InkProject, address: &AccountId32, signer: &Keypa
         ContractExecResult::decode(&mut response.as_slice()).unwrap();
 
     if let Ok(val) = result.result {
-        println!("{:?}", val.data);
+        let foo = transcoder
+            .decode_message_return(label, &mut val.data.as_slice())
+            .unwrap();
+        println!("$$$ {:?}", foo);
+        println!(">>> {:?}", format!("{}", foo));
     }
 }
 
