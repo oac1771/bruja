@@ -5,7 +5,7 @@ version = "0.0.0"
 license = "Unlicense"
 homepage = "https://github.com/paritytech/substrate-contracts-node"
 repository = "https://github.com/paritytech/substrate-contracts-node"
-rust-version = "1.79"
+rust-version = "1.77"
 
 [workspace]
 resolver = "2"

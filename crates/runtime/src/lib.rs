@@ -189,6 +189,7 @@ impl frame_system::Config for Runtime {
     type Version = Version;
     // Use the account data from the balances pallet
     type AccountData = pallet_balances::AccountData<<Runtime as pallet_balances::Config>::Balance>;
+    type AccountId = sp_runtime::AccountId32;
 }
 
 // Implements the types required for the balances pallet.
@@ -234,9 +235,9 @@ impl pallet_contracts::Config for Runtime {
 pub mod interface {
     use super::Runtime;
     use frame::deps::frame_system;
+    pub use frame::runtime::types_common::OpaqueBlock;
 
     pub type Block = super::Block;
-    pub use frame::runtime::types_common::OpaqueBlock;
     pub type AccountId = <Runtime as frame_system::Config>::AccountId;
     pub type Nonce = <Runtime as frame_system::Config>::Nonce;
     pub type Hash = <Runtime as frame_system::Config>::Hash;

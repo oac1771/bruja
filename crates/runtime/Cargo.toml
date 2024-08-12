@@ -12,8 +12,6 @@ publish = false
 [dependencies]
 codec = { workspace = true }
 scale-info = { workspace = true }
-
-# this is a frame-based runtime, thus importing `frame` with runtime feature enabled.
 frame = { features = [
 	"experimental",
 	"runtime",
