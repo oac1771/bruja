@@ -11,25 +11,20 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-catalog = { workspace = true}
-
 tokio = { version = "1.37.0" , features = ["rt-multi-thread", "fs", "io-util"]}
-subxt = { version = "0.35.3" }
 subxt-signer = "0.35.3"
 rand = "0.8.5"
-serde_json.workspace = true
-serde.workspace = true
-scale = { package = "parity-scale-codec", version = "3.6.12" }
-scale-info = { workspace = true }
+contract-transcode = "4.1.1"
+contract-extrinsics = "4.1.1"
 
+serde_json = { workspace = true }
+serde = { workspace = true }
+codec = { workspace = true }
+scale-info = { workspace = true }
 frame = { features = [
 	"experimental",
 	"runtime",
 ], workspace = true }
-
-sp-runtime = { workspace = true, default-features = true }
-pallet-contracts-uapi = { package = "pallet-contracts-uapi-next", version = "=6.0.3", features = ["scale"] }
-contract-transcode = "4.1.1"
 
 [features]
 default = ["std"]

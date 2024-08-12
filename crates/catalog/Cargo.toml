@@ -6,7 +6,7 @@ authors = ["Omar"]
 
 [dependencies]
 ink = { version = "5.0.0", default-features = false }
-scale-info = { version = "2.10.0", default-features = false, features = [
+scale-info = { workspace = true, default-features = false, features = [
 	"derive",
 	"serde",
 ] }
@@ -15,7 +15,6 @@ codec = { workspace = true, features = ["derive"] }
 [dev-dependencies]
 tokio = { version = "1.37.0" }
 subxt = { version = "0.35.3" }
-wabt = "0.10.0"
 subxt-signer = "0.35.3"
 rand = "0.8.5"
 
