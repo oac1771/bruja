@@ -1,5 +1,5 @@
 use contract_transcode::{ink_metadata::InkProject, ContractMessageTranscoder};
-use contract_extrinsics::{InstantiateCommandBuilder, ExtrinsicOptsBuilder};
+// use contract_extrinsics::{InstantiateCommandBuilder, ExtrinsicOptsBuilder};
 // use contract_extrinsics::pallet_contracts_primitives::ContractExecResult;
 // use rand::Rng;
 
@@ -37,7 +37,7 @@ fn load_transcoder() -> ContractMessageTranscoder {
 //     file
 // }
 
-async fn deploy_contract(_contract: &InkProject, signer: &Keypair) {
+async fn deploy_contract(_contract: &InkProject, _signer: &Keypair) {
     // let extrinsic_opts = ExtrinsicOptsBuilder::new(signer).done();
     // let foo = InstantiateCommandBuilder::new(extrinsic_opts);
         // .constructor(self.constructor.clone())
