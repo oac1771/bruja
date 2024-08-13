@@ -12,11 +12,14 @@ rust-version.workspace = true
 
 [dependencies]
 tokio = { version = "1.37.0" , features = ["rt-multi-thread"]}
-subxt-signer = "0.35.3"
+ink_env = "5.0.0"
+subxt-signer = { version = "0.35.3", features = ["subxt"] }
+subxt = "0.35.3"
 rand = "0.8.5"
 contract-transcode = "4.1.1"
 contract-extrinsics = "4.1.1"
 
+sp-core = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
 codec = { workspace = true }

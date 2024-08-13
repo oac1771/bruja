@@ -1,54 +1,54 @@
-use contract_transcode::{ink_metadata::InkProject, ContractMessageTranscoder};
-// use contract_extrinsics::{InstantiateCommandBuilder, ExtrinsicOptsBuilder};
+use contract_extrinsics::{ExtrinsicOptsBuilder, InstantiateCommandBuilder, InstantiateExec};
+// use contract_transcode::{ink_metadata::InkProject, ContractMessageTranscoder};
+use sp_core::Bytes;
 // use contract_extrinsics::pallet_contracts_primitives::ContractExecResult;
-// use rand::Rng;
+use ink_env::DefaultEnvironment;
+use subxt::{utils::AccountId32, SubstrateConfig};
+use subxt_signer::sr25519::{dev::alice, Keypair};
 
-use subxt_signer::sr25519::{self, Keypair};
-
-// const PROOF_SIZE: u64 = u64::MAX / 2;
+const FILE_PATH: &str = "./target/ink/catalog/catalog.contract";
 
 #[tokio::main]
 async fn main() {
-    let transcoder = load_transcoder();
-    // let client = OnlineClient::<SubstrateConfig>::new().await.unwrap();
-    let signer = sr25519::dev::alice();
+    // let transcoder = load_transcoder();
+    let signer = alice();
 
-    deploy_contract(transcoder.metadata(), &signer).await;
+    deploy_contract(signer).await;
     // get_worker(&transcoder, &address, &signer).await;
     // set_worker(&contract, &address, &client);
 }
 
-fn load_transcoder() -> ContractMessageTranscoder {
-    let metadata_file = std::fs::File::open("./target/ink/catalog/catalog.json").unwrap();
-    let abi: InkProject = serde_json::from_reader(metadata_file).unwrap();
+// fn load_transcoder() -> ContractMessageTranscoder {
+//     let metadata_file = std::fs::File::open("./target/ink/catalog/catalog.json").unwrap();
+//     let abi: InkProject = serde_json::from_reader(metadata_file).unwrap();
+//     let transcoder = ContractMessageTranscoder::new(abi);
 
-    let transcoder = ContractMessageTranscoder::new(abi);
-
-    // let json = serde_json::to_string_pretty(&abi).unwrap();
-    // println!("{}", json);
-
-    transcoder
-}
-
-// fn read_wasm() -> Vec<u8> {
-//     let path = "./target/ink/catalog/catalog.wasm";
-//     let file = std::fs::read(path).unwrap();
-
-//     file
+//     transcoder
 // }
 
-async fn deploy_contract(_contract: &InkProject, _signer: &Keypair) {
-    // let extrinsic_opts = ExtrinsicOptsBuilder::new(signer).done();
-    // let foo = InstantiateCommandBuilder::new(extrinsic_opts);
-        // .constructor(self.constructor.clone())
-        // .args(self.args.clone())
-        // .value(value)
-        // .gas_limit(self.gas_limit)
-        // .proof_size(self.proof_size)
-        // .salt(self.salt.clone())
-        // .done()
-        // .await
-        // .unwrap();
+async fn deploy_contract(signer: Keypair) -> AccountId32 {
+    let extrinsic_opts = ExtrinsicOptsBuilder::new(signer)
+        .file(Some(FILE_PATH))
+        .done();
+
+    let bytes: [u8; 8] = rand::random();
+    let salt: Bytes = bytes.to_vec().into();
+
+    let instantiate_exec: InstantiateExec<SubstrateConfig, DefaultEnvironment, Keypair> =
+        InstantiateCommandBuilder::new(extrinsic_opts)
+            .constructor("new")
+            .salt(Some(salt))
+            .done()
+            .await
+            .unwrap();
+
+    let address = instantiate_exec
+        .instantiate(None)
+        .await
+        .unwrap()
+        .contract_address;
+
+    return address;
 }
 
 // async fn get_worker(

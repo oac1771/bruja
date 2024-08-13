@@ -52,6 +52,7 @@ sp-io = { version = "37.0.0", default-features = false }
 sp-runtime = { version = "38.0.0", default-features = false }
 sp-genesis-builder = { version = "0.14.0", default-features = false }
 sp-tracing = { version = "17.0.0", default-features = false}
+sp-core = { version = "31.0.0", default-features = false}
 
 pallet-balances = { version = "36.0.0", default-features = false}
 pallet-sudo = { version = "35.0.0", default-features = false}
