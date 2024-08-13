@@ -38,8 +38,8 @@ fn load_transcoder() -> ContractMessageTranscoder {
 // }
 
 async fn deploy_contract(_contract: &InkProject, signer: &Keypair) {
-    let extrinsic_opts = ExtrinsicOptsBuilder::new(signer).done();
-    let foo = InstantiateCommandBuilder::new(extrinsic_opts);
+    // let extrinsic_opts = ExtrinsicOptsBuilder::new(signer).done();
+    // let foo = InstantiateCommandBuilder::new(extrinsic_opts);
         // .constructor(self.constructor.clone())
         // .args(self.args.clone())
         // .value(value)
