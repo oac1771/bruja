@@ -1,8 +1,8 @@
-use contract_extrinsics::{ExtrinsicOptsBuilder, InstantiateCommandBuilder, InstantiateExec};
-// use contract_transcode::{ink_metadata::InkProject, ContractMessageTranscoder};
-use sp_core::Bytes;
-// use contract_extrinsics::pallet_contracts_primitives::ContractExecResult;
+use contract_extrinsics::{
+    CallCommandBuilder, CallExec, ExtrinsicOptsBuilder, InstantiateCommandBuilder, InstantiateExec,
+};
 use ink_env::DefaultEnvironment;
+use sp_core::Bytes;
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::{dev::alice, Keypair};
 
@@ -10,21 +10,12 @@ const FILE_PATH: &str = "./target/ink/catalog/catalog.contract";
 
 #[tokio::main]
 async fn main() {
-    // let transcoder = load_transcoder();
     let signer = alice();
 
-    deploy_contract(signer).await;
-    // get_worker(&transcoder, &address, &signer).await;
+    let address = deploy_contract(signer.clone()).await;
+    get_worker(address, signer).await;
     // set_worker(&contract, &address, &client);
 }
-
-// fn load_transcoder() -> ContractMessageTranscoder {
-//     let metadata_file = std::fs::File::open("./target/ink/catalog/catalog.json").unwrap();
-//     let abi: InkProject = serde_json::from_reader(metadata_file).unwrap();
-//     let transcoder = ContractMessageTranscoder::new(abi);
-
-//     transcoder
-// }
 
 async fn deploy_contract(signer: Keypair) -> AccountId32 {
     let extrinsic_opts = ExtrinsicOptsBuilder::new(signer)
@@ -51,52 +42,26 @@ async fn deploy_contract(signer: Keypair) -> AccountId32 {
     return address;
 }
 
-// async fn get_worker(
-//     transcoder: &ContractMessageTranscoder,
-//     address: &AccountId32,
-//     signer: &Keypair,
-// ) {
-//     let function = "ContractsApi_call";
-//     let label = "get_worker";
-//     let rpc: LegacyRpcMethods<SubstrateConfig> =
-//         LegacyRpcMethods::new(RpcClient::from_url("ws://127.0.0.1:9944").await.unwrap());
+async fn get_worker(address: AccountId32, signer: Keypair) {
+    let message = "get_worker";
+    let extrinsic_opts = ExtrinsicOptsBuilder::new(signer)
+        .file(Some(FILE_PATH))
+        .done();
 
-//     let call_data = transcoder
-//         .metadata()
-//         .spec()
-//         .messages()
-//         .iter()
-//         .find(|msg| msg.label() == label)
-//         .unwrap()
-//         .selector()
-//         .to_bytes()
-//         .to_vec();
+    let call_exec: CallExec<SubstrateConfig, DefaultEnvironment, Keypair> =
+        CallCommandBuilder::new(address, &message, extrinsic_opts)
+            .done()
+            .await
+            .unwrap();
 
-//     let value: u128 = 0;
+    let call_result = call_exec.call_dry_run().await.unwrap().result.unwrap().data;
+    let value = call_exec
+        .transcoder()
+        .decode_message_return(call_exec.message(), &mut &call_result[..])
+        .unwrap();
 
-//     let call_request = CallRequest {
-//         origin: signer.public_key().to_account_id(),
-//         dest: address.clone(),
-//         value: value,
-//         gas_limit: None,
-//         storage_deposit_limit: None,
-//         input_data: call_data,
-//     };
-
-//     let args = call_request.encode();
-
-//     let response = rpc.state_call(function, Some(&args), None).await.unwrap();
-//     let result: ContractExecResult<u128> =
-//         ContractExecResult::decode(&mut response.as_slice()).unwrap();
-
-//     if let Ok(val) = result.result {
-//         let foo = transcoder
-//             .decode_message_return(label, &mut val.data.as_slice())
-//             .unwrap();
-//         println!("$$$ {:?}", foo);
-//         println!(">>> {:?}", format!("{}", foo));
-//     }
-// }
+    println!("Get worker result: {}", value);
+}
 
 // async fn _set_worker(
 //     contract: &InkProject,
