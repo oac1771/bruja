@@ -46,7 +46,7 @@ pub mod catalog {
             let caller = self.env().caller();
             self.workers.insert(caller, &val);
 
-            // add event emission 
+            // add event emission
 
             true
         }

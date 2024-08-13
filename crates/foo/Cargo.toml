@@ -11,7 +11,7 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokio = { version = "1.37.0" , features = ["rt-multi-thread", "fs", "io-util"]}
+tokio = { version = "1.37.0" , features = ["rt-multi-thread"]}
 subxt-signer = "0.35.3"
 rand = "0.8.5"
 contract-transcode = "4.1.1"
