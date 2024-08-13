@@ -1,0 +1,34 @@
+---
+name: CI 
+
+on:
+  push:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v3
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt
+          target:  wasm32-unknown-unknown
+          cache-workspaces: true
+      
+      - name: Add Rust Deps
+        shell: bash
+        run: |
+          rustup component add rust-src --toolchain stable-x86_64-unknown-linux-gnu
+
+      - name: Cargo Check
+        shell: bash
+        run: cargo check
+
+
+
