@@ -29,18 +29,18 @@ codec = { version = "3.6.12", default-features = false, package = "parity-scale-
 scale-info = { version = "2.11.1", default-features = false }
 hex = { version = "0.4.3", default-features = false }
 
-sc-cli = { version = "0.43.0", default-features = false }
+sc-cli = { version = "0.44.0", default-features = false }
 sc-executor = { version = "0.39.0", default-features = false }
-sc-network = { version = "0.41.0", default-features = false }
-sc-service = { version = "0.42.0", default-features = false }
-sc-telemetry = { version = "21.0.0", default-features = false }
+sc-network = { version = "0.42.0", default-features = false }
+sc-service = { version = "0.43.0", default-features = false }
+sc-telemetry = { version = "22.0.0", default-features = false }
 sc-transaction-pool = { version = "35.0.0", default-features = false }
 sc-transaction-pool-api = { version = "35.0.0", default-features = false }
 sc-consensus = { version = "0.40.0", default-features = false }
-sc-consensus-manual-seal = { version = "0.42.0", default-features = false }
-sc-rpc-api = { version = "0.40.0", default-features = false }
-sc-basic-authorship = { version = "0.41.0", default-features = false }
-sc-offchain = { version = "36.0.0", default-features = false }
+sc-consensus-manual-seal = { version = "0.43.0", default-features = false }
+sc-rpc-api = { version = "0.41.0", default-features = false }
+sc-basic-authorship = { version = "0.42.0", default-features = false }
+sc-offchain = { version = "37.0.0", default-features = false }
 sc-client-api = { version = "35.0.0", default-features = false }
 
 sp-timestamp = { version = "33.0.0", default-features = false }
@@ -60,7 +60,7 @@ pallet-transaction-payment = { version = "35.0.0", default-features = false }
 pallet-transaction-payment-rpc-runtime-api = { version = "35.0.0", default-features = false }
 pallet-contracts = { version = "34.0.0", default-features = false }
 
-substrate-frame-rpc-system = { version = "35.0.0", default-features = false }
+substrate-frame-rpc-system = { version = "36.0.0", default-features = false }
 substrate-build-script-utils = { version = "11.0.0", default-features = false }
 substrate-wasm-builder = { version = "23.0.0", default-features = false }
 
