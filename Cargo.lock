@@ -4146,9 +4146,7 @@ dependencies = [
  "jsonrpsee-client-transport",
  "jsonrpsee-core 0.22.5",
  "jsonrpsee-http-client",
- "jsonrpsee-server 0.22.5",
  "jsonrpsee-types 0.22.5",
- "tokio",
 ]
 
 [[package]]
@@ -4159,7 +4157,7 @@ checksum = "62b089779ad7f80768693755a031cc14a7766aba707cbe886674e3f79e9b7e47"
 dependencies = [
  "jsonrpsee-core 0.23.2",
  "jsonrpsee-proc-macros",
- "jsonrpsee-server 0.23.2",
+ "jsonrpsee-server",
  "jsonrpsee-types 0.23.2",
  "tokio",
  "tracing",
@@ -4199,9 +4197,7 @@ dependencies = [
  "futures-util",
  "hyper 0.14.30",
  "jsonrpsee-types 0.22.5",
- "parking_lot 0.12.3",
  "pin-project",
- "rand",
  "rustc-hash",
  "serde",
  "serde_json",
@@ -4267,30 +4263,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.58",
-]
-
-[[package]]
-name = "jsonrpsee-server"
-version = "0.22.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12d8b6a9674422a8572e0b0abb12feeb3f2aeda86528c80d0350c2bd0923ab41"
-dependencies = [
- "futures-util",
- "http 0.2.12",
- "hyper 0.14.30",
- "jsonrpsee-core 0.22.5",
- "jsonrpsee-types 0.22.5",
- "pin-project",
- "route-recognizer",
- "serde",
- "serde_json",
- "soketto 0.7.1",
- "thiserror",
- "tokio",
- "tokio-stream",
- "tokio-util",
- "tower",
- "tracing",
 ]
 
 [[package]]
@@ -5703,13 +5675,13 @@ dependencies = [
  "docify",
  "futures",
  "futures-timer",
- "jsonrpsee 0.22.5",
+ "jsonrpsee 0.23.2",
  "polkadot-sdk-frame",
  "runtime",
  "sc-basic-authorship",
  "sc-cli",
  "sc-client-api",
- "sc-consensus 0.40.0",
+ "sc-consensus",
  "sc-consensus-manual-seal",
  "sc-executor",
  "sc-network",
@@ -7966,32 +7938,6 @@ dependencies = [
 
 [[package]]
 name = "sc-consensus"
-version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d7149e17ec363316391119f614ffb0da96284f4ed3aa1d67560687f627605b6"
-dependencies = [
- "async-trait",
- "futures",
- "futures-timer",
- "log",
- "mockall 0.11.4",
- "parking_lot 0.12.3",
- "sc-client-api",
- "sc-network-types",
- "sc-utils",
- "serde",
- "sp-api",
- "sp-blockchain",
- "sp-consensus",
- "sp-core 34.0.0",
- "sp-runtime 38.0.0",
- "sp-state-machine 0.42.0",
- "substrate-prometheus-endpoint",
- "thiserror",
-]
-
-[[package]]
-name = "sc-consensus"
 version = "0.41.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b2927954d83d4c055a8699cad8ae093fc921ce73694da6773bd06d195e9a8dd"
@@ -8027,7 +7973,7 @@ dependencies = [
  "parity-scale-codec",
  "sc-block-builder",
  "sc-client-api",
- "sc-consensus 0.41.0",
+ "sc-consensus",
  "sc-consensus-slots",
  "sc-telemetry",
  "sp-api",
@@ -8061,7 +8007,7 @@ dependencies = [
  "parity-scale-codec",
  "parking_lot 0.12.3",
  "sc-client-api",
- "sc-consensus 0.41.0",
+ "sc-consensus",
  "sc-consensus-epochs",
  "sc-consensus-slots",
  "sc-telemetry",
@@ -8091,7 +8037,7 @@ dependencies = [
  "fork-tree",
  "parity-scale-codec",
  "sc-client-api",
- "sc-consensus 0.41.0",
+ "sc-consensus",
  "sp-blockchain",
  "sp-runtime 38.0.0",
 ]
@@ -8110,7 +8056,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "sc-client-api",
- "sc-consensus 0.41.0",
+ "sc-consensus",
  "sc-consensus-aura",
  "sc-consensus-babe",
  "sc-consensus-epochs",
@@ -8144,7 +8090,7 @@ dependencies = [
  "log",
  "parity-scale-codec",
  "sc-client-api",
- "sc-consensus 0.41.0",
+ "sc-consensus",
  "sc-telemetry",
  "sp-arithmetic 26.0.0",
  "sp-blockchain",
@@ -8352,7 +8298,7 @@ dependencies = [
  "libp2p-identity",
  "parity-scale-codec",
  "prost-build 0.12.6",
- "sc-consensus 0.41.0",
+ "sc-consensus",
  "sc-network-types",
  "sp-consensus",
  "sp-consensus-grandpa",
@@ -8400,7 +8346,7 @@ dependencies = [
  "prost 0.12.6",
  "prost-build 0.12.6",
  "sc-client-api",
- "sc-consensus 0.41.0",
+ "sc-consensus",
  "sc-network",
  "sc-network-common",
  "sc-network-types",
@@ -8632,7 +8578,7 @@ dependencies = [
  "sc-chain-spec",
  "sc-client-api",
  "sc-client-db",
- "sc-consensus 0.41.0",
+ "sc-consensus",
  "sc-executor",
  "sc-informant",
  "sc-keystore",
@@ -9719,7 +9665,6 @@ dependencies = [
  "base64 0.13.1",
  "bytes",
  "futures",
- "http 0.2.12",
  "httparse",
  "log",
  "rand",
