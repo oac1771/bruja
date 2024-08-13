@@ -30,7 +30,7 @@ jobs:
       - name: Add OS Dependencies
         shell: bash
         run: |
-          apt install -y protobuf-compiler
+          sudo apt install -y protobuf-compiler
 
       - name: Cargo Check
         shell: bash
