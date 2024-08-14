@@ -38,6 +38,11 @@ Add Subxt Cli
 cargo install subxt-cli
 ```
 
+Get node metadata
+```
+subxt metadata --pallets Contracts  > chain.scale
+```
+
 
 # Reference
 info on runtime development including crate strucutre: [here](https://docs.substrate.io/learn/runtime-development/)

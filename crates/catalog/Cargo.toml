@@ -27,4 +27,7 @@ std = [
     "ink/std",
 ]
 ink-as-dependency = []
-e2e-tests = []
+
+[[test]]
+name = "test_e2e"
+test = false

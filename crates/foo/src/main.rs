@@ -88,5 +88,5 @@ async fn set_worker(address: AccountId32, signer: Keypair) {
     let contract_emitted = events.find_first::<ContractEmitted>().unwrap().unwrap();
     let worker_set_event =
         <WorkerSet as Decode>::decode(&mut contract_emitted.data.as_slice()).unwrap();
-    println!("Worker Set Event {:?}", worker_set_event);
+    println!("Worker Set Event: {:?}", worker_set_event);
 }
