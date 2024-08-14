@@ -1,6 +1,5 @@
 target/
 bin/
-*.scale
 local/*
 **/.DS_Store
 .vscode/**
