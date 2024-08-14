@@ -11,3 +11,11 @@ rust-version.workspace = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+ink_env = { workspace = true }
+subxt = { workspace = true }
+subxt-signer = { workspace = true, features = ["subxt"]}
+sp-core = { workspace = true }
+serde = { workspace = true }
+
+contract-extrinsics = "4.1.1"
+rand = "0.8.5"

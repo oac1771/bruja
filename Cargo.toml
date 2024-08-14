@@ -66,5 +66,10 @@ substrate-frame-rpc-system = { version = "36.0.0", default-features = false }
 substrate-build-script-utils = { version = "11.0.0", default-features = false }
 substrate-wasm-builder = { version = "23.0.0", default-features = false }
 
+ink_env = "5.0.0"
+subxt = "0.35.3"
+subxt-signer = "0.35.3"
+
 runtime = { path = "crates/runtime" }
 catalog = { path = "crates/catalog"}
+utils = { path = "crates/utils"}
