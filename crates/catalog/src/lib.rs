@@ -11,6 +11,12 @@ pub mod catalog {
         WorkerNotFound,
     }
 
+    #[ink(event)]
+    pub struct WorkerSet {
+        who: AccountId,
+        val: u32,
+    }
+
     #[ink(storage)]
     pub struct Catalog {
         workers: Mapping<AccountId, u32>,
@@ -42,24 +48,44 @@ pub mod catalog {
         }
 
         #[ink(message)]
-        pub fn set_worker(&mut self, val: u32) -> bool {
+        pub fn set_worker(&mut self, val: u32) {
             let caller = self.env().caller();
             self.workers.insert(caller, &val);
 
-            // add event emission
-
-            true
+            self.env().emit_event(WorkerSet { who: caller, val });
         }
     }
 
     #[cfg(test)]
     mod tests {
         use super::*;
+        use ink::{
+            env::test::{recorded_events, EmittedEvent},
+            primitives::AccountId,
+            scale::Decode,
+        };
 
         #[ink::test]
         fn default_works() {
             let catalog = Catalog::default();
             assert_eq!(catalog.get_worker(), Err(CatalogError::WorkerNotFound));
+        }
+
+        #[ink::test]
+        fn set_worker_emits_event() {
+            let val = 10;
+            let who = AccountId::from([1; 32]);
+            let mut catalog = Catalog::default();
+
+            catalog.set_worker(val);
+
+            let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
+            let worker_set_event =
+                <WorkerSet as Decode>::decode(&mut emitted_events[0].data.as_slice()).unwrap();
+
+            assert_eq!(emitted_events.len(), 1);
+            assert_eq!(worker_set_event.val, val);
+            assert_eq!(worker_set_event.who, who);
         }
     }
 }

@@ -33,6 +33,10 @@ Add Cargo Contract for ink development
 cargo install --force --locked cargo-contract
 ```
 
+Add Subxt Cli
+```
+cargo install subxt-cli
+```
 
 
 # Reference
