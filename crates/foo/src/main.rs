@@ -1,9 +1,11 @@
 #[subxt::subxt(runtime_metadata_path = "../../chain.scale")]
 pub mod chain {}
 
+use catalog::catalog::WorkerSet;
+use chain::contracts::events::ContractEmitted;
+use codec::Decode;
 use contract_extrinsics::{
-    CallCommandBuilder, CallExec, DisplayEvents, ExtrinsicOptsBuilder, InstantiateCommandBuilder,
-    InstantiateExec,
+    CallCommandBuilder, CallExec, ExtrinsicOptsBuilder, InstantiateCommandBuilder, InstantiateExec,
 };
 use ink_env::DefaultEnvironment;
 use sp_core::Bytes;
@@ -18,7 +20,8 @@ async fn main() {
 
     let address = deploy_contract(signer.clone()).await;
     get_worker(address.clone(), signer.clone()).await;
-    set_worker(address, signer).await;
+    set_worker(address.clone(), signer.clone()).await;
+    get_worker(address.clone(), signer.clone()).await;
 }
 
 async fn deploy_contract(signer: Keypair) -> AccountId32 {
@@ -69,22 +72,21 @@ async fn get_worker(address: AccountId32, signer: Keypair) {
 
 async fn set_worker(address: AccountId32, signer: Keypair) {
     let message = "set_worker";
+    let val = "10";
     let extrinsic_opts = ExtrinsicOptsBuilder::new(signer)
         .file(Some(FILE_PATH))
         .done();
 
     let call_exec: CallExec<SubstrateConfig, DefaultEnvironment, Keypair> =
         CallCommandBuilder::new(address, &message, extrinsic_opts)
-            .args(vec!["10"])
+            .args(vec![val])
             .done()
             .await
             .unwrap();
-    let metadata = call_exec.client().metadata();
 
     let events = call_exec.call(None).await.unwrap();
-    let foo =
-        DisplayEvents::from_events::<SubstrateConfig, DefaultEnvironment>(&events, None, &metadata)
-            .unwrap();
-
-    println!("{:?}", foo.to_json());
+    let contract_emitted = events.find_first::<ContractEmitted>().unwrap().unwrap();
+    let worker_set_event =
+        <WorkerSet as Decode>::decode(&mut contract_emitted.data.as_slice()).unwrap();
+    println!("Worker Set Event {:?}", worker_set_event);
 }

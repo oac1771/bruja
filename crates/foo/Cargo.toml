@@ -19,6 +19,7 @@ rand = "0.8.5"
 contract-transcode = "4.1.1"
 contract-extrinsics = "4.1.1"
 
+catalog = { workspace = true }
 sp-core = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }

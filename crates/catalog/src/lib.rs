@@ -11,6 +11,7 @@ pub mod catalog {
         WorkerNotFound,
     }
 
+    #[derive(Debug)]
     #[ink(event)]
     pub struct WorkerSet {
         who: AccountId,
