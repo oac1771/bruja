@@ -1,6 +1,8 @@
 use std::{fmt::Display, marker::PhantomData};
 
-use contract_extrinsics::{ExtrinsicOptsBuilder, InstantiateCommandBuilder, InstantiateExec};
+use contract_extrinsics::{
+    ErrorVariant, ExtrinsicOptsBuilder, InstantiateCommandBuilder, InstantiateExec,
+};
 use ink_env::Environment;
 use serde::Serialize;
 use sp_core::{Bytes, Decode};
@@ -34,9 +36,11 @@ where
         }
     }
 
-    pub async fn deploy(&self, constructor: &str) -> <C as Config>::AccountId {
+    pub async fn instantiate(
+        &self,
+        constructor: &str,
+    ) -> Result<<C as Config>::AccountId, ClientError> {
         let extrinsic_opts = self.extrinsic_opts_builder().done();
-
         let salt: Bytes = rand::random::<[u8; 8]>().to_vec().into();
 
         let instantiate_exec: InstantiateExec<C, E, S> =
@@ -44,19 +48,42 @@ where
                 .constructor(constructor)
                 .salt(Some(salt))
                 .done()
-                .await
-                .unwrap();
+                .await?;
 
-        let address = instantiate_exec
-            .instantiate(None)
-            .await
-            .unwrap()
-            .contract_address;
+        let address = instantiate_exec.instantiate(None).await?.contract_address;
 
-        return address;
+        return Ok(address);
     }
 
     fn extrinsic_opts_builder(&self) -> ExtrinsicOptsBuilder<C, E, S> {
         ExtrinsicOptsBuilder::new(self.signer.clone()).file(Some(self.artifact_file.clone()))
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ClientError {
+    #[error("Instantiation Command Builder Error: {source}")]
+    InstantiateCommandBuilderError {
+        #[from]
+        source: anyhow::Error,
+    },
+
+    #[error("Instantiation Error: {error}")]
+    InstantiateError { error: String },
+}
+
+impl From<ErrorVariant> for ClientError {
+    fn from(value: ErrorVariant) -> Self {
+        let error = match value {
+            ErrorVariant::Generic(err) => {
+                if let Ok(val) = serde_json::to_string(&err) {
+                    val
+                } else {
+                    "Error serializing GenericError to string".to_string()
+                }
+            }
+            ErrorVariant::Module(err) => err.error,
+        };
+        ClientError::InstantiateError { error }
     }
 }

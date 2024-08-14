@@ -11948,13 +11948,16 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 name = "utils"
 version = "0.0.0"
 dependencies = [
+ "anyhow",
  "contract-extrinsics",
  "ink_env",
  "rand",
  "serde",
+ "serde_json",
  "sp-core 31.0.0",
  "subxt",
  "subxt-signer",
+ "thiserror",
 ]
 
 [[package]]

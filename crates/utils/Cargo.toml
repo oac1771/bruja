@@ -16,6 +16,9 @@ subxt = { workspace = true }
 subxt-signer = { workspace = true, features = ["subxt"]}
 sp-core = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
 
 contract-extrinsics = "4.1.1"
 rand = "0.8.5"
+anyhow = "1.0.86"
