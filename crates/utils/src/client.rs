@@ -5,7 +5,6 @@ use contract_extrinsics::{
     CallCommandBuilder, CallExec, ErrorVariant, ExtrinsicOptsBuilder, InstantiateCommandBuilder,
     InstantiateExec,
 };
-use contract_transcode::Value;
 use ink_env::Environment;
 use serde::Serialize;
 use sp_core::{Bytes, Decode};
@@ -61,12 +60,12 @@ where
         return Ok(address);
     }
 
-    async fn _immutable_call(
+    pub async fn immutable_call(
         &self,
         message: &str,
         address: <C as Config>::AccountId,
         args: Vec<String>,
-    ) -> Result<Value, ClientError> {
+    ) -> Result<Vec<u8>, ClientError> {
         let extrinsic_opts = self.extrinsic_opts_builder().done();
         let call_exec: CallExec<C, E, S> =
             CallCommandBuilder::new(address, &message, extrinsic_opts)
@@ -75,7 +74,7 @@ where
                 .await
                 .context("Failed at CallCommandBuilder::done()")?;
 
-        if self._is_mutable(&call_exec, message)? {
+        if self.is_mutable(&call_exec, message)? {
             return Err(ClientError::MessageMutabilityError {
                 message: format!("{} is not immutable message", message),
             });
@@ -88,12 +87,7 @@ where
             .result?
             .data;
 
-        let value = call_exec
-            .transcoder()
-            .decode_message_return(call_exec.message(), &mut &call_result[..])
-            .context("Failed at CallExec::decode_message_return()")?;
-
-        Ok(value)
+        Ok(call_result)
     }
 
     async fn _mutable_call(
@@ -110,7 +104,7 @@ where
                 .await
                 .context("Failed at CallCommandBuilder::done()")?;
 
-        if !self._is_mutable(&call_exec, message)? {
+        if !self.is_mutable(&call_exec, message)? {
             return Err(ClientError::MessageMutabilityError {
                 message: format!("{} is not mutable message", message),
             });
@@ -125,7 +119,7 @@ where
         ExtrinsicOptsBuilder::new(self.signer.clone()).file(Some(self.artifact_file.clone()))
     }
 
-    fn _is_mutable(
+    fn is_mutable(
         &self,
         call_exec: &CallExec<C, E, S>,
         message: &str,

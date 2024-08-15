@@ -48,5 +48,9 @@ jobs:
         shell: bash
         run: cargo check
 
+      - name: Cargo Test
+        shell: bash
+        run: cargo test
+
 
 

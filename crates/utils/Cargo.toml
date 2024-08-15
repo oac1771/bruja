@@ -22,6 +22,5 @@ sp-core = { workspace = true }
 sp-runtime = { version = "34.0.0", default-features = true }
 
 contract-extrinsics = "4.1.1"
-contract-transcode = "4.1.1"
 rand = "0.8.5"
 anyhow = "1.0.86"

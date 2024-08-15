@@ -11950,7 +11950,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "contract-extrinsics",
- "contract-transcode",
  "ink_env",
  "rand",
  "serde",
