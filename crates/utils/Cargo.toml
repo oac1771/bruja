@@ -14,11 +14,14 @@ rust-version.workspace = true
 ink_env = { workspace = true }
 subxt = { workspace = true }
 subxt-signer = { workspace = true, features = ["subxt"]}
-sp-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 
+sp-core = { workspace = true }
+sp-runtime = { version = "34.0.0", default-features = true }
+
 contract-extrinsics = "4.1.1"
+contract-transcode = "4.1.1"
 rand = "0.8.5"
 anyhow = "1.0.86"

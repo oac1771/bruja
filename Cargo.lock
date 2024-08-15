@@ -11950,11 +11950,13 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "contract-extrinsics",
+ "contract-transcode",
  "ink_env",
  "rand",
  "serde",
  "serde_json",
  "sp-core 31.0.0",
+ "sp-runtime 34.0.0",
  "subxt",
  "subxt-signer",
  "thiserror",

@@ -8,10 +8,12 @@ mod tests {
 
     #[tokio::test]
     async fn foo() {
-        let artifact_file = "foo".to_string();
+        let artifact_file = "../../target/ink/catalog/catalog.contract";
         let signer = alice();
         let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(artifact_file, signer);
+
+        let address = client.instantiate("new").await.unwrap();
 
         assert!(true)
     }
