@@ -11951,6 +11951,7 @@ dependencies = [
  "anyhow",
  "contract-extrinsics",
  "ink_env",
+ "parity-scale-codec",
  "rand",
  "serde",
  "serde_json",

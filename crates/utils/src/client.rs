@@ -60,12 +60,12 @@ where
         return Ok(address);
     }
 
-    pub async fn immutable_call(
+    pub async fn immutable_call<T: Decode>(
         &self,
         message: &str,
         address: <C as Config>::AccountId,
         args: Vec<String>,
-    ) -> Result<Vec<u8>, ClientError> {
+    ) -> Result<T, ClientError> {
         let extrinsic_opts = self.extrinsic_opts_builder().done();
         let call_exec: CallExec<C, E, S> =
             CallCommandBuilder::new(address, &message, extrinsic_opts)
@@ -80,14 +80,16 @@ where
             });
         }
 
-        let call_result = call_exec
+        let data = call_exec
             .call_dry_run()
             .await
             .context("Failed at CallExec::call_dry_run(")?
             .result?
             .data;
 
-        Ok(call_result)
+        let result = T::decode(&mut data.as_slice())?;
+
+        Ok(result)
     }
 
     async fn _mutable_call(
@@ -146,6 +148,12 @@ pub enum ClientError {
     ContractExtrinsicCrateError {
         #[from]
         source: anyhow::Error,
+    },
+
+    #[error("Codec Decode Error: {source}")]
+    DecodeError {
+        #[from]
+        source: codec::Error,
     },
 
     #[error("Contract Dispatch Error: {error}")]
