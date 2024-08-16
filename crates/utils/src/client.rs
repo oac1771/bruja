@@ -5,6 +5,7 @@ use contract_extrinsics::{
     CallCommandBuilder, CallExec, ErrorVariant, ExtrinsicOptsBuilder, InstantiateCommandBuilder,
     InstantiateExec,
 };
+use ink::primitives::{LangError, MessageResult};
 use ink_env::Environment;
 use serde::Serialize;
 use sp_core::{Bytes, Decode};
@@ -87,7 +88,7 @@ where
             .result?
             .data;
 
-        let result = T::decode(&mut data.as_slice())?;
+        let result = <MessageResult<T>>::decode(&mut data.as_slice())??;
 
         Ok(result)
     }
@@ -165,6 +166,9 @@ pub enum ClientError {
     #[error("Unexpected Message Mutability State: {message}")]
     MessageMutabilityError { message: String },
 
+    #[error("Codec Decode Error: {message}")]
+    MessageError { message: String },
+
     #[error("CallExec Error: {error}")]
     CallExecError { error: String },
 }
@@ -192,5 +196,13 @@ impl From<ErrorVariant> for ClientError {
             ErrorVariant::Module(err) => err.error,
         };
         ClientError::CallExecError { error }
+    }
+}
+
+impl From<LangError> for ClientError {
+    fn from(_value: LangError) -> Self {
+        Self::MessageError {
+            message: "Failed to read execution input for the dispatchable.".to_string(),
+        }
     }
 }

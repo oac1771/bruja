@@ -1135,6 +1135,8 @@ dependencies = [
 name = "catalog"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "futures",
  "ink",
  "ink_env",
  "parity-scale-codec",
@@ -11950,6 +11952,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "contract-extrinsics",
+ "ink",
  "ink_env",
  "parity-scale-codec",
  "rand",
