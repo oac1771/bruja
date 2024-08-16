@@ -93,11 +93,11 @@ where
         Ok(result)
     }
 
-    async fn _mutable_call(
+    pub async fn mutable_call(
         &self,
         message: &str,
         address: <C as Config>::AccountId,
-        args: Vec<String>,
+        args: Vec<&str>,
     ) -> Result<ExtrinsicEvents<C>, ClientError> {
         let extrinsic_opts = self.extrinsic_opts_builder().done();
         let call_exec: CallExec<C, E, S> =
@@ -195,7 +195,9 @@ impl From<ErrorVariant> for ClientError {
             }
             ErrorVariant::Module(err) => err.error,
         };
-        ClientError::CallExecError { error }
+        ClientError::CallExecError {
+            error: format!("Error Executing Call: {}", error),
+        }
     }
 }
 

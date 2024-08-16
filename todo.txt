@@ -1,5 +1,4 @@
 larger refactor:
-    - create test runner to be able to do e2e tests for smart contract
     - create docker container to build artifacts
         - use academy PoW repo that has builder pattern in layers
         - see if this will let you run colima with aarch64 and 
