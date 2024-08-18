@@ -18,9 +18,10 @@
 use crate::{
     chain_spec,
     cli::{Cli, Subcommand},
-    service,
+    service::{new_full, new_partial},
 };
 use sc_cli::SubstrateCli;
+use sc_network::{config::NetworkBackendType, Litep2pNetworkBackend, NetworkWorker};
 use sc_service::PartialComponents;
 
 #[cfg(feature = "try-runtime")]
@@ -79,7 +80,7 @@ pub fn run() -> sc_cli::Result<()> {
                     task_manager,
                     import_queue,
                     ..
-                } = service::new_partial(&config)?;
+                } = new_partial(&config)?;
                 Ok((cmd.run(client, import_queue), task_manager))
             })
         }
@@ -90,7 +91,7 @@ pub fn run() -> sc_cli::Result<()> {
                     client,
                     task_manager,
                     ..
-                } = service::new_partial(&config)?;
+                } = new_partial(&config)?;
                 Ok((cmd.run(client, config.database), task_manager))
             })
         }
@@ -101,7 +102,7 @@ pub fn run() -> sc_cli::Result<()> {
                     client,
                     task_manager,
                     ..
-                } = service::new_partial(&config)?;
+                } = new_partial(&config)?;
                 Ok((cmd.run(client, config.chain_spec), task_manager))
             })
         }
@@ -113,7 +114,7 @@ pub fn run() -> sc_cli::Result<()> {
                     task_manager,
                     import_queue,
                     ..
-                } = service::new_partial(&config)?;
+                } = new_partial(&config)?;
                 Ok((cmd.run(client, import_queue), task_manager))
             })
         }
@@ -129,7 +130,7 @@ pub fn run() -> sc_cli::Result<()> {
                     task_manager,
                     backend,
                     ..
-                } = service::new_partial(&config)?;
+                } = new_partial(&config)?;
                 Ok((cmd.run(client, backend, None), task_manager))
             })
         }
@@ -141,16 +142,14 @@ pub fn run() -> sc_cli::Result<()> {
             let runner = cli.create_runner(&cli.run)?;
             runner.run_node_until_exit(|config| async move {
                 match config.network.network_backend {
-                    sc_network::config::NetworkBackendType::Libp2p => {
-                        service::new_full::<sc_network::NetworkWorker<_, _>>(config, cli.consensus)
+                    NetworkBackendType::Libp2p => {
+                        new_full::<NetworkWorker<_, _>>(config, cli.consensus)
                             .map_err(sc_cli::Error::Service)
                     }
-                    sc_network::config::NetworkBackendType::Litep2p => service::new_full::<
-                        sc_network::Litep2pNetworkBackend,
-                    >(
-                        config, cli.consensus
-                    )
-                    .map_err(sc_cli::Error::Service),
+                    NetworkBackendType::Litep2p => {
+                        new_full::<Litep2pNetworkBackend>(config, cli.consensus)
+                            .map_err(sc_cli::Error::Service)
+                    }
                 }
             })
         }

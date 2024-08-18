@@ -7,3 +7,5 @@ larger refactor:
 
     - figure out how to use substrate wasm builder for ink contract to not need to use cargo contract cli
         to build wasm binary
+
+    - make contract e2e test run against runtime only if possible similar to ink_e2e sandbox feature .

@@ -12,7 +12,8 @@ command = "docker/build.sh"
 
 [tasks.test-contract]
 command = "cargo"
-args = ["test", "--features", "e2e-tests"]
+env = { "CONTRACTS_NODE" = "../../target/debug/node" }
+args = ["test", "-p", "catalog", "--test", "e2e"]
 
 [tasks.local-node]
 script='''

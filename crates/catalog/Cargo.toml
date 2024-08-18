@@ -13,16 +13,7 @@ scale-info = { workspace = true, default-features = false, features = [
 codec = { workspace = true, features = ["derive"] }
 
 [dev-dependencies]
-utils = { workspace = true }
-
-futures = { workspace = true }
-anyhow = { workspace = true }
-ink_env = { workspace = true }
-subxt = { workspace = true }
-subxt-signer = { workspace = true }
-
-tokio = { version = "1.37.0" }
-rand = "0.8.5"
+ink_e2e = { version = "5.0.0" }
 
 [lib]
 path = "src/lib.rs"
@@ -35,5 +26,6 @@ std = [
 ink-as-dependency = []
 
 [[test]]
-name = "test_e2e"
+name = "e2e"
+path = "tests/test_e2e.rs"
 test = false
