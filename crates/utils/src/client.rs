@@ -24,6 +24,8 @@ pub struct Client<C, E, S> {
     _env: PhantomData<E>,
 }
 
+// reformat this so it takes suri and builds signer in ::new() method
+// add method to return keypair type
 impl<C: Config, E: Environment, S: Signer<C> + Clone> Client<C, E, S>
 where
     C::Hash: From<[u8; 32]> + EncodeAsType + IntoVisitor,

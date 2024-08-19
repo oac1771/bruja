@@ -13796,8 +13796,10 @@ checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 name = "worker"
 version = "0.0.0"
 dependencies = [
+ "catalog",
  "clap",
  "ink_env",
+ "parity-scale-codec",
  "subxt 0.35.3",
  "subxt-signer 0.35.3",
  "thiserror",

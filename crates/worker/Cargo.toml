@@ -12,9 +12,13 @@ rust-version.workspace = true
 
 [dependencies]
 utils = { workspace = true }
+catalog = { workspace = true }
+
 clap = { workspace = true, features = ["derive"] }
+codec = { workspace = true }
 subxt-signer = { workspace = true }
 subxt = { workspace = true }
 ink_env = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
+# ink = { workspace = true }

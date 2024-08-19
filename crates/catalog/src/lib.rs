@@ -14,8 +14,8 @@ pub mod catalog {
     #[derive(Debug)]
     #[ink(event)]
     pub struct WorkerSet {
-        who: AccountId,
-        val: u32,
+        pub who: AccountId,
+        pub val: u32,
     }
 
     #[ink(storage)]
