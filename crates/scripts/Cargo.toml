@@ -1,5 +1,5 @@
 [package]
-name = "worker"
+name = "scripts"
 authors.workspace = true
 edition.workspace = true
 version.workspace = true
@@ -14,10 +14,9 @@ rust-version.workspace = true
 utils = { workspace = true }
 catalog = { workspace = true }
 
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 clap = { workspace = true, features = ["derive"] }
-codec = { workspace = true }
-subxt-signer = { workspace = true }
+subxt-signer = { workspace = true, features = ["subxt"] }
 subxt = { workspace = true }
 ink_env = { workspace = true }
-thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+

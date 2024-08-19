@@ -9505,6 +9505,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3cf7c11c38cb994f3d40e8a8cde3bbd1f72a435e4c49e85d6553d8312306152"
 
 [[package]]
+name = "scripts"
+version = "0.0.0"
+dependencies = [
+ "catalog",
+ "clap",
+ "ink_env",
+ "subxt 0.35.3",
+ "subxt-signer 0.35.3",
+ "tokio",
+ "utils",
+]
+
+[[package]]
 name = "sct"
 version = "0.7.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

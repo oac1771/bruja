@@ -13,7 +13,7 @@ members = [
 	"crates/node",
 	"crates/runtime",
 	"crates/catalog",
-	"crates/utils", "crates/worker",
+	"crates/utils", "crates/worker", "crates/scripts",
 ]
 
 [workspace.dependencies]

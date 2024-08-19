@@ -17,16 +17,16 @@ use subxt::{
     tx::Signer,
 };
 
-pub struct Client<C, E, S> {
+pub struct Client<'a, C, E, S> {
     artifact_file: String,
-    signer: S,
+    signer: &'a S,
     _config: PhantomData<C>,
     _env: PhantomData<E>,
 }
 
 // reformat this so it takes suri and builds signer in ::new() method
 // add method to return keypair type
-impl<C: Config, E: Environment, S: Signer<C> + Clone> Client<C, E, S>
+impl<'a, C: Config, E: Environment, S: Signer<C> + Clone> Client<'a, C, E, S>
 where
     C::Hash: From<[u8; 32]> + EncodeAsType + IntoVisitor,
     C::AccountId: Display + IntoVisitor + Decode + EncodeAsType,
@@ -34,7 +34,7 @@ where
         From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params>,
     E::Balance: Default + EncodeAsType + Serialize,
 {
-    pub fn new(artifact_file: &str, signer: S) -> Self {
+    pub fn new(artifact_file: &str, signer: &'a S) -> Self {
         Self {
             artifact_file: artifact_file.to_string(),
             signer: signer,

@@ -20,4 +20,6 @@ pub enum Error {
         #[from]
         source: codec::Error,
     },
+    #[error("Error: {0}")]
+    Other(String),
 }

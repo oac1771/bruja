@@ -7,8 +7,8 @@ time_summary = true
 reduce_output = true
 default_to_workspace = false
 
-[tasks.docker-build]
-command = "docker/build.sh"
+# [tasks.docker-build]
+# command = "docker/build.sh"
 
 [tasks.test-contract]
 command = "cargo"
