@@ -1,6 +1,6 @@
 target/
 bin/
-local/*
+test_dbs/*
 **/.DS_Store
 .vscode/**
 

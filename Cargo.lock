@@ -2692,26 +2692,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1"
 
 [[package]]
-name = "foo"
-version = "0.0.0"
-dependencies = [
- "catalog",
- "contract-extrinsics",
- "contract-transcode",
- "ink_env",
- "parity-scale-codec",
- "polkadot-sdk-frame",
- "rand",
- "scale-info",
- "serde",
- "serde_json",
- "sp-core 31.0.0",
- "subxt 0.35.3",
- "subxt-signer 0.35.3",
- "tokio",
-]
-
-[[package]]
 name = "foreign-types"
 version = "0.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -13811,6 +13791,13 @@ name = "winsafe"
 version = "0.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
+
+[[package]]
+name = "worker"
+version = "0.0.0"
+dependencies = [
+ "clap",
+]
 
 [[package]]
 name = "wyz"
