@@ -13797,6 +13797,12 @@ name = "worker"
 version = "0.0.0"
 dependencies = [
  "clap",
+ "ink_env",
+ "subxt 0.35.3",
+ "subxt-signer 0.35.3",
+ "thiserror",
+ "tokio",
+ "utils",
 ]
 
 [[package]]

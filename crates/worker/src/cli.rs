@@ -13,13 +13,15 @@ enum Command {
     Register(RegisterCmd),
 }
 
-pub fn run() {
+pub async fn run() {
     let args = Cli::parse();
-    let config = Config;
+    let config = Config::new();
 
-    match args.command {
-        Command::Register(cmd) => {
-            cmd.handle(config);
-        }
+    let result = match args.command {
+        Command::Register(cmd) => cmd.handle(config).await,
+    };
+
+    if let Err(err) = result {
+        panic!("Error: {:?}", err);
     }
 }

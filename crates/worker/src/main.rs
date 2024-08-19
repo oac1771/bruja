@@ -1,9 +1,11 @@
 mod cli;
 mod commands;
 mod config;
+mod error;
 
 use cli::run;
 
-fn main() {
-    run();
+#[tokio::main]
+async fn main() {
+    run().await;
 }
