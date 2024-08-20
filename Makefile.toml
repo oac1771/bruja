@@ -7,8 +7,8 @@ time_summary = true
 reduce_output = true
 default_to_workspace = false
 
-# [tasks.docker-build]
-# command = "docker/build.sh"
+[tasks.start-colima]
+command = "colima start --memory 4 --cpu 4"
 
 [tasks.test-contract]
 command = "cargo"
@@ -19,4 +19,17 @@ args = ["test", "-p", "catalog", "--test", "e2e"]
 script='''
 cargo build -p node
 ./target/debug/node --dev --base-path ./test_dbs/$(uuidgen)
+'''
+
+[tasks.install-dependencies]
+script='''
+cargo install --force --locked cargo-contract
+cargo install subxt-cli
+rustup target add wasm32-unknown-unknown
+'''
+
+[tasks.build]
+script='''
+cargo contract build --manifest-path crates/catalog/Cargo.toml ${@}
+cargo build ${@}
 '''

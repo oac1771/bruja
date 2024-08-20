@@ -3,5 +3,3 @@ bin/
 test_dbs/*
 **/.DS_Store
 .vscode/**
-
-interface.rs

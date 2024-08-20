@@ -56,3 +56,5 @@ substrate-build-script-utils = { workspace = true, default-features = true }
 
 [features]
 default = []
+try-runtime = []
+runtime-benchmarks = []
