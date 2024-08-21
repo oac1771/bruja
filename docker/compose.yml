@@ -1,0 +1,16 @@
+services:
+  node:
+    image: $DOCKER_IMAGE
+    container_name: node
+    command: /usr/local/bin/node --dev
+    ports:
+      - 0.0.0.0:9944:9944
+    network_mode: host
+
+  worker:
+    image: $DOCKER_IMAGE
+    container_name: worker
+    command: sleep inf
+    environment:
+      - SURI=//Alice
+      - ARTIFACT_FILE_PATH=catalog.contract

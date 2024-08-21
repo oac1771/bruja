@@ -1,5 +1,7 @@
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = true
+DOCKER_IMAGE = "bruja:latest"
+DOCKER_BUILDER_IMAGE = "bruja_builder:latest"
 
 [config]
 skip_core_tasks = true
@@ -9,6 +11,24 @@ default_to_workspace = false
 
 [tasks.start-colima]
 command = "colima start --memory 4 --cpu 4"
+
+[tasks.docker-build]
+script='''
+docker build . -f docker/bruja_builder.Dockerfile -t $DOCKER_BUILDER_IMAGE
+docker build . --build-arg BUILDER_IMAGE=$DOCKER_BUILDER_IMAGE \
+    -f docker/bruja.Dockerfile \
+    -t $DOCKER_IMAGE 
+'''
+
+[tasks.docker-compose]
+script='''
+docker compose -f docker/compose.yml up -d
+'''
+
+[tasks.docker-compose-down]
+script='''
+docker compose -f docker/compose.yml down
+'''
 
 [tasks.test-contract]
 command = "cargo"
@@ -21,15 +41,9 @@ cargo build -p node
 ./target/debug/node --dev --base-path ./test_dbs/$(uuidgen)
 '''
 
-[tasks.install-dependencies]
+[tasks.install-dev-dependencies]
 script='''
 cargo install --force --locked cargo-contract
 cargo install subxt-cli
 rustup target add wasm32-unknown-unknown
-'''
-
-[tasks.build]
-script='''
-cargo contract build --manifest-path crates/catalog/Cargo.toml ${@}
-cargo build ${@}
 '''

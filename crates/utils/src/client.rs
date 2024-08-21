@@ -147,7 +147,7 @@ where
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
-    #[error("Instantiation Command Builder Error: {source}")]
+    #[error("Contract Extrinsic Crate Error: {source}")]
     ContractExtrinsicCrateError {
         #[from]
         source: anyhow::Error,

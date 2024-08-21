@@ -1,10 +1,12 @@
-larger refactor:
-    - create docker container to build artifacts
-        - use academy PoW repo that has builder pattern in layers
-        - see if this will let you run colima with aarch64 and 
-            use docker build --platform to build x86 for builder
-            and node/worker/requester containers
+- create docker compose 
+- create requester
+    - look for available workers
+    - submit code to chain
 
+
+larger refactor:
+
+    - use smalldot with worker 
     - figure out how to use substrate wasm builder for ink contract to not need to use cargo contract cli
         to build wasm binary
 
