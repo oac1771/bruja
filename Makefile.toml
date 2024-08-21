@@ -15,7 +15,8 @@ command = "colima start --memory 4 --cpu 4"
 [tasks.docker-build]
 script='''
 docker build . -f docker/bruja_builder.Dockerfile -t $DOCKER_BUILDER_IMAGE
-docker build . --build-arg BUILDER_IMAGE=$DOCKER_BUILDER_IMAGE \
+docker build .  \
+    --build-arg BUILDER_IMAGE=$DOCKER_BUILDER_IMAGE \
     -f docker/bruja.Dockerfile \
     -t $DOCKER_IMAGE 
 docker image prune --filter label=stage=intermediate --force

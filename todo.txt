@@ -1,4 +1,3 @@
-- create docker compose 
 - create requester
     - look for available workers
     - submit code to chain

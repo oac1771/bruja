@@ -3,7 +3,8 @@ use catalog::catalog::WorkerSet;
 use clap::Parser;
 use codec::Decode;
 use ink_env::DefaultEnvironment;
-use subxt::SubstrateConfig;
+use std::str::FromStr;
+use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
 use utils::{chain::contracts::events::ContractEmitted, client::Client};
 
@@ -11,16 +12,22 @@ use utils::{chain::contracts::events::ContractEmitted, client::Client};
 pub struct RegisterCmd {
     #[arg(long)]
     val: String,
+
+    #[arg(long)]
+    address: String,
 }
 
 impl RegisterCmd {
     pub async fn handle(&self, config: Config) -> Result<(), Error> {
+        let contract_address =
+            AccountId32::from_str(&self.address).map_err(|err| Error::Other(err.to_string()))?;
+
         let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer);
         let args = self.args();
 
         let events = client
-            .mutable_call("set_worker", config.contract_address, args)
+            .mutable_call("set_worker", contract_address, args)
             .await?;
 
         let result = match events.find_first::<ContractEmitted>()? {
