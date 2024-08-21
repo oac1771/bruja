@@ -1,7 +1,7 @@
 ARG BUILDER_IMAGE=
 
 FROM ${BUILDER_IMAGE} as builder
-LABEL stage=builder
+LABEL stage=intermediate
 
 WORKDIR /dir
 COPY . /dir

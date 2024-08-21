@@ -18,14 +18,15 @@ docker build . -f docker/bruja_builder.Dockerfile -t $DOCKER_BUILDER_IMAGE
 docker build . --build-arg BUILDER_IMAGE=$DOCKER_BUILDER_IMAGE \
     -f docker/bruja.Dockerfile \
     -t $DOCKER_IMAGE 
+docker image prune --filter label=stage=intermediate --force
 '''
 
-[tasks.docker-compose]
+[tasks.docker-up]
 script='''
 docker compose -f docker/compose.yml up -d
 '''
 
-[tasks.docker-compose-down]
+[tasks.docker-down]
 script='''
 docker compose -f docker/compose.yml down
 '''
