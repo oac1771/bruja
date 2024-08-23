@@ -44,6 +44,11 @@ jobs:
         run: |
           cargo install --no-default-features --force cargo-make
 
+      - name: Add Cargo Contract
+        shell: bash
+        run: |
+          cargo install --force --locked cargo-contract
+
       - name: Add OS Dependencies
         shell: bash
         run: |
