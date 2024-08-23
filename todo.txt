@@ -1,6 +1,5 @@
 - create requester
     - look for available workers
-    - submit code to chain
 
 - make contract upgradeable
     - wrap state in lazy 
