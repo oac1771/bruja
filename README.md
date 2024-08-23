@@ -8,9 +8,9 @@ mise install
 brew install qemu lima docker
 ```
 
-Add Cargo Make:
+Install Dev Dependencies
 ```
-cargo install --no-default-features --force cargo-make
+cargo make install-dev-dependencies
 ```
 
 Get node metadata
