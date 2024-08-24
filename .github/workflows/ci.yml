@@ -15,15 +15,19 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v3
 
+      - name: Add OS Dependencies
+        shell: bash
+        run: |
+          sudo apt install -y protobuf-compiler
+
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           components: rustfmt
           target:  wasm32-unknown-unknown
           cache-workspaces: true
           toolchain: 1.77
-
-      - name: Set up cargo cache
-        uses: actions/cache@v3
+      - uses: actions/cache/restore@v4
+        id: cache
         with:
           path: |
             ~/.cargo/bin/
@@ -32,7 +36,6 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: ${{ runner.os }}-cargo-
       
       - name: Add Rust Deps
         shell: bash
@@ -41,19 +44,16 @@ jobs:
           rustup component add clippy --toolchain 1.77-x86_64-unknown-linux-gnu
 
       - name: Add Cargo Make
+        if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          which cargo-make || cargo install --no-default-features cargo-make
+          cargo install --no-default-features cargo-make
 
       - name: Add Cargo Contract
+        if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          which cargo-contract ||cargo install --locked cargo-contract
-
-      - name: Add OS Dependencies
-        shell: bash
-        run: |
-          sudo apt install -y protobuf-compiler
+          cargo install --locked cargo-contract
 
       - name: Cargo Build
         shell: bash
@@ -67,5 +67,16 @@ jobs:
       - name: Contract Integration Tests
         shell: bash
         run: cargo make test-contract
+
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
 
