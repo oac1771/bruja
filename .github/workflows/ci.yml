@@ -43,12 +43,12 @@ jobs:
       - name: Add Cargo Make
         shell: bash
         run: |
-          cargo install --no-default-features cargo-make
+          which cargo-make || cargo install --no-default-features cargo-make
 
       - name: Add Cargo Contract
         shell: bash
         run: |
-          cargo install --locked cargo-contract
+          which cargo-contract ||cargo install --locked cargo-contract
 
       - name: Add OS Dependencies
         shell: bash
