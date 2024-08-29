@@ -55,10 +55,20 @@ jobs:
         run: |
           cargo install --locked cargo-contract
 
+      - name: git status
+        shell: bash
+        run: |
+          git status
+
       - name: Cargo Build
         shell: bash
         run: |
           cargo make cargo-build
+
+      - name: git status
+        shell: bash
+        run: |
+          git status
 
       # - name: Unit Tests
       #   shell: bash
