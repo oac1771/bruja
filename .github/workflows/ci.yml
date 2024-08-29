@@ -44,11 +44,11 @@ jobs:
           rustup component add rust-src --toolchain 1.77-x86_64-unknown-linux-gnu
           rustup component add clippy --toolchain 1.77-x86_64-unknown-linux-gnu
 
-      # - name: Add Cargo Make
-      #   if: steps.cache.outputs.cache-hit != 'true'
-      #   shell: bash
-      #   run: |
-      #     cargo install --no-default-features cargo-make
+      - name: Add Cargo Make
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          cargo install --no-default-features cargo-make
 
       # - name: Add Cargo Contract
       #   if: steps.cache.outputs.cache-hit != 'true'
