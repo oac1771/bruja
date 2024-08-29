@@ -9506,7 +9506,7 @@ checksum = "a3cf7c11c38cb994f3d40e8a8cde3bbd1f72a435e4c49e85d6553d8312306152"
 
 [[package]]
 name = "scripts"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "catalog",
  "clap",
@@ -12936,7 +12936,7 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
 name = "utils"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "anyhow",
  "contract-extrinsics",
@@ -13807,7 +13807,7 @@ checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
 name = "worker"
-version = "0.0.6"
+version = "0.0.7"
 dependencies = [
  "catalog",
  "clap",

@@ -56,10 +56,10 @@ jobs:
         run: |
           cargo install --locked cargo-contract
 
-      # - name: Cargo Build
-      #   shell: bash
-      #   run: |
-      #     cargo make cargo-build
+      - name: Cargo Build
+        shell: bash
+        run: |
+          cargo make cargo-build
 
       # - name: Unit Tests
       #   shell: bash
