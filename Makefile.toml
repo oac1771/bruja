@@ -10,7 +10,9 @@ reduce_output = true
 default_to_workspace = false
 
 [tasks.start-colima]
-command = "colima start --memory 4 --cpu 4"
+script='''
+colima start --memory 5 --cpu 8
+'''
 
 [tasks.docker-build]
 script='''
@@ -52,6 +54,6 @@ rustup target add wasm32-unknown-unknown
 
 [tasks.cargo-build]
 script='''
-cargo contract build --manifest-path crates/catalog/Cargo.toml
-cargo build --exclude scripts --workspace
+cross build --target x86_64-unknown-linux-musl --exclude scripts --workspace
 '''
+# cargo contract build --manifest-path crates/catalog/Cargo.toml

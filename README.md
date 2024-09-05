@@ -29,3 +29,5 @@ info on build: [here](https://docs.substrate.io/build/build-process/)
 info on subxt codegen: [here](https://docs.rs/subxt/0.37.0/subxt/book/setup/codegen/index.html)
 
 info on cargo-contract: [here](https://use.ink/cargo-contract-cli/)
+
+get musl linker for mac m1: [here](https://github.com/FiloSottile/homebrew-musl-cross)
