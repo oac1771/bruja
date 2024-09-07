@@ -1,7 +1,7 @@
 [workspace.package]
 authors = ["Omar"]
 edition = "2021"
-version = "0.0.8"
+version = "0.0.9"
 license = "Unlicense"
 homepage = "https://github.com/paritytech/substrate-contracts-node"
 repository = "https://github.com/paritytech/substrate-contracts-node"

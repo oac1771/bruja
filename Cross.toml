@@ -1,4 +1,0 @@
-[build]
-dockerfile = "./docker/bruja_builder.Dockerfile"
-
-# apt-get install -y protobuf-compiler build-essential gcc-snapshot libc6-dev

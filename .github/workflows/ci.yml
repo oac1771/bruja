@@ -15,14 +15,9 @@ jobs:
       - name: Checkout source code
         uses: actions/checkout@v3
 
-      - name: Add OS Dependencies
-        shell: bash
-        run: |
-          sudo apt install -y protobuf-compiler
-
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
-          components: rustfmt
+          components: rustfmt, clippy, rust-src
           target:  wasm32-unknown-unknown
           toolchain: 1.77
 
@@ -36,39 +31,34 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: 
       
-      - name: Add Rust Deps
-        shell: bash
-        run: |
-          rustup component add rust-src --toolchain 1.77-x86_64-unknown-linux-gnu
-          rustup component add clippy --toolchain 1.77-x86_64-unknown-linux-gnu
+      # - name: Add Rust Deps
+      #   shell: bash
+      #   run: |
+      #     rustup component add rust-src --toolchain 1.77-x86_64-unknown-linux-gnu
+      #     rustup component add clippy --toolchain 1.77-x86_64-unknown-linux-gnu
 
-      - name: Add Cargo Make
+      # - name: Add Cargo Make
+      #   if: steps.cache.outputs.cache-hit != 'true'
+      #   shell: bash
+      #   run: |
+      #     cargo install --no-default-features cargo-make
+
+      - name: Build
         if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
-          cargo install --no-default-features cargo-make
-
-      - name: Add Cargo Contract
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          cargo install --locked cargo-contract
-
-      - name: git status
-        shell: bash
-        run: |
-          git status
-
-      - name: Cargo Build
-        shell: bash
-        run: |
-          cargo make cargo-build
-
-      - name: git status
-        shell: bash
-        run: |
-          git status
+          docker build . -f docker/bruja_builder.Dockerfile -t bruja_builder
+          docker run \
+            -v $(pwd)/target:/target \
+            -v $(pwd)/Cargo.toml:/Cargo.toml \
+            -v $(pwd)/crates:/crates \
+            -v $(pwd)/chain.scale:/chain.scale \
+            -v ~/.cargo/registry:~/.cargo/registry \
+            -v ~/.cargo/git:~/.cargo/git \
+            bruja_builder cargo build -p worker --release
 
       # - name: Unit Tests
       #   shell: bash
@@ -79,7 +69,6 @@ jobs:
       #   run: cargo make test-contract
 
       - uses: actions/cache/save@v4
-        if: always()
         with:
           path: |
             ~/.cargo/bin/
