@@ -10,5 +10,5 @@ RUN apt-get install -y build-essential \
 
 RUN curl -sSf https://sh.rustup.rs/ | bash -s -- -y
 RUN rustup target add wasm32-unknown-unknown
-RUN rustup component add rust-src --toolchain stable-aarch64-unknown-linux-gnu
+RUN rustup component add rust-src
 RUN cargo install --force --locked cargo-contract
