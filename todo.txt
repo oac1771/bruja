@@ -1,4 +1,3 @@
-- pin rust version to 1.77 in cargo.toml
 
 - create requester
     - look for available workers
