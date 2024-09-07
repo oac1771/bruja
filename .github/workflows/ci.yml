@@ -54,8 +54,8 @@ jobs:
             -v $(pwd)/Cargo.toml:/Cargo.toml \
             -v $(pwd)/crates:/crates \
             -v $(pwd)/chain.scale:/chain.scale \
-            -v ~/.cargo/registry:~/.cargo/registry \
-            -v ~/.cargo/git:~/.cargo/git \
+            -v ~/.cargo/registry:$HOME/.cargo/registry \
+            -v ~/.cargo/git:$HOME/.cargo/git \
             bruja_builder cargo build -p worker --release
 
       # - name: Unit Tests
