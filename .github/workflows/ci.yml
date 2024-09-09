@@ -31,7 +31,6 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Install Deps
-        if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           sudo apt-get update
