@@ -30,6 +30,13 @@ jobs:
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
+      - name: Install Deps
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          apt-get update
+          apt-get install -y protobuf-compiler 
+
       - name: Add Rust Component
         if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
@@ -57,14 +64,15 @@ jobs:
       #   shell: bash
       #   run: cargo make test-contract
 
-      # - uses: actions/cache/save@v4
-      #   with:
-      #     path: |
-      #       ~/.cargo/bin/
-      #       ~/.cargo/registry/index/
-      #       ~/.cargo/registry/cache/
-      #       ~/.cargo/git/db/
-      #       target/
-      #     key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+      - uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
 
