@@ -51,12 +51,8 @@ cargo install subxt-cli
 rustup target add wasm32-unknown-unknown
 '''
 
-# docker build --build-arg BUILDER_IMAGE=bruja_builder --target builder -t builder . -f docker/bruja.Dockerfile
-# docker create --name temp-container builder
-# docker cp foo:/dir/target test_dbs/target
-
-# [tasks.cargo-build]
-# script='''
-# cross build --target x86_64-unknown-linux-musl --exclude scripts --workspace
-# '''
-# cargo contract build --manifest-path crates/catalog/Cargo.toml
+[tasks.cargo-build]
+script='''
+cargo contract build --manifest-path crates/catalog/Cargo.toml
+cargo build --exclude scripts --exclude catalog --workspace
+'''
