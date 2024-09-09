@@ -56,13 +56,13 @@ jobs:
         run: |
           cargo make cargo-build
 
-      # - name: Unit Tests
-      #   shell: bash
-      #   run: cargo test
+      - name: Unit Tests
+        shell: bash
+        run: cargo test
 
-      # - name: Contract Integration Tests
-      #   shell: bash
-      #   run: cargo make test-contract
+      - name: Contract Integration Tests
+        shell: bash
+        run: cargo make test-contract
 
       - uses: actions/cache/save@v4
         if: always()
