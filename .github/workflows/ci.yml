@@ -59,7 +59,7 @@ jobs:
       - name: Unit Tests
         shell: bash
         run: |
-          cargo test
+          RUSTFLAGS="--cfg allow(unexpected_cfgs)" cargo test
 
       # - name: Contract Integration Tests
       #   shell: bash
