@@ -29,6 +29,7 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
+          restore-keys: ${{ runner.os }}-cargo-
 
       - name: Install Deps
         shell: bash
@@ -57,21 +58,13 @@ jobs:
 
       - name: Unit Tests
         shell: bash
-        run: cargo test
+        run: |
+          rustup component add clippy
+          cargo test
 
       - name: Contract Integration Tests
         shell: bash
         run: cargo make test-contract
 
-      # - uses: actions/cache/save@v4
-      #   if: always()
-      #   with:
-      #     path: |
-      #       ~/.cargo/bin/
-      #       ~/.cargo/registry/index/
-      #       ~/.cargo/registry/cache/
-      #       ~/.cargo/git/db/
-      #       target/
-      #     key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
 
