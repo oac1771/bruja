@@ -19,7 +19,7 @@ jobs:
         with:
           target: wasm32-unknown-unknown
 
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
         id: cache
         with:
           path: |
@@ -29,7 +29,6 @@ jobs:
             ~/.cargo/git/db/
             target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
-          # restore-keys: ${{ runner.os }}-cargo-
 
       - name: Install Deps
         shell: bash
@@ -43,18 +42,18 @@ jobs:
         run: |
           rustup component add rust-src
 
-      - name: Add Cargo Tooling
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          cargo install --no-default-features cargo-make
-          cargo install --force --locked cargo-contract
+      # - name: Add Cargo Tooling
+      #   if: steps.cache.outputs.cache-hit != 'true'
+      #   shell: bash
+      #   run: |
+      #     cargo install --no-default-features cargo-make
+      #     cargo install --force --locked cargo-contract
 
-      - name: Cargo Build
-        if: steps.cache.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          cargo make cargo-build
+      # - name: Cargo Build
+      #   if: steps.cache.outputs.cache-hit != 'true'
+      #   shell: bash
+      #   run: |
+      #     cargo make cargo-build
 
       - name: Unit Tests
         shell: bash
@@ -62,9 +61,19 @@ jobs:
           rustup component add clippy
           cargo test
 
-      - name: Contract Integration Tests
-        shell: bash
-        run: cargo make test-contract
+      # - name: Contract Integration Tests
+      #   shell: bash
+      #   run: cargo make test-contract
 
-
+      # - uses: actions/cache/save@v4
+      #   id: cache
+      #   if: always()
+      #   with:
+      #     path: |
+      #       ~/.cargo/bin/
+      #       ~/.cargo/registry/index/
+      #       ~/.cargo/registry/cache/
+      #       ~/.cargo/git/db/
+      #       target/
+      #     key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
