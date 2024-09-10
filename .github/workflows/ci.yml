@@ -60,9 +60,9 @@ jobs:
         run: |
           cargo test
 
-      # - name: Contract Integration Tests
-      #   shell: bash
-      #   run: cargo make test-contract
+      - name: Contract Integration Tests
+        shell: bash
+        run: cargo make test-contract
 
       # - uses: actions/cache/save@v4
       #   id: cache
