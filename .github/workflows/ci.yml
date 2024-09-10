@@ -38,23 +38,22 @@ jobs:
           sudo apt-get install -y protobuf-compiler 
 
       - name: Add Rust Component
-        if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           rustup component add rust-src
 
-      # - name: Add Cargo Tooling
-      #   if: steps.cache.outputs.cache-hit != 'true'
-      #   shell: bash
-      #   run: |
-      #     cargo install --no-default-features cargo-make
-      #     cargo install --force --locked cargo-contract
+      - name: Add Cargo Tooling
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          cargo install --no-default-features cargo-make
+          cargo install --force --locked cargo-contract
 
-      # - name: Cargo Build
-      #   if: steps.cache.outputs.cache-hit != 'true'
-      #   shell: bash
-      #   run: |
-      #     cargo make cargo-build
+      - name: Cargo Build
+        if: steps.cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          cargo make cargo-build
 
       - name: Unit Tests
         shell: bash
