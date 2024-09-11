@@ -1,5 +1,5 @@
 use crate::{config::Config, error::Error};
-use catalog::catalog::WorkerSet;
+use catalog::catalog::WorkerRegistered;
 use clap::Parser;
 use codec::Decode;
 use ink_env::DefaultEnvironment;
@@ -27,12 +27,12 @@ impl RegisterCmd {
         let args = self.args();
 
         let events = client
-            .mutable_call("set_worker", contract_address, args)
+            .mutable_call("register_worker", contract_address, args)
             .await?;
 
         let result = match events.find_first::<ContractEmitted>()? {
             Some(event) => {
-                let worker_set_event = <WorkerSet>::decode(&mut event.data.as_slice())?;
+                let worker_set_event = <WorkerRegistered>::decode(&mut event.data.as_slice())?;
 
                 if worker_set_event.who.as_ref() == config.signer.public_key().0 {
                     println!("Successfully registered worker!");

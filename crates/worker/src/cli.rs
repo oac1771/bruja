@@ -1,4 +1,7 @@
-use crate::{commands::register::RegisterCmd, config::Config};
+use crate::{
+    commands::{register::RegisterCmd, start::StartCmd},
+    config::Config,
+};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
@@ -11,6 +14,7 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 enum Command {
     Register(RegisterCmd),
+    Start(StartCmd),
 }
 
 pub async fn run() {
@@ -19,6 +23,7 @@ pub async fn run() {
 
     let result = match args.command {
         Command::Register(cmd) => cmd.handle(config).await,
+        Command::Start(cmd) => cmd.handle().await,
     };
 
     if let Err(err) = result {

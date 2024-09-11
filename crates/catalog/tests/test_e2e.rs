@@ -5,7 +5,7 @@ mod tests {
 
     use codec::Decode;
     use ink::env::DefaultEnvironment;
-    use ink_e2e::{events::ContractEmitted, ContractsBackend, alice};
+    use ink_e2e::{alice, events::ContractEmitted, ContractsBackend};
 
     type E2EResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -43,11 +43,7 @@ mod tests {
         let mut call_builder = contract.call_builder::<Catalog>();
 
         let submit_job = call_builder.submit_job(code);
-        let response = client
-            .call(&alice, &submit_job)
-            .submit()
-            .await
-            .unwrap();
+        let response = client.call(&alice, &submit_job).submit().await.unwrap();
 
         let contract_emmitted_event = response
             .events

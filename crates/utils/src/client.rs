@@ -18,7 +18,7 @@ use subxt::{
 };
 
 pub struct Client<'a, C, E, S> {
-    artifact_file: String,
+    artifact_file: &'a str,
     signer: &'a S,
     _config: PhantomData<C>,
     _env: PhantomData<E>,
@@ -34,9 +34,9 @@ where
         From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params>,
     E::Balance: Default + EncodeAsType + Serialize,
 {
-    pub fn new(artifact_file: &str, signer: &'a S) -> Self {
+    pub fn new(artifact_file: &'a str, signer: &'a S) -> Self {
         Self {
-            artifact_file: artifact_file.to_string(),
+            artifact_file: artifact_file,
             signer: signer,
             _config: PhantomData::default(),
             _env: PhantomData::default(),
@@ -121,7 +121,7 @@ where
     }
 
     fn extrinsic_opts_builder(&self) -> ExtrinsicOptsBuilder<C, E, S> {
-        ExtrinsicOptsBuilder::new(self.signer.clone()).file(Some(self.artifact_file.clone()))
+        ExtrinsicOptsBuilder::new(self.signer.clone()).file(Some(self.artifact_file))
     }
 
     fn is_mutable(

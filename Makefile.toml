@@ -41,7 +41,7 @@ cargo test -p catalog --test e2e
 
 [tasks.local-node]
 script='''
-cargo run -p node --dev --base-path ./test_dbs/$(uuidgen)
+cargo run -p node -- --dev --base-path ./test_dbs/$(uuidgen)
 '''
 
 [tasks.install-dev-dependencies]

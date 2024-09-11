@@ -1,6 +1,8 @@
-
 - create requester
     - look for available workers
+        - see if there is a way to read storage without calling the contract itself
+- worker:
+    - listen for submitted job events
 
 - make contract upgradeable
     - wrap state in lazy 

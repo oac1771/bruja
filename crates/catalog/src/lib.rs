@@ -9,11 +9,12 @@ pub mod catalog {
             hash::{HashOutput, Keccak256},
             hash_bytes,
         },
+        prelude::vec::Vec,
         storage::{traits::StorageLayout, Mapping},
-        prelude::vec::Vec
     };
 
-    pub type Keccak256HashOutput = <Keccak256 as HashOutput>::Type;
+    type Keccak256HashOutput = <Keccak256 as HashOutput>::Type;
+    type Workers = Mapping<AccountId, u32>;
 
     #[derive(Debug, PartialEq, Eq, Encode, Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
@@ -23,7 +24,7 @@ pub mod catalog {
 
     #[derive(Debug)]
     #[ink(event)]
-    pub struct WorkerSet {
+    pub struct WorkerRegistered {
         pub who: AccountId,
         pub val: u32,
     }
@@ -32,7 +33,7 @@ pub mod catalog {
     #[ink(event)]
     pub struct JobSubmitted {
         pub who: AccountId,
-        pub id: Keccak256HashOutput
+        pub id: Keccak256HashOutput,
     }
 
     #[derive(Debug, Encode, Decode)]
@@ -44,7 +45,7 @@ pub mod catalog {
 
     #[ink(storage)]
     pub struct Catalog {
-        workers: Mapping<AccountId, u32>,
+        workers: Workers,
         jobs: Mapping<AccountId, Job>,
     }
 
@@ -75,11 +76,11 @@ pub mod catalog {
         }
 
         #[ink(message)]
-        pub fn set_worker(&mut self, val: u32) {
+        pub fn register_worker(&mut self, val: u32) {
             let caller = self.env().caller();
             self.workers.insert(caller, &val);
 
-            self.env().emit_event(WorkerSet { who: caller, val });
+            self.env().emit_event(WorkerRegistered { who: caller, val });
         }
 
         #[ink(message)]
@@ -120,11 +121,12 @@ pub mod catalog {
             let who = AccountId::from([1; 32]);
             let mut catalog = Catalog::default();
 
-            catalog.set_worker(val);
+            catalog.register_worker(val);
 
             let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
             let worker_set_event =
-                <WorkerSet as Decode>::decode(&mut emitted_events[0].data.as_slice()).unwrap();
+                <WorkerRegistered as Decode>::decode(&mut emitted_events[0].data.as_slice())
+                    .unwrap();
 
             assert_eq!(emitted_events.len(), 1);
             assert_eq!(worker_set_event.val, val);
@@ -146,7 +148,6 @@ pub mod catalog {
 
             assert_eq!(job_submitted_event.who, who);
             assert_eq!(job_submitted_event.id, expected_hash);
-
         }
     }
 }
