@@ -1,3 +1,4 @@
+use crate::chain::contracts::events::ContractEmitted;
 use anyhow::Context;
 use std::{fmt::Display, marker::PhantomData};
 
@@ -11,7 +12,6 @@ use serde::Serialize;
 use sp_core::{Bytes, Decode};
 use sp_runtime::DispatchError;
 use subxt::{
-    blocks::ExtrinsicEvents,
     config::{Config, DefaultExtrinsicParams, ExtrinsicParams},
     ext::{scale_decode::IntoVisitor, scale_encode::EncodeAsType},
     tx::Signer,
@@ -95,12 +95,12 @@ where
         Ok(result)
     }
 
-    pub async fn mutable_call(
+    pub async fn mutable_call<Ev: Decode>(
         &self,
         message: &str,
         address: <C as Config>::AccountId,
         args: Vec<&str>,
-    ) -> Result<ExtrinsicEvents<C>, ClientError> {
+    ) -> Result<Ev, ClientError> {
         let extrinsic_opts = self.extrinsic_opts_builder().done();
         let call_exec: CallExec<C, E, S> =
             CallCommandBuilder::new(address, &message, extrinsic_opts)
@@ -116,8 +116,13 @@ where
         }
 
         let events = call_exec.call(None).await?;
-
-        Ok(events)
+        match events.find_first::<ContractEmitted>()? {
+            Some(event) => {
+                let result = <Ev as Decode>::decode(&mut event.data.as_slice())?;
+                Ok(result)
+            }
+            None => Err(ClientError::ContractEmittedError),
+        }
     }
 
     fn extrinsic_opts_builder(&self) -> ExtrinsicOptsBuilder<C, E, S> {
@@ -159,6 +164,12 @@ pub enum ClientError {
         source: codec::Error,
     },
 
+    #[error("Subxt Crate Error: {source}")]
+    SubxtError {
+        #[from]
+        source: subxt::Error,
+    },
+
     #[error("Contract Dispatch Error: {error}")]
     ContractDispatchError { error: String },
 
@@ -173,6 +184,9 @@ pub enum ClientError {
 
     #[error("CallExec Error: {error}")]
     CallExecError { error: String },
+
+    #[error("ContractEmitted event not found")]
+    ContractEmittedError,
 }
 
 impl From<DispatchError> for ClientError {

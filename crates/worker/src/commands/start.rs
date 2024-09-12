@@ -66,7 +66,6 @@ impl StartCmd {
                     println!("Job Event!");
                     println!("Id: {:?}", job.id);
                     println!("Key: {:?}", job.key);
-
                 }
                 WatchedEvents::Registration(registration) => {
                     println!("Registration Event!: {:?}", registration.who)
