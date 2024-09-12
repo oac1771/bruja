@@ -5,12 +5,12 @@ use utils::chain::contracts::events::ContractEmitted;
 use clap::Parser;
 use codec::Decode;
 use std::str::FromStr;
-use subxt::{utils::AccountId32, OnlineClient, SubstrateConfig};
+use subxt::{blocks::Block, utils::AccountId32, OnlineClient, SubstrateConfig};
 
 enum WatchedEvents {
     Job(JobSubmitted),
     Registration(WorkerRegistered),
-    DecodeErr
+    DecodeErr,
 }
 
 #[derive(Debug, Parser)]
@@ -28,20 +28,32 @@ impl StartCmd {
         let mut blocks_sub = client.blocks().subscribe_finalized().await?;
 
         while let Some(block) = blocks_sub.next().await {
-            let block = block?;
-            let extrinsics = block.extrinsics().await?;
-
-            for ext in extrinsics.iter() {
-                let ext = ext?;
-                let ext_events = ext.events().await?;
-
-                let events = ext_events
-                    .find::<ContractEmitted>()
-                    .filter_map(|ev| ev.ok())
-                    .filter(|ev| ev.contract == contract_address);
-
-                self.handle_events(events)?;
+            if let Err(error) = self.process_block(block, &contract_address).await {
+                println!("Error Processing Block: {}", error);
             }
+        }
+
+        Ok(())
+    }
+
+    async fn process_block(
+        &self,
+        block: Result<Block<SubstrateConfig, OnlineClient<SubstrateConfig>>, subxt::Error>,
+        contract_address: &AccountId32,
+    ) -> Result<(), Error> {
+        let block = block?;
+        let extrinsics = block.extrinsics().await?;
+
+        for ext in extrinsics.iter() {
+            let ext = ext?;
+            let ext_events = ext.events().await?;
+
+            let events = ext_events
+                .find::<ContractEmitted>()
+                .filter_map(|ev| ev.ok())
+                .filter(|ev| ev.contract == *contract_address);
+
+            self.handle_events(events)?;
         }
 
         Ok(())
@@ -51,12 +63,15 @@ impl StartCmd {
         for event in events {
             match self.determine_event(event) {
                 WatchedEvents::Job(job) => {
-                    println!("Job Event!: {:?}", job.id)
-                },
+                    println!("Job Event!");
+                    println!("Id: {:?}", job.id);
+                    println!("Key: {:?}", job.key);
+
+                }
                 WatchedEvents::Registration(registration) => {
                     println!("Registration Event!: {:?}", registration.who)
-                },
-                WatchedEvents::DecodeErr => {},
+                }
+                WatchedEvents::DecodeErr => {}
             }
         }
 
@@ -71,6 +86,5 @@ impl StartCmd {
         } else {
             WatchedEvents::DecodeErr
         }
-
     }
 }

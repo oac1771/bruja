@@ -7766,6 +7766,17 @@ dependencies = [
 [[package]]
 name = "requester"
 version = "0.0.14"
+dependencies = [
+ "catalog",
+ "clap",
+ "ink_env",
+ "parity-scale-codec",
+ "subxt 0.35.3",
+ "subxt-signer 0.35.3",
+ "thiserror",
+ "tokio",
+ "utils",
+]
 
 [[package]]
 name = "resolv-conf"

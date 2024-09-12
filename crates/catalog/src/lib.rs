@@ -10,7 +10,10 @@ pub mod catalog {
             hash_bytes,
         },
         prelude::vec::Vec,
-        storage::{traits::StorageLayout, Mapping},
+        storage::{
+            traits::{StorageKey, StorageLayout},
+            Mapping,
+        },
     };
 
     type Keccak256HashOutput = <Keccak256 as HashOutput>::Type;
@@ -34,6 +37,7 @@ pub mod catalog {
     pub struct JobSubmitted {
         pub who: AccountId,
         pub id: Keccak256HashOutput,
+        pub key: u32,
     }
 
     #[derive(Debug, Encode, Decode)]
@@ -85,12 +89,13 @@ pub mod catalog {
 
         #[ink(message)]
         pub fn submit_job(&mut self, code: Vec<u8>) {
-            let caller = self.env().caller();
+            let who = self.env().caller();
             let id = self.hash(&code);
             let job = Job { id, code };
+            let key = job.key();
 
-            self.jobs.insert(caller, &job);
-            self.env().emit_event(JobSubmitted { who: caller, id });
+            self.jobs.insert(who, &job);
+            self.env().emit_event(JobSubmitted { who, id, key });
         }
 
         fn hash(&self, data: &[u8]) -> Keccak256HashOutput {
@@ -148,6 +153,7 @@ pub mod catalog {
 
             assert_eq!(job_submitted_event.who, who);
             assert_eq!(job_submitted_event.id, expected_hash);
+            assert_eq!(job_submitted_event.key, 0);
         }
     }
 }
