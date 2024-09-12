@@ -54,6 +54,7 @@ jobs:
         shell: bash
         run: |
           cargo make cargo-build
+          cargo test --no-run
 
       - name: Unit Tests
         shell: bash
@@ -63,16 +64,3 @@ jobs:
       - name: Contract Integration Tests
         shell: bash
         run: cargo make test-contract
-
-      # - uses: actions/cache/save@v4
-      #   id: cache
-      #   if: always()
-      #   with:
-      #     path: |
-      #       ~/.cargo/bin/
-      #       ~/.cargo/registry/index/
-      #       ~/.cargo/registry/cache/
-      #       ~/.cargo/git/db/
-      #       target/
-      #     key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
-
