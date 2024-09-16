@@ -26,6 +26,7 @@ serde = { version = "1.0.204", default-features = false }
 frame = { version = "0.4.0", default-features = false, package = "polkadot-sdk-frame" }
 codec = { version = "3.6.12", default-features = false, package = "parity-scale-codec" }
 scale-info = { version = "2.11.1", default-features = false }
+scale-value = { version = "0.14.1", default-features = false }
 thiserror = { version = "1.0.63" }
 anyhow = { version = "1.0.86" }
 ink = { version = "5.0.0", default-features = false }

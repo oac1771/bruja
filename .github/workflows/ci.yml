@@ -54,7 +54,6 @@ jobs:
         shell: bash
         run: |
           cargo make cargo-build
-          cargo test --no-run
 
       - name: Unit Tests
         shell: bash

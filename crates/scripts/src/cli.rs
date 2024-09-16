@@ -1,4 +1,4 @@
-use crate::commands::instantiate::InstantiateCmd;
+use crate::commands::{foo::Foo, instantiate::InstantiateCmd};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
@@ -11,6 +11,7 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 enum Command {
     Instantiate(InstantiateCmd),
+    Foo(Foo),
 }
 
 pub async fn run() {
@@ -18,5 +19,6 @@ pub async fn run() {
 
     match args.command {
         Command::Instantiate(cmd) => cmd.handle().await,
+        Command::Foo(cmd) => cmd.handle().await,
     };
 }

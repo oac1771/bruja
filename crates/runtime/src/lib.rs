@@ -46,8 +46,8 @@ use runtime_apis::RUNTIME_API_VERSIONS;
 /// The runtime version.
 #[runtime_version]
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-    spec_name: create_runtime_str!("minimal-template-runtime"),
-    impl_name: create_runtime_str!("minimal-template-runtime"),
+    spec_name: create_runtime_str!("runtime"),
+    impl_name: create_runtime_str!("runtime"),
     authoring_version: 1,
     spec_version: 0,
     impl_version: 1,

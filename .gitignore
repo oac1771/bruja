@@ -1,5 +1,6 @@
 target/
 bin/
-test_dbs/*
+test_dbs/**_local
 **/.DS_Store
 .vscode/**
+interface.rs

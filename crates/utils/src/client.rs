@@ -125,7 +125,7 @@ where
         }
     }
 
-    fn extrinsic_opts_builder(&self) -> ExtrinsicOptsBuilder<C, E, S> {
+    pub fn extrinsic_opts_builder(&self) -> ExtrinsicOptsBuilder<C, E, S> {
         ExtrinsicOptsBuilder::new(self.signer.clone()).file(Some(self.artifact_file))
     }
 

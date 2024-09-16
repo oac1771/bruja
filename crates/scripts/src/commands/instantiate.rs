@@ -1,5 +1,5 @@
 use clap::Parser;
-use ink_env::DefaultEnvironment;
+use ink::env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::SubstrateConfig;
 use subxt_signer::{sr25519::Keypair, SecretUri};
