@@ -21,8 +21,4 @@ ink_env = { workspace = true }
 
 ink = { workspace = true }
 contract-extrinsics = "4.1.1"
-url = "2.5.2"
-serde_json = {workspace = true}
-scale-value = {workspace = true}
-reqwest = { version = "0.12.7", features = ["json"] }
-hex = { version = "0.4.3", default-features = false }
+

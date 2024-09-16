@@ -1,6 +1,3 @@
-// refactor to have a map of account id to job_ids
-// and another map of job_ids to jobs
-
 #![cfg_attr(not(feature = "std"), no_std, no_main)]
 #![allow(unexpected_cfgs)]
 #[ink::contract]
@@ -16,7 +13,7 @@ pub mod catalog {
         storage::{traits::StorageLayout, Mapping},
     };
 
-    type Keccak256HashOutput = <Keccak256 as HashOutput>::Type;
+    pub type Keccak256HashOutput = <Keccak256 as HashOutput>::Type;
     type Workers = Mapping<AccountId, u32>;
     type Jobs = Mapping<AccountId, Vec<Keccak256HashOutput>>;
 
@@ -76,7 +73,6 @@ pub mod catalog {
             self.env().emit_event(WorkerRegistered { who: caller, val });
         }
 
-        // maybe map to storage vec of jobs per account?
         #[ink(message)]
         pub fn submit_job(&mut self, code: Vec<u8>) {
             let who = self.env().caller();

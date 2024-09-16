@@ -1,13 +1,17 @@
 use crate::chain::contracts::events::ContractEmitted;
 use anyhow::Context;
+use codec::Encode;
 use std::{fmt::Display, marker::PhantomData};
+
+use pallet_contracts::ContractAccessError;
 
 use contract_extrinsics::{
     CallCommandBuilder, CallExec, ErrorVariant, ExtrinsicOptsBuilder, InstantiateCommandBuilder,
     InstantiateExec,
 };
 use ink::primitives::{LangError, MessageResult};
-use ink_env::Environment;
+use ink::env::Environment;
+use ink_metadata::layout::Layout;
 use serde::Serialize;
 use sp_core::{Bytes, Decode};
 use sp_runtime::DispatchError;
@@ -15,6 +19,7 @@ use subxt::{
     config::{Config, DefaultExtrinsicParams, ExtrinsicParams},
     ext::{scale_decode::IntoVisitor, scale_encode::EncodeAsType},
     tx::Signer,
+    SubstrateConfig, backend::{legacy::LegacyBackend, rpc::RpcClient, Backend}
 };
 
 pub struct Client<'a, C, E, S> {
@@ -123,6 +128,50 @@ where
             }
             None => Err(ClientError::ContractEmittedError),
         }
+    }
+
+    pub async fn get_storage<D: Decode>(&self, address: <C as Config>::AccountId) -> Result<D, ClientError> {
+        let contract_message_transcoder = self
+            .extrinsic_opts_builder()
+            .done()
+            .contract_artifacts()?
+            .contract_transcoder()?;
+
+        let mut jobs_key: u32 = 0;
+
+        if let Layout::Root(root) = contract_message_transcoder.metadata().layout() {
+            if let Layout::Struct(struct_layout) = root.layout() {
+                for field in struct_layout.fields() {
+                    if field.name() == "jobs" {
+                        if let Layout::Root(root) = field.layout() {
+                            jobs_key = *root.root_key().key();
+                        }
+                    }
+                }
+            }
+        }
+
+        let storage_key = (jobs_key, self.signer.account_id()).encode();
+        let args = (address, storage_key.clone()).encode();
+
+        let client = RpcClient::from_insecure_url("ws://127.0.0.1:9944")
+            .await
+            .unwrap();
+        let backend: LegacyBackend<SubstrateConfig> = LegacyBackend::builder().build(client);
+
+        let latest_block = backend.latest_finalized_block_ref().await.unwrap();
+
+        let storage_data = backend
+            .call("ContractsApi_get_storage", Some(&args), latest_block.hash())
+            .await
+            .unwrap();
+
+        let result: Result<Option<Vec<u8>>, ContractAccessError> =
+            Decode::decode(&mut storage_data.as_slice()).unwrap();
+        let raw_bytes = result.unwrap().unwrap();
+        let data = D::decode(&mut raw_bytes.as_slice()).unwrap();
+
+        Ok(data)
     }
 
     pub fn extrinsic_opts_builder(&self) -> ExtrinsicOptsBuilder<C, E, S> {

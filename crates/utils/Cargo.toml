@@ -11,17 +11,24 @@ repository.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-ink_env = { workspace = true }
 ink = { workspace = true }
+ink_metadata = { version = "5.0.0" }
 subxt = { workspace = true }
 subxt-signer = { workspace = true, features = ["subxt"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 codec = { workspace = true }
+pallet-contracts = { workspace = true, default-features = false }
 
 sp-core = { workspace = true }
 
 sp-runtime = { version = "34.0.0", default-features = true }
 contract-extrinsics = "4.1.1"
 rand = "0.8.5"
+
+[features]
+default = ["std"]
+std = [
+	"pallet-contracts/std",
+]
