@@ -36,8 +36,8 @@ where
 {
     pub fn new(artifact_file: &'a str, signer: &'a S) -> Self {
         Self {
-            artifact_file: artifact_file,
-            signer: signer,
+            artifact_file,
+            signer,
             _config: PhantomData::default(),
             _env: PhantomData::default(),
         }

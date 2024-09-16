@@ -1,13 +1,21 @@
 use clap::Parser;
-use ink::{env::{hash::{HashOutput, Keccak256}, hash_bytes, DefaultEnvironment}, metadata::layout::Layout, scale::{Decode, Encode}};
+use contract_extrinsics::pallet_contracts_primitives::ContractAccessError;
+use ink::{
+    env::{
+        hash::{HashOutput, Keccak256},
+        hash_bytes, DefaultEnvironment,
+    },
+    metadata::layout::Layout,
+    scale::{Encode, Decode},
+};
 use std::str::FromStr;
 use subxt::{
     backend::{legacy::LegacyBackend, rpc::RpcClient, Backend},
-    utils::AccountId32, SubstrateConfig,
+    utils::AccountId32,
+    SubstrateConfig,
 };
 use subxt_signer::{sr25519::Keypair, SecretUri};
 use utils::client::Client;
-use catalog::catalog::Job;
 
 #[derive(Debug, Parser)]
 pub struct Foo {
@@ -25,7 +33,6 @@ fn hash(data: &[u8]) -> Keccak256HashOutput {
 
 impl Foo {
     pub async fn handle(&self) {
-
         let contract_address = AccountId32::from_str(&self.address).unwrap();
 
         let signer = Keypair::from_uri(&SecretUri::from_str("//Alice").unwrap()).unwrap();
@@ -45,7 +52,6 @@ impl Foo {
 
         if let Layout::Root(root) = contract_message_transcoder.metadata().layout() {
             if let Layout::Struct(struct_layout) = root.layout() {
-
                 for field in struct_layout.fields() {
                     if field.name() == "jobs" {
                         if let Layout::Root(root) = field.layout() {
@@ -53,13 +59,11 @@ impl Foo {
                         }
                     }
                 }
-
             }
         }
 
         let storage_key = (jobs_key, signer.public_key().0).encode();
         let args = (contract_address, storage_key.clone()).encode();
-
 
         let client = RpcClient::from_insecure_url("ws://127.0.0.1:9944")
             .await
@@ -67,56 +71,20 @@ impl Foo {
         let backend: LegacyBackend<SubstrateConfig> = LegacyBackend::builder().build(client);
 
         let latest_block = backend.latest_finalized_block_ref().await.unwrap();
-        // let genesis_hash = backend.genesis_hash().await.unwrap();
-        // let runtime_version = backend.current_runtime_version().await.unwrap();
-        let storage_data = backend.call("ContractsApi_get_storage", Some(&args), latest_block.hash()).await.unwrap();
 
-        println!("Hash {:?}", hash(vec![1,2,3,5].as_slice()));
+        let storage_data = backend
+            .call("ContractsApi_get_storage", Some(&args), latest_block.hash())
+            .await
+            .unwrap();
+
+        println!("Hash {:?}", hash(vec![1, 2, 3, 5].as_slice()));
         println!("Storage Data {:?}", storage_data);
 
-        let job = <Job as Decode>::decode(&mut &storage_data[3..]).unwrap();
-        println!("{:?}", job);
+        let foo: Result<Option<Vec<u8>>, ContractAccessError> = Decode::decode(&mut storage_data.as_slice()).unwrap();
+        let hi = foo.unwrap().unwrap();
+        let bar: Vec<Keccak256HashOutput> = Decode::decode(&mut hi.as_slice()).unwrap();
 
+        println!("{:?}", bar);
 
-
-        // println!("{:?}", metadata);
-
-        // let client: OnlineClient<SubstrateConfig> = OnlineClient::from_backend_with(genesis_hash, runtime_version, metadata, Arc::new(backend)).unwrap();
-
-        // println!("{:?}", client.metadata());
-
-        // let runtime_api_client = client.runtime_api().at_latest().await.unwrap();
-        // let storage_result = runtime_api_client.call(payload).await.unwrap();
-
-        // println!("{:?}", storage_result.into_encoded());
-
-        // ----------------------------------------------
-
-        // println!("{:?}", foo);
-
-        // let url = Url::parse("ws://localhost:9944").unwrap();
-        // let contract_address = AccountId32::from_str(&self.address).unwrap();
-        // let storage_rpc: ContractStorageRpc<SubstrateConfig> =
-        //     ContractStorageRpc::new(&url).await.unwrap();
-        // let contract_storage: ContractStorage<SubstrateConfig, DefaultEnvironment> =
-        //     ContractStorage::new(storage_rpc);
-
-        // let foo = contract_storage.load_contract_storage_data(&contract_address).await.unwrap();
-        // // println!("{:?}", foo);
-
-        // let bar = ContractStorageLayout::new(foo, &contract_message_transcoder).unwrap();
-
-        // println!(
-        //     "{json}",
-        //     json = serde_json::to_string_pretty(&bar).unwrap()
-        // );
-
-        // bar.iter().for_each(|cell| {
-        //     if let ContractStorageCell::Mapping(map) = cell {
-        //         if map.root().path.contains(&"jobs".to_string()) {
-        //             println!("{:?}", map);
-        //         }
-        //     }
-        // });
     }
 }

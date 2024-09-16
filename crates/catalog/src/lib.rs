@@ -12,15 +12,13 @@ pub mod catalog {
             hash::{HashOutput, Keccak256},
             hash_bytes,
         },
-        prelude::vec::Vec,
-        storage::{
-            traits::{StorageKey, StorageLayout},
-            Mapping,
-        },
+        prelude::{vec, vec::Vec},
+        storage::{traits::StorageLayout, Mapping},
     };
 
     type Keccak256HashOutput = <Keccak256 as HashOutput>::Type;
     type Workers = Mapping<AccountId, u32>;
+    type Jobs = Mapping<AccountId, Vec<Keccak256HashOutput>>;
 
     #[derive(Debug, PartialEq, Eq, Encode, Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
@@ -40,20 +38,19 @@ pub mod catalog {
     pub struct JobSubmitted {
         pub who: AccountId,
         pub id: Keccak256HashOutput,
-        pub key: u32,
     }
 
     #[derive(Debug, Encode, Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo), derive(StorageLayout))]
     pub struct Job {
-        id: Keccak256HashOutput,
         code: Vec<u8>,
+        id: Keccak256HashOutput,
     }
 
     #[ink(storage)]
     pub struct Catalog {
         workers: Workers,
-        jobs: Mapping<AccountId, Job>,
+        jobs: Jobs,
     }
 
     impl Default for Catalog {
@@ -72,17 +69,6 @@ pub mod catalog {
         }
 
         #[ink(message)]
-        pub fn get_worker(&self) -> Result<u32, CatalogError> {
-            let caller = self.env().caller();
-            let result = self
-                .workers
-                .get(caller)
-                .ok_or(CatalogError::WorkerNotFound)?;
-
-            Ok(result)
-        }
-
-        #[ink(message)]
         pub fn register_worker(&mut self, val: u32) {
             let caller = self.env().caller();
             self.workers.insert(caller, &val);
@@ -95,11 +81,16 @@ pub mod catalog {
         pub fn submit_job(&mut self, code: Vec<u8>) {
             let who = self.env().caller();
             let id = self.hash(&code);
-            let job = Job { id, code };
-            let key = job.key();
 
-            self.jobs.insert(who, &job);
-            self.env().emit_event(JobSubmitted { who, id, key });
+            let ids = if let Some(mut ids) = self.jobs.get(who) {
+                ids.push(id);
+                ids
+            } else {
+                vec![id]
+            };
+
+            self.jobs.insert(who, &ids);
+            self.env().emit_event(JobSubmitted { who, id });
         }
 
         fn hash(&self, data: &[u8]) -> Keccak256HashOutput {
@@ -117,12 +108,6 @@ pub mod catalog {
             primitives::AccountId,
             scale::Decode,
         };
-
-        #[ink::test]
-        fn default_works() {
-            let catalog = Catalog::default();
-            assert_eq!(catalog.get_worker(), Err(CatalogError::WorkerNotFound));
-        }
 
         #[ink::test]
         fn set_worker_emits_event() {
@@ -154,10 +139,40 @@ pub mod catalog {
             let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
             let job_submitted_event =
                 <JobSubmitted as Decode>::decode(&mut emitted_events[0].data.as_slice()).unwrap();
+            let jobs = catalog.jobs.get(who).unwrap();
 
             assert_eq!(job_submitted_event.who, who);
             assert_eq!(job_submitted_event.id, expected_hash);
-            assert_eq!(job_submitted_event.key, 0);
+            assert_eq!(jobs.len(), 1);
+        }
+
+        #[ink::test]
+        fn submit_job_appends_to_existing_jobs() {
+            let who = AccountId::from([1; 32]);
+            let mut catalog = Catalog::default();
+            let code_1 = vec![1, 2, 3, 4];
+            let code_2 = vec![1, 2, 3, 5];
+
+            catalog.submit_job(code_1.clone());
+            catalog.submit_job(code_2.clone());
+
+            let expected_hash_1 = catalog.hash(&code_1);
+            let expected_hash_2 = catalog.hash(&code_2);
+
+            let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
+
+            let job_submitted_event_1 =
+                <JobSubmitted as Decode>::decode(&mut emitted_events[0].data.as_slice()).unwrap();
+            let job_submitted_event_2 =
+                <JobSubmitted as Decode>::decode(&mut emitted_events[1].data.as_slice()).unwrap();
+            let jobs = catalog.jobs.get(who).unwrap();
+
+            assert_eq!(job_submitted_event_1.id, expected_hash_1);
+            assert_eq!(job_submitted_event_2.id, expected_hash_2);
+
+            assert_eq!(jobs.len(), 2);
+            assert_eq!(jobs[0], expected_hash_1);
+            assert_eq!(jobs[1], expected_hash_2);
         }
     }
 }
