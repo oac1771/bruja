@@ -12957,6 +12957,7 @@ version = "0.0.14"
 dependencies = [
  "anyhow",
  "contract-extrinsics",
+ "hex",
  "ink",
  "ink_metadata",
  "pallet-contracts 34.0.0",
@@ -12966,6 +12967,7 @@ dependencies = [
  "serde_json",
  "sp-core 31.0.0",
  "sp-runtime 34.0.0",
+ "sp-weights 31.0.0",
  "subxt 0.35.3",
  "subxt-signer 0.35.3",
  "thiserror",

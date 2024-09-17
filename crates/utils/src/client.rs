@@ -1,26 +1,40 @@
-use crate::chain::contracts::events::ContractEmitted;
+use crate::{
+    chain::{
+        self,
+        contracts::events::{ContractEmitted, Instantiated},
+        runtime_types::sp_weights::weight_v2::Weight,
+    },
+    ink_project::InkProject,
+};
 use anyhow::Context;
 use codec::Encode;
 use std::{fmt::Display, marker::PhantomData};
 
+use std::{fs::File, io::BufReader};
+
 use pallet_contracts::ContractAccessError;
 
 use contract_extrinsics::{
-    CallCommandBuilder, CallExec, ErrorVariant, ExtrinsicOptsBuilder, InstantiateCommandBuilder,
-    InstantiateExec,
+    CallCommandBuilder, CallExec, ExtrinsicOptsBuilder, InstantiateCommandBuilder, InstantiateExec,
 };
-use ink::primitives::{LangError, MessageResult};
 use ink::env::Environment;
+use ink::primitives::MessageResult;
 use ink_metadata::layout::Layout;
 use serde::Serialize;
 use sp_core::{Bytes, Decode};
-use sp_runtime::DispatchError;
 use subxt::{
+    backend::{legacy::LegacyBackend, rpc::RpcClient, Backend},
     config::{Config, DefaultExtrinsicParams, ExtrinsicParams},
     ext::{scale_decode::IntoVisitor, scale_encode::EncodeAsType},
     tx::Signer,
-    SubstrateConfig, backend::{legacy::LegacyBackend, rpc::RpcClient, Backend}
+    OnlineClient, SubstrateConfig,
 };
+
+use contract_extrinsics::ErrorVariant;
+use ink::primitives::LangError;
+use sp_runtime::DispatchError;
+
+const PROOF_SIZE: u64 = u64::MAX / 2;
 
 pub struct Client<'a, C, E, S> {
     artifact_file: &'a str,
@@ -29,14 +43,12 @@ pub struct Client<'a, C, E, S> {
     _env: PhantomData<E>,
 }
 
-// reformat this so it takes suri and builds signer in ::new() method
-// add method to return keypair type
 impl<'a, C: Config, E: Environment, S: Signer<C> + Clone> Client<'a, C, E, S>
 where
     C::Hash: From<[u8; 32]> + EncodeAsType + IntoVisitor,
     C::AccountId: Display + IntoVisitor + Decode + EncodeAsType,
     <<C as Config>::ExtrinsicParams as ExtrinsicParams<C>>::Params:
-        From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params>,
+        From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default,
     E::Balance: Default + EncodeAsType + Serialize,
 {
     pub fn new(artifact_file: &'a str, signer: &'a S) -> Self {
@@ -46,6 +58,44 @@ where
             _config: PhantomData::default(),
             _env: PhantomData::default(),
         }
+    }
+
+    pub async fn instantiate_v2(&self, constructor: &str) {
+        let file = File::open(self.artifact_file).unwrap();
+        let reader = BufReader::new(file);
+        let ink_project: InkProject = serde_json::from_reader(reader).unwrap();
+        let client = OnlineClient::<C>::new().await.unwrap();
+
+        let salt = rand::random::<[u8; 8]>().to_vec();
+        let code = ink_project.code().unwrap();
+        let gas_limit = Weight {
+            ref_time: 500_000_000_000,
+            proof_size: PROOF_SIZE,
+        };
+        let data = ink_project.get_constructor_selector(constructor).unwrap();
+
+        let instantiate_tx = chain::tx()
+            .contracts()
+            .instantiate_with_code(0, gas_limit, None, code, data, salt);
+
+        let signed_extrinsic = client
+            .tx()
+            .create_signed(&instantiate_tx, self.signer, Default::default())
+            .await
+            .unwrap();
+
+        let events = signed_extrinsic
+            .submit_and_watch()
+            .await
+            .unwrap()
+            .wait_for_finalized_success()
+            .await
+            .unwrap();
+
+        let instantiated = events.find_first::<Instantiated>().unwrap().unwrap();
+
+        println!("{}", instantiated.contract);
+
     }
 
     pub async fn instantiate(
@@ -130,7 +180,10 @@ where
         }
     }
 
-    pub async fn get_storage<D: Decode>(&self, address: <C as Config>::AccountId) -> Result<D, ClientError> {
+    pub async fn get_storage<D: Decode>(
+        &self,
+        address: <C as Config>::AccountId,
+    ) -> Result<D, ClientError> {
         let contract_message_transcoder = self
             .extrinsic_opts_builder()
             .done()

@@ -11,6 +11,7 @@ repository.workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
+hex = { workspace = true }
 ink = { workspace = true }
 ink_metadata = { version = "5.0.0" }
 subxt = { workspace = true }
@@ -20,6 +21,7 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 codec = { workspace = true }
 pallet-contracts = { workspace = true, default-features = false }
+sp-weights = { workspace = true, default-features = false }
 
 sp-core = { workspace = true }
 

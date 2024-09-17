@@ -31,6 +31,7 @@ thiserror = { version = "1.0.63" }
 anyhow = { version = "1.0.86" }
 ink = { version = "5.0.0", default-features = false }
 tokio = { version = "1.37.0" }
+hex = { version = "0.4.3", default-features = false }
 
 sc-cli = { version = "0.44.0", default-features = false }
 sc-executor = { version = "0.39.0", default-features = false }
@@ -54,8 +55,9 @@ sp-block-builder = { version = "33.0.0", default-features = false }
 sp-io = { version = "37.0.0", default-features = false }
 sp-runtime = { version = "38.0.0", default-features = false }
 sp-genesis-builder = { version = "0.14.0", default-features = false }
-sp-tracing = { version = "17.0.0", default-features = false}
-sp-core = { version = "31.0.0", default-features = false}
+sp-tracing = { version = "17.0.0", default-features = false }
+sp-core = { version = "31.0.0", default-features = false }
+sp-weights = { version = "31.0.0", default-features = false }
 
 pallet-balances = { version = "36.0.0", default-features = false}
 pallet-sudo = { version = "35.0.0", default-features = false}
