@@ -1,10 +1,10 @@
-use catalog::catalog::JobSubmitted;
+use catalog::catalog::{JobSubmitted, WorkerRegistered};
 use clap::Parser;
 use ink::env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::SubstrateConfig;
 use subxt_signer::{sr25519::Keypair, SecretUri};
-use utils::client::{Client, Args};
+use utils::client::{Args, Client};
 
 #[derive(Debug, Parser)]
 pub struct Foo {
@@ -21,12 +21,35 @@ impl Foo {
 
         let address = contract_client.instantiate_v2("new").await;
         println!("{}", address);
-        let job_submitted = contract_client
-            .mutable_call_v2::<JobSubmitted>(address, "submit_job", vec![Args::Vec(vec![1,2,3,4])])
+
+        let worker_registerd = contract_client
+            .mutable_call_v2::<WorkerRegistered>(
+                address.clone(),
+                "register_worker",
+                vec![Args::U32(10)],
+            )
             .await;
 
-        // let jobs = contract_client.get_storage::<Vec<Keccak256HashOutput>>(contract_address).await.unwrap();
+        println!("{:?}", worker_registerd);
 
-        println!("{:?}", job_submitted);
+        // let foo = contract_client
+        //     .immutable_call::<u32>("get_worker", address, vec![])
+        //     .await;
+
+        let foo = contract_client
+            .immutable_call_v2::<u32>(address, "get_worker", vec![])
+            .await;
+
+        println!("{:?}", foo);
+
+        // let job_submitted = contract_client
+        //     .mutable_call_v2::<JobSubmitted>(
+        //         address,
+        //         "submit_job",
+        //         vec![Args::Vec(vec![1, 2, 3, 4])],
+        //     )
+        //     .await;
+
+        // println!("{:?}", job_submitted);
     }
 }

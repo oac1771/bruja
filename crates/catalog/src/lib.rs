@@ -66,6 +66,14 @@ pub mod catalog {
         }
 
         #[ink(message)]
+        pub fn get_worker(&self) -> u32 {
+            let caller = self.env().caller();
+            let result = self.workers.get(&caller).unwrap_or(0);
+
+            result
+        }
+
+        #[ink(message)]
         pub fn register_worker(&mut self, val: u32) {
             let caller = self.env().caller();
             self.workers.insert(caller, &val);

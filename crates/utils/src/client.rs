@@ -12,7 +12,7 @@ use std::{fmt::Display, marker::PhantomData};
 
 use std::{fs::File, io::BufReader};
 
-use pallet_contracts::ContractAccessError;
+use pallet_contracts::{ContractAccessError, ContractExecResult};
 
 use contract_extrinsics::{
     CallCommandBuilder, CallExec, ExtrinsicOptsBuilder, InstantiateCommandBuilder, InstantiateExec,
@@ -23,7 +23,11 @@ use ink_metadata::layout::Layout;
 use serde::Serialize;
 use sp_core::{Bytes, Decode};
 use subxt::{
-    backend::{legacy::LegacyBackend, rpc::RpcClient, Backend},
+    backend::{
+        legacy::{LegacyBackend, LegacyRpcMethods},
+        rpc::RpcClient,
+        Backend,
+    },
     config::{Config, DefaultExtrinsicParams, ExtrinsicParams},
     ext::{scale_decode::IntoVisitor, scale_encode::EncodeAsType},
     tx::Signer,
@@ -39,7 +43,18 @@ const PROOF_SIZE: u64 = u64::MAX / 2;
 
 #[derive(Encode)]
 pub enum Args {
-    Vec(Vec<u8>)
+    Vec(Vec<u8>),
+    U32(u32),
+}
+
+#[derive(Encode)]
+struct Call<AccountId, Balance> {
+    origin: AccountId,
+    dest: AccountId,
+    value: Balance,
+    gas_limit: Option<Weight>,
+    storage_deposit_limit: Option<Balance>,
+    input_data: Vec<u8>,
 }
 
 pub struct Client<'a, C, E, S> {
@@ -48,7 +63,6 @@ pub struct Client<'a, C, E, S> {
     _config: PhantomData<C>,
     _env: PhantomData<E>,
 }
-
 
 // figure out dry run for immutable calls
     // maybe figure out gas estimates
@@ -134,6 +148,53 @@ where
         let address = instantiate_exec.instantiate(None).await?.contract_address;
 
         return Ok(address);
+    }
+
+    pub async fn immutable_call_v2<T: Decode>(
+        &self,
+        address: <C as Config>::AccountId,
+        message: &str,
+        args: Vec<Args>,
+    ) -> T {
+        let rpc: LegacyRpcMethods<C> =
+            LegacyRpcMethods::new(RpcClient::from_url("ws://127.0.0.1:9944").await.unwrap());
+        let file = File::open(self.artifact_file).unwrap();
+        let reader = BufReader::new(file);
+        let ink_project: InkProject = serde_json::from_reader(reader).unwrap();
+        let message = ink_project.get_message(message).unwrap();
+
+        let mut input_data = message.get_selector().unwrap();
+
+        let gas_limit = Weight {
+            ref_time: 500_000_000_000,
+            proof_size: PROOF_SIZE,
+        };
+
+        args.encode_to(&mut input_data);
+
+        let params = Call {
+            origin: self.signer.account_id(),
+            dest: address,
+            value: 0_u128,
+            gas_limit: Some(gas_limit),
+            storage_deposit_limit: None,
+            input_data,
+        }
+        .encode();
+
+        let response = rpc
+            .state_call("ContractsApi_call", Some(&params), None)
+            .await
+            .unwrap();
+
+        let foo: ContractExecResult<E::Balance, ()> =
+            Decode::decode(&mut response.as_slice()).unwrap();
+        
+        let result = <MessageResult<T>>::decode(&mut foo.result.unwrap().data.as_slice())
+            .unwrap()
+            .unwrap();
+
+        result
     }
 
     pub async fn immutable_call<T: Decode>(
