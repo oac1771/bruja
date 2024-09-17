@@ -27,6 +27,7 @@ use subxt::{
     config::{Config, DefaultExtrinsicParams, ExtrinsicParams},
     ext::{scale_decode::IntoVisitor, scale_encode::EncodeAsType},
     tx::Signer,
+    utils::{AccountId32, MultiAddress},
     OnlineClient, SubstrateConfig,
 };
 
@@ -36,6 +37,11 @@ use sp_runtime::DispatchError;
 
 const PROOF_SIZE: u64 = u64::MAX / 2;
 
+#[derive(Encode)]
+pub enum Args {
+    Vec(Vec<u8>)
+}
+
 pub struct Client<'a, C, E, S> {
     artifact_file: &'a str,
     signer: &'a S,
@@ -43,10 +49,17 @@ pub struct Client<'a, C, E, S> {
     _env: PhantomData<E>,
 }
 
+
+// figure out dry run for immutable calls
+    // maybe figure out gas estimates
+// make cleaner abstractions
+// get rid of contract-extrinsics
+
 impl<'a, C: Config, E: Environment, S: Signer<C> + Clone> Client<'a, C, E, S>
 where
     C::Hash: From<[u8; 32]> + EncodeAsType + IntoVisitor,
-    C::AccountId: Display + IntoVisitor + Decode + EncodeAsType,
+    C::AccountId:
+        Display + IntoVisitor + Decode + EncodeAsType + Into<MultiAddress<AccountId32, ()>>,
     <<C as Config>::ExtrinsicParams as ExtrinsicParams<C>>::Params:
         From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default,
     E::Balance: Default + EncodeAsType + Serialize,
@@ -60,7 +73,7 @@ where
         }
     }
 
-    pub async fn instantiate_v2(&self, constructor: &str) {
+    pub async fn instantiate_v2(&self, constructor: &str) -> AccountId32 {
         let file = File::open(self.artifact_file).unwrap();
         let reader = BufReader::new(file);
         let ink_project: InkProject = serde_json::from_reader(reader).unwrap();
@@ -72,7 +85,11 @@ where
             ref_time: 500_000_000_000,
             proof_size: PROOF_SIZE,
         };
-        let data = ink_project.get_constructor_selector(constructor).unwrap();
+        let data = ink_project
+            .get_constructor(constructor)
+            .unwrap()
+            .get_selector()
+            .unwrap();
 
         let instantiate_tx = chain::tx()
             .contracts()
@@ -94,8 +111,9 @@ where
 
         let instantiated = events.find_first::<Instantiated>().unwrap().unwrap();
 
-        println!("{}", instantiated.contract);
+        let result = instantiated.contract;
 
+        result
     }
 
     pub async fn instantiate(
@@ -148,6 +166,51 @@ where
         let result = <MessageResult<T>>::decode(&mut data.as_slice())??;
 
         Ok(result)
+    }
+
+    pub async fn mutable_call_v2<Ev: Decode>(
+        &self,
+        address: <C as Config>::AccountId,
+        message: &str,
+        args: Vec<Args>,
+    ) -> Ev {
+        let file = File::open(self.artifact_file).unwrap();
+        let reader = BufReader::new(file);
+        let ink_project: InkProject = serde_json::from_reader(reader).unwrap();
+        let client = OnlineClient::<C>::new().await.unwrap();
+
+        let message = ink_project.get_message(message).unwrap();
+        let mut data = message.get_selector().unwrap();
+        let gas_limit = Weight {
+            ref_time: 500_000_000_000,
+            proof_size: PROOF_SIZE,
+        };
+
+        args.encode_to(&mut data);
+
+        let call_tx = chain::tx()
+            .contracts()
+            .call(address.into(), 0, gas_limit, None, data);
+
+        let signed_extrinsic = client
+            .tx()
+            .create_signed(&call_tx, self.signer, Default::default())
+            .await
+            .unwrap();
+
+        let events = signed_extrinsic
+            .submit_and_watch()
+            .await
+            .unwrap()
+            .wait_for_finalized_success()
+            .await
+            .unwrap();
+
+        let contract_emitted = events.find_first::<ContractEmitted>().unwrap().unwrap();
+
+        let result = <Ev as Decode>::decode(&mut contract_emitted.data.as_slice()).unwrap();
+
+        result
     }
 
     pub async fn mutable_call<Ev: Decode>(

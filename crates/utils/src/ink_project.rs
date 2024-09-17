@@ -12,7 +12,7 @@ impl InkProject {
         self.source.wasm()
     }
 
-    pub fn get_constructor_selector(&self, constructor: &str) -> Result<Vec<u8>, InkProjectError> {
+    pub fn get_constructor(&self, constructor: &str) -> Result<&Constructor, InkProjectError> {
         let constructor = self
             .spec
             .constructors
@@ -22,9 +22,20 @@ impl InkProject {
                 val: constructor.to_string(),
             })?;
 
-        let bytes = hex::decode(&constructor.selector[2..])?;
+        Ok(constructor)
+    }
 
-        Ok(bytes)
+    pub fn get_message(&self, message: &str) -> Result<&Message, InkProjectError> {
+        let message = self
+            .spec
+            .messages
+            .iter()
+            .find(|msg| msg.label == message)
+            .ok_or_else(|| InkProjectError::MessageNotFound {
+                val: message.to_string(),
+            })?;
+
+        Ok(message)
     }
 }
 
@@ -43,12 +54,35 @@ impl Source {
 #[derive(Deserialize, Debug)]
 struct Spec {
     constructors: Vec<Constructor>,
+    messages: Vec<Message>,
 }
 
 #[derive(Deserialize, Debug)]
-struct Constructor {
+pub struct Constructor {
     label: String,
     selector: String,
+}
+
+impl Constructor {
+    pub fn get_selector(&self) -> Result<Vec<u8>, InkProjectError> {
+        let bytes = hex::decode(&self.selector[2..])?;
+
+        Ok(bytes)
+    }
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Message {
+    label: String,
+    selector: String,
+}
+
+impl Message {
+    pub fn get_selector(&self) -> Result<Vec<u8>, InkProjectError> {
+        let bytes = hex::decode(&self.selector[2..])?;
+
+        Ok(bytes)
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -61,4 +95,7 @@ pub enum InkProjectError {
 
     #[error("Constructor not found: {val}")]
     ConstructorNotFound { val: String },
+
+    #[error("Message not found: {val}")]
+    MessageNotFound { val: String },
 }
