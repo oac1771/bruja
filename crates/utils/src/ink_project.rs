@@ -9,7 +9,8 @@ pub struct InkProject {
 
 impl InkProject {
     pub fn code(&self) -> Result<Vec<u8>, InkProjectError> {
-        self.source.wasm()
+        let code = self.source.wasm()?;
+        Ok(code)
     }
 
     pub fn get_constructor(&self, constructor: &str) -> Result<&Constructor, InkProjectError> {

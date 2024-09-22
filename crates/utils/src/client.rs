@@ -4,47 +4,366 @@ use crate::{
         contracts::events::{ContractEmitted, Instantiated},
         runtime_types::sp_weights::weight_v2::Weight,
     },
-    ink_project::InkProject,
+    ink_project::{InkProject, InkProjectError},
 };
-use anyhow::Context;
-use codec::Encode;
-use std::{fmt::Display, marker::PhantomData};
+use codec::{Decode, Encode};
+use std::{fmt::Display, fs::File, io::BufReader, marker::PhantomData};
 
-use std::{fs::File, io::BufReader};
+use pallet_contracts::{Code, ContractAccessError, ContractExecResult, ContractInstantiateResult};
 
-use pallet_contracts::{ContractAccessError, ContractExecResult};
-
-use contract_extrinsics::{
-    CallCommandBuilder, CallExec, ExtrinsicOptsBuilder, InstantiateCommandBuilder, InstantiateExec,
+use ink::{
+    env::Environment,
+    primitives::{LangError, MessageResult},
 };
-use ink::env::Environment;
-use ink::primitives::MessageResult;
-use ink_metadata::layout::Layout;
 use serde::Serialize;
-use sp_core::{Bytes, Decode};
 use subxt::{
-    backend::{
-        legacy::{LegacyBackend, LegacyRpcMethods},
-        rpc::RpcClient,
-        Backend,
-    },
+    backend::{legacy::LegacyRpcMethods, rpc::RpcClient},
+    blocks::ExtrinsicEvents,
     config::{Config, DefaultExtrinsicParams, ExtrinsicParams},
     ext::{scale_decode::IntoVisitor, scale_encode::EncodeAsType},
-    tx::Signer,
+    tx::{Payload, Signer, TxPayload},
     utils::{AccountId32, MultiAddress},
-    OnlineClient, SubstrateConfig,
+    OnlineClient,
 };
-
-use contract_extrinsics::ErrorVariant;
-use ink::primitives::LangError;
-use sp_runtime::DispatchError;
 
 const PROOF_SIZE: u64 = u64::MAX / 2;
 
-#[derive(Encode)]
-pub enum Args {
-    Vec(Vec<u8>),
-    U32(u32),
+pub struct Client<'a, C, E, S> {
+    ink_project: InkProject,
+    signer: &'a S,
+    rpc_client: RpcClient,
+    _config: PhantomData<C>,
+    _env: PhantomData<E>,
+}
+
+// figure out gas estimates
+// figure out how to deserialize json nicely and get job key from storage
+// fix Args enum encoding
+// create fn that takes Vec<Arg> and spit out Vec<u8>
+// impl Call::new()
+
+impl<'a, C: Config, E: Environment, S: Signer<C> + Clone> Client<'a, C, E, S>
+where
+    C::Hash: From<[u8; 32]> + EncodeAsType + IntoVisitor,
+    C::AccountId:
+        Display + IntoVisitor + Decode + EncodeAsType + Into<MultiAddress<AccountId32, ()>>,
+    <<C as Config>::ExtrinsicParams as ExtrinsicParams<C>>::Params:
+        From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default,
+    E::Balance: Default + EncodeAsType + Serialize + From<u128>,
+{
+    pub async fn new(artifact_file: &'a str, signer: &'a S) -> Result<Self, ClientError> {
+        let file = File::open(artifact_file)?;
+        let reader = BufReader::new(file);
+        let ink_project: InkProject = serde_json::from_reader(reader)?;
+
+        let rpc_client = RpcClient::from_insecure_url("ws://127.0.0.1:9944").await?;
+
+        Ok(Self {
+            ink_project,
+            signer,
+            rpc_client,
+            _config: PhantomData::default(),
+            _env: PhantomData::default(),
+        })
+    }
+
+    pub async fn instantiate(&self, constructor: &str) -> Result<AccountId32, ClientError> {
+        let salt = rand::random::<[u8; 8]>().to_vec();
+        let code = self.ink_project.code()?;
+
+        let data = self
+            .ink_project
+            .get_constructor(constructor)?
+            .get_selector()?;
+
+        let gas_limit = self
+            .estimate_gas_instantiate(
+                self.signer.account_id(),
+                0_u128.into(),
+                code.clone(),
+                data.clone(),
+                salt.clone(),
+            )
+            .await?;
+
+        let instantiate_tx = chain::tx()
+            .contracts()
+            .instantiate_with_code(0, gas_limit, None, code, data, salt);
+
+        let events = self.submit_extrinsic(instantiate_tx).await?;
+
+        let instantiated = events
+            .find_first::<Instantiated>()?
+            .ok_or_else(|| ClientError::EventNotFound)?;
+
+        Ok(instantiated.contract)
+    }
+
+    pub async fn mutable_call<Ev: Decode>(
+        &self,
+        address: <C as Config>::AccountId,
+        message: &str,
+        args: Vec<Args>,
+    ) -> Result<Ev, ClientError> {
+        let message = self.ink_project.get_message(message)?;
+        let mut data = message.get_selector()?;
+        let gas_limit = Weight {
+            ref_time: 500_000_000_000,
+            proof_size: PROOF_SIZE,
+        };
+
+        args.encode_to(&mut data);
+
+        let call_tx = chain::tx()
+            .contracts()
+            .call(address.into(), 0, gas_limit, None, data);
+
+        let events = self.submit_extrinsic(call_tx).await?;
+
+        let contract_emitted = events
+            .find_first::<ContractEmitted>()?
+            .ok_or_else(|| ClientError::EventNotFound)?;
+
+        let result = <Ev as Decode>::decode(&mut contract_emitted.data.as_slice())?;
+
+        Ok(result)
+    }
+
+    // do you even need a gas limit for runtime api call?
+    // try without it
+    pub async fn immutable_call<D: Decode>(
+        &self,
+        address: <C as Config>::AccountId,
+        message: &str,
+        args: Vec<Args>,
+    ) -> Result<D, ClientError> {
+        let message = self.ink_project.get_message(message)?;
+
+        let mut input_data = message.get_selector()?;
+
+        let gas_limit = Weight {
+            ref_time: 500_000_000_000,
+            proof_size: PROOF_SIZE,
+        };
+
+        args.encode_to(&mut input_data);
+
+        let params = Call::new(
+            self.signer.account_id(),
+            address,
+            0_u128,
+            Some(gas_limit),
+            None,
+            input_data,
+        )
+        .encode();
+
+        let exec_return = self
+            .call_runtime_api::<ContractExecResult<E::Balance, ()>>(
+                "ContractsApi_call",
+                Some(&params),
+                None,
+            )
+            .await?
+            .result?;
+
+        let result = <MessageResult<D>>::decode(&mut exec_return.data.as_slice())??;
+
+        Ok(result)
+    }
+
+    pub async fn get_storage<D: Decode>(
+        &self,
+        address: <C as Config>::AccountId,
+    ) -> Result<D, ClientError> {
+        let jobs_key: u32 = 0;
+
+        let storage_key = (jobs_key, self.signer.account_id()).encode();
+        let params = (address, storage_key.clone()).encode();
+
+        let raw_bytes = self
+            .call_runtime_api::<Result<Option<Vec<u8>>, ContractAccessError>>(
+                "ContractsApi_get_storage",
+                Some(&params),
+                None,
+            )
+            .await??
+            .ok_or_else(|| ClientError::DataNotFound)?;
+
+        let data = D::decode(&mut raw_bytes.as_slice())?;
+
+        Ok(data)
+    }
+
+    async fn estimate_gas_instantiate(
+        &self,
+        origin: C::AccountId,
+        value: E::Balance,
+        code: Vec<u8>,
+        data: Vec<u8>,
+        salt: Vec<u8>,
+    ) -> Result<Weight, ClientError> {
+        let instantiate_call_data: Instantiate<C::AccountId, E::Balance, C::Hash> =
+            Instantiate::new(origin, value, code, data.clone(), salt);
+
+        let result = self
+            .call_runtime_api::<ContractInstantiateResult<C::AccountId, E::Balance, ()>>(
+                "ContractsApi_instantiate",
+                Some(&instantiate_call_data.encode()),
+                None,
+            )
+            .await?;
+
+        let gas_consumed = result.gas_consumed;
+
+        Ok(gas_consumed.into())
+    }
+
+    async fn call_runtime_api<R: Decode>(
+        &self,
+        function: &str,
+        call_parameters: Option<&[u8]>,
+        at: Option<C::Hash>,
+    ) -> Result<R, ClientError> {
+        let rpc_client: LegacyRpcMethods<C> = LegacyRpcMethods::new(self.rpc_client.clone());
+        let response = rpc_client.state_call(function, call_parameters, at).await?;
+
+        let result = R::decode(&mut response.as_slice())?;
+
+        Ok(result)
+    }
+
+    async fn submit_extrinsic<Tx>(
+        &self,
+        tx_payload: Payload<Tx>,
+    ) -> Result<ExtrinsicEvents<C>, ClientError>
+    where
+        Payload<Tx>: TxPayload,
+    {
+        let client = OnlineClient::<C>::from_rpc_client(self.rpc_client.clone()).await?;
+        let signed_extrinsic = client
+            .tx()
+            .create_signed(&tx_payload, self.signer, Default::default())
+            .await?;
+
+        let events = signed_extrinsic
+            .submit_and_watch()
+            .await?
+            .wait_for_finalized_success()
+            .await?;
+
+        Ok(events)
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ClientError {
+    #[error("Codec Decode Error: {source}")]
+    Decode {
+        #[from]
+        source: codec::Error,
+    },
+
+    #[error("Subxt Crate Error: {source}")]
+    Subxt {
+        #[from]
+        source: subxt::Error,
+    },
+
+    #[error("Io error: {source}")]
+    StdIo {
+        #[from]
+        source: std::io::Error,
+    },
+
+    #[error("SerdeJson error: {source}")]
+    SerdeJson {
+        #[from]
+        source: serde_json::Error,
+    },
+
+    #[error("Ink project error: {source}")]
+    InkProject {
+        #[from]
+        source: InkProjectError,
+    },
+
+    #[error("Sp runtime dispatch error {error}")]
+    SpRuntime { error: String },
+
+    #[error("Contract access Error {error}")]
+    ContractAccess { error: String },
+
+    #[error("Contract Dispatch Error: {error}")]
+    ContractDispatch { error: String },
+
+    #[error("Message Not Found: {message}")]
+    MessageNotFound { message: String },
+
+    #[error("Unexpected Message Mutability State: {message}")]
+    MessageMutability { message: String },
+
+    #[error("Codec Decode Error: {message}")]
+    InkMessage { message: String },
+
+    #[error("CallExec Error: {error}")]
+    CallExec { error: String },
+
+    #[error("ContractEmitted event not found")]
+    ContractEmitted,
+
+    #[error("Event not found")]
+    EventNotFound,
+
+    #[error("No data found at provided storage key")]
+    DataNotFound,
+}
+
+impl From<LangError> for ClientError {
+    fn from(_value: LangError) -> Self {
+        Self::InkMessage {
+            message: "Failed to read execution input for the dispatchable.".to_string(),
+        }
+    }
+}
+
+impl From<sp_runtime::DispatchError> for ClientError {
+    fn from(value: sp_runtime::DispatchError) -> Self {
+        let error = match value {
+            sp_runtime::DispatchError::Other(err) => err.to_string(),
+            sp_runtime::DispatchError::CannotLookup => "cannot lookup".to_string(),
+            sp_runtime::DispatchError::BadOrigin => "bad origin".to_string(),
+            sp_runtime::DispatchError::Module(_) => "module error".to_string(),
+            sp_runtime::DispatchError::ConsumerRemaining => "consumer remaining".to_string(),
+            sp_runtime::DispatchError::NoProviders => "no providers".to_string(),
+            sp_runtime::DispatchError::TooManyConsumers => "to many consumers".to_string(),
+            sp_runtime::DispatchError::Token(_) => "token error".to_string(),
+            sp_runtime::DispatchError::Arithmetic(_) => "arithmetic error".to_string(),
+            sp_runtime::DispatchError::Transactional(_) => "transactional error".to_string(),
+            sp_runtime::DispatchError::Exhausted => "exhausted error".to_string(),
+            sp_runtime::DispatchError::Corruption => "corruption error".to_string(),
+            sp_runtime::DispatchError::Unavailable => "unavailable error".to_string(),
+            sp_runtime::DispatchError::RootNotAllowed => "root not allowed error".to_string(),
+        };
+
+        Self::SpRuntime { error }
+    }
+}
+
+impl From<ContractAccessError> for ClientError {
+    fn from(value: ContractAccessError) -> Self {
+        let error = match value {
+            ContractAccessError::DoesntExist => {
+                "Contract does not exist at specified address".to_string()
+            }
+            ContractAccessError::KeyDecodingFailed => {
+                "Storage key cannot be decoded from input".to_string()
+            }
+            ContractAccessError::MigrationInProgress => "Migration in progress".to_string(),
+        };
+
+        Self::ContractAccess { error: error }
+    }
 }
 
 #[derive(Encode)]
@@ -57,396 +376,63 @@ struct Call<AccountId, Balance> {
     input_data: Vec<u8>,
 }
 
-pub struct Client<'a, C, E, S> {
-    artifact_file: &'a str,
-    signer: &'a S,
-    _config: PhantomData<C>,
-    _env: PhantomData<E>,
+#[derive(Encode)]
+struct Instantiate<AccountId, Balance, Hash> {
+    origin: AccountId,
+    value: Balance,
+    gas_limit: Option<Weight>,
+    storage_deposit_limit: Option<Balance>,
+    code: Code<Hash>,
+    data: Vec<u8>,
+    salt: Vec<u8>,
 }
 
-// figure out dry run for immutable calls
-    // maybe figure out gas estimates
-// make cleaner abstractions
-// get rid of contract-extrinsics
-
-impl<'a, C: Config, E: Environment, S: Signer<C> + Clone> Client<'a, C, E, S>
-where
-    C::Hash: From<[u8; 32]> + EncodeAsType + IntoVisitor,
-    C::AccountId:
-        Display + IntoVisitor + Decode + EncodeAsType + Into<MultiAddress<AccountId32, ()>>,
-    <<C as Config>::ExtrinsicParams as ExtrinsicParams<C>>::Params:
-        From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default,
-    E::Balance: Default + EncodeAsType + Serialize,
-{
-    pub fn new(artifact_file: &'a str, signer: &'a S) -> Self {
+impl<AccountId, Balance> Call<AccountId, Balance> {
+    fn new(
+        origin: AccountId,
+        dest: AccountId,
+        value: Balance,
+        gas_limit: Option<Weight>,
+        storage_deposit_limit: Option<Balance>,
+        input_data: Vec<u8>,
+    ) -> Self {
         Self {
-            artifact_file,
-            signer,
-            _config: PhantomData::default(),
-            _env: PhantomData::default(),
-        }
-    }
-
-    pub async fn instantiate_v2(&self, constructor: &str) -> AccountId32 {
-        let file = File::open(self.artifact_file).unwrap();
-        let reader = BufReader::new(file);
-        let ink_project: InkProject = serde_json::from_reader(reader).unwrap();
-        let client = OnlineClient::<C>::new().await.unwrap();
-
-        let salt = rand::random::<[u8; 8]>().to_vec();
-        let code = ink_project.code().unwrap();
-        let gas_limit = Weight {
-            ref_time: 500_000_000_000,
-            proof_size: PROOF_SIZE,
-        };
-        let data = ink_project
-            .get_constructor(constructor)
-            .unwrap()
-            .get_selector()
-            .unwrap();
-
-        let instantiate_tx = chain::tx()
-            .contracts()
-            .instantiate_with_code(0, gas_limit, None, code, data, salt);
-
-        let signed_extrinsic = client
-            .tx()
-            .create_signed(&instantiate_tx, self.signer, Default::default())
-            .await
-            .unwrap();
-
-        let events = signed_extrinsic
-            .submit_and_watch()
-            .await
-            .unwrap()
-            .wait_for_finalized_success()
-            .await
-            .unwrap();
-
-        let instantiated = events.find_first::<Instantiated>().unwrap().unwrap();
-
-        let result = instantiated.contract;
-
-        result
-    }
-
-    pub async fn instantiate(
-        &self,
-        constructor: &str,
-    ) -> Result<<C as Config>::AccountId, ClientError> {
-        let extrinsic_opts = self.extrinsic_opts_builder().done();
-        let salt: Bytes = rand::random::<[u8; 8]>().to_vec().into();
-
-        let instantiate_exec: InstantiateExec<C, E, S> =
-            InstantiateCommandBuilder::new(extrinsic_opts)
-                .constructor(constructor)
-                .salt(Some(salt))
-                .done()
-                .await
-                .context("Failed at InstantiateCommandBuilder::done()")?;
-
-        let address = instantiate_exec.instantiate(None).await?.contract_address;
-
-        return Ok(address);
-    }
-
-    pub async fn immutable_call_v2<T: Decode>(
-        &self,
-        address: <C as Config>::AccountId,
-        message: &str,
-        args: Vec<Args>,
-    ) -> T {
-        let rpc: LegacyRpcMethods<C> =
-            LegacyRpcMethods::new(RpcClient::from_url("ws://127.0.0.1:9944").await.unwrap());
-        let file = File::open(self.artifact_file).unwrap();
-        let reader = BufReader::new(file);
-        let ink_project: InkProject = serde_json::from_reader(reader).unwrap();
-        let message = ink_project.get_message(message).unwrap();
-
-        let mut input_data = message.get_selector().unwrap();
-
-        let gas_limit = Weight {
-            ref_time: 500_000_000_000,
-            proof_size: PROOF_SIZE,
-        };
-
-        args.encode_to(&mut input_data);
-
-        let params = Call {
-            origin: self.signer.account_id(),
-            dest: address,
-            value: 0_u128,
-            gas_limit: Some(gas_limit),
-            storage_deposit_limit: None,
+            origin,
+            dest,
+            value,
+            gas_limit,
+            storage_deposit_limit,
             input_data,
         }
-        .encode();
-
-        let response = rpc
-            .state_call("ContractsApi_call", Some(&params), None)
-            .await
-            .unwrap();
-
-        let foo: ContractExecResult<E::Balance, ()> =
-            Decode::decode(&mut response.as_slice()).unwrap();
-        
-        let result = <MessageResult<T>>::decode(&mut foo.result.unwrap().data.as_slice())
-            .unwrap()
-            .unwrap();
-
-        result
-    }
-
-    pub async fn immutable_call<T: Decode>(
-        &self,
-        message: &str,
-        address: <C as Config>::AccountId,
-        args: Vec<String>,
-    ) -> Result<T, ClientError> {
-        let extrinsic_opts = self.extrinsic_opts_builder().done();
-        let call_exec: CallExec<C, E, S> =
-            CallCommandBuilder::new(address, &message, extrinsic_opts)
-                .args(args)
-                .done()
-                .await
-                .context("Failed at CallCommandBuilder::done()")?;
-
-        if self.is_mutable(&call_exec, message)? {
-            return Err(ClientError::MessageMutabilityError {
-                message: format!("{} is not immutable message", message),
-            });
-        }
-
-        let data = call_exec
-            .call_dry_run()
-            .await
-            .context("Failed at CallExec::call_dry_run(")?
-            .result?
-            .data;
-
-        let result = <MessageResult<T>>::decode(&mut data.as_slice())??;
-
-        Ok(result)
-    }
-
-    pub async fn mutable_call_v2<Ev: Decode>(
-        &self,
-        address: <C as Config>::AccountId,
-        message: &str,
-        args: Vec<Args>,
-    ) -> Ev {
-        let file = File::open(self.artifact_file).unwrap();
-        let reader = BufReader::new(file);
-        let ink_project: InkProject = serde_json::from_reader(reader).unwrap();
-        let client = OnlineClient::<C>::new().await.unwrap();
-
-        let message = ink_project.get_message(message).unwrap();
-        let mut data = message.get_selector().unwrap();
-        let gas_limit = Weight {
-            ref_time: 500_000_000_000,
-            proof_size: PROOF_SIZE,
-        };
-
-        args.encode_to(&mut data);
-
-        let call_tx = chain::tx()
-            .contracts()
-            .call(address.into(), 0, gas_limit, None, data);
-
-        let signed_extrinsic = client
-            .tx()
-            .create_signed(&call_tx, self.signer, Default::default())
-            .await
-            .unwrap();
-
-        let events = signed_extrinsic
-            .submit_and_watch()
-            .await
-            .unwrap()
-            .wait_for_finalized_success()
-            .await
-            .unwrap();
-
-        let contract_emitted = events.find_first::<ContractEmitted>().unwrap().unwrap();
-
-        let result = <Ev as Decode>::decode(&mut contract_emitted.data.as_slice()).unwrap();
-
-        result
-    }
-
-    pub async fn mutable_call<Ev: Decode>(
-        &self,
-        message: &str,
-        address: <C as Config>::AccountId,
-        args: Vec<&str>,
-    ) -> Result<Ev, ClientError> {
-        let extrinsic_opts = self.extrinsic_opts_builder().done();
-        let call_exec: CallExec<C, E, S> =
-            CallCommandBuilder::new(address, &message, extrinsic_opts)
-                .args(args)
-                .done()
-                .await
-                .context("Failed at CallCommandBuilder::done()")?;
-
-        if !self.is_mutable(&call_exec, message)? {
-            return Err(ClientError::MessageMutabilityError {
-                message: format!("{} is not mutable message", message),
-            });
-        }
-
-        let events = call_exec.call(None).await?;
-        match events.find_first::<ContractEmitted>()? {
-            Some(event) => {
-                let result = <Ev as Decode>::decode(&mut event.data.as_slice())?;
-                Ok(result)
-            }
-            None => Err(ClientError::ContractEmittedError),
-        }
-    }
-
-    pub async fn get_storage<D: Decode>(
-        &self,
-        address: <C as Config>::AccountId,
-    ) -> Result<D, ClientError> {
-        let contract_message_transcoder = self
-            .extrinsic_opts_builder()
-            .done()
-            .contract_artifacts()?
-            .contract_transcoder()?;
-
-        let mut jobs_key: u32 = 0;
-
-        if let Layout::Root(root) = contract_message_transcoder.metadata().layout() {
-            if let Layout::Struct(struct_layout) = root.layout() {
-                for field in struct_layout.fields() {
-                    if field.name() == "jobs" {
-                        if let Layout::Root(root) = field.layout() {
-                            jobs_key = *root.root_key().key();
-                        }
-                    }
-                }
-            }
-        }
-
-        let storage_key = (jobs_key, self.signer.account_id()).encode();
-        let args = (address, storage_key.clone()).encode();
-
-        let client = RpcClient::from_insecure_url("ws://127.0.0.1:9944")
-            .await
-            .unwrap();
-        let backend: LegacyBackend<SubstrateConfig> = LegacyBackend::builder().build(client);
-
-        let latest_block = backend.latest_finalized_block_ref().await.unwrap();
-
-        let storage_data = backend
-            .call("ContractsApi_get_storage", Some(&args), latest_block.hash())
-            .await
-            .unwrap();
-
-        let result: Result<Option<Vec<u8>>, ContractAccessError> =
-            Decode::decode(&mut storage_data.as_slice()).unwrap();
-        let raw_bytes = result.unwrap().unwrap();
-        let data = D::decode(&mut raw_bytes.as_slice()).unwrap();
-
-        Ok(data)
-    }
-
-    pub fn extrinsic_opts_builder(&self) -> ExtrinsicOptsBuilder<C, E, S> {
-        ExtrinsicOptsBuilder::new(self.signer.clone()).file(Some(self.artifact_file))
-    }
-
-    fn is_mutable(
-        &self,
-        call_exec: &CallExec<C, E, S>,
-        message: &str,
-    ) -> Result<bool, ClientError> {
-        let result = call_exec
-            .transcoder()
-            .metadata()
-            .spec()
-            .messages()
-            .iter()
-            .find(|msg| msg.label() == message)
-            .ok_or_else(|| ClientError::MessageNotFound {
-                message: message.to_string(),
-            })?
-            .mutates();
-
-        Ok(result)
     }
 }
 
-#[derive(Debug, thiserror::Error)]
-pub enum ClientError {
-    #[error("Contract Extrinsic Crate Error: {source}")]
-    ContractExtrinsicCrateError {
-        #[from]
-        source: anyhow::Error,
-    },
+impl<AccountId, Balance, Hash> Instantiate<AccountId, Balance, Hash> {
+    fn new(origin: AccountId, value: Balance, code: Vec<u8>, data: Vec<u8>, salt: Vec<u8>) -> Self {
 
-    #[error("Codec Decode Error: {source}")]
-    DecodeError {
-        #[from]
-        source: codec::Error,
-    },
-
-    #[error("Subxt Crate Error: {source}")]
-    SubxtError {
-        #[from]
-        source: subxt::Error,
-    },
-
-    #[error("Contract Dispatch Error: {error}")]
-    ContractDispatchError { error: String },
-
-    #[error("Message Not Found: {message}")]
-    MessageNotFound { message: String },
-
-    #[error("Unexpected Message Mutability State: {message}")]
-    MessageMutabilityError { message: String },
-
-    #[error("Codec Decode Error: {message}")]
-    MessageError { message: String },
-
-    #[error("CallExec Error: {error}")]
-    CallExecError { error: String },
-
-    #[error("ContractEmitted event not found")]
-    ContractEmittedError,
-}
-
-impl From<DispatchError> for ClientError {
-    fn from(value: DispatchError) -> Self {
-        let error = match serde_json::to_string(&value) {
-            Ok(val) => val,
-            Err(err) => format!("Error Serializing DispatchError: {}", err),
-        };
-        ClientError::ContractDispatchError { error }
-    }
-}
-
-impl From<ErrorVariant> for ClientError {
-    fn from(value: ErrorVariant) -> Self {
-        let error = match value {
-            ErrorVariant::Generic(err) => {
-                if let Ok(val) = serde_json::to_string(&err) {
-                    val
-                } else {
-                    "Error serializing GenericError to string".to_string()
-                }
-            }
-            ErrorVariant::Module(err) => err.error,
-        };
-        ClientError::CallExecError {
-            error: format!("Error Executing Call: {}", error),
+        Self {
+            origin,
+            value,
+            gas_limit: None,
+            storage_deposit_limit: None,
+            code: Code::Upload(code),
+            data,
+            salt,
         }
     }
 }
 
-impl From<LangError> for ClientError {
-    fn from(_value: LangError) -> Self {
-        Self::MessageError {
-            message: "Failed to read execution input for the dispatchable.".to_string(),
+impl From<sp_weights::Weight> for Weight {
+    fn from(value: sp_weights::Weight) -> Self {
+        Self {
+            ref_time: value.ref_time(),
+            proof_size: value.proof_size(),
         }
     }
+}
+
+#[derive(Encode)]
+pub enum Args {
+    Vec(Vec<u8>),
+    U32(u32),
 }

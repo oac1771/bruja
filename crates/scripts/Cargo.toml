@@ -17,8 +17,5 @@ tokio = { workspace = true, features = ["rt-multi-thread"] }
 clap = { workspace = true, features = ["derive"] }
 subxt-signer = { workspace = true, features = ["subxt"] }
 subxt = { workspace = true }
-ink_env = { workspace = true }
 
 ink = { workspace = true }
-contract-extrinsics = "4.1.1"
-

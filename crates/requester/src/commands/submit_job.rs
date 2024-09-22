@@ -19,7 +19,7 @@ impl SubmitJobCmd {
             AccountId32::from_str(&self.address).map_err(|err| Error::Other(err.to_string()))?;
 
         let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
-            Client::new(&config.artifact_file_path, &config.signer);
+            Client::new(&config.artifact_file_path, &config.signer).await?;
 
         let args: Vec<&str> = vec!["[1,2,3,5]"];
 
