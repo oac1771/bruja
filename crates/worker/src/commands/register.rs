@@ -23,31 +23,29 @@ impl RegisterCmd {
 
         let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer).await?;
-        let args = self.args();
 
-         match client
-            .write::<WorkerRegistered, Vec<u32>>(contract_address, "register_worker", args)
+        match client
+            .write::<WorkerRegistered, u32>(contract_address, "register_worker", self.val)
             .await
         {
             Ok(event) => {
                 if event.who.as_ref() == config.signer.public_key().0 {
                     println!("Successfully registered worker!");
+                    return Ok(())
                 } else {
                     return Err(Error::Other(String::from(
                         "WorkerRegistered Event did not contain expected value",
                     )));
                 }
             }
-            Err(err) => return Err(Error::Other(format!(
-                "Error during registration: {:?}",
-                err
-            ))),
+            Err(err) => {
+                return Err(Error::Other(format!(
+                    "Error during registration: {:?}",
+                    err
+                )))
+            }
         };
 
-        Ok(())
     }
 
-    fn args(&self) -> Vec<u32> {
-        vec![self.val]
-    }
 }

@@ -102,10 +102,13 @@ where
         let message = self.ink_project.get_message(message)?;
         let mut data = message.get_selector()?;
 
-        let gas_limit = self.call(address.clone(), message.get_label(), args.clone()).await?.gas_required;
+        let gas_limit = self
+            .call(address.clone(), message.get_label(), args.clone())
+            .await?
+            .gas_required;
 
         args.encode_to(&mut data);
-        
+
         let call_tx = chain::tx()
             .contracts()
             .call(address.into(), 0, gas_limit.into(), None, data);
@@ -127,7 +130,6 @@ where
         message: &str,
         args: Args,
     ) -> Result<D, ClientError> {
-
         let exec_return = self.call(address, message, args).await?.result?;
 
         let result = <MessageResult<D>>::decode(&mut exec_return.data.as_slice())??;
@@ -135,15 +137,18 @@ where
         Ok(result)
     }
 
-    // this should take in label of which storage item you want to query
     pub async fn get_storage<D: Decode>(
         &self,
         contract_address: <C as Config>::AccountId,
+        field_name: &str,
+        key: C::AccountId,
     ) -> Result<D, ClientError> {
-        let jobs_key: u32 = 0;
+        let field = self.ink_project.get_storage_field(field_name)?;
+        let mut field_key = field.get_storage_key()?;
 
-        let storage_key = (jobs_key, self.signer.account_id()).encode();
-        let params = (contract_address, storage_key.clone()).encode();
+        field_key.append(&mut key.encode());
+
+        let params = (contract_address, field_key).encode();
 
         let raw_bytes = self
             .call_runtime_api::<Result<Option<Vec<u8>>, ContractAccessError>>(
@@ -152,7 +157,7 @@ where
                 None,
             )
             .await??
-            .ok_or_else(|| ClientError::DataNotFound)?;
+            .ok_or_else(|| ClientError::StorageEntryIsEmpty)?;
 
         let data = D::decode(&mut raw_bytes.as_slice())?;
 
@@ -183,7 +188,7 @@ where
         Ok(gas_consumed.into())
     }
 
-    async fn call<Args: Encode>(
+    async fn call<Args: Encode + Clone>(
         &self,
         address: <C as Config>::AccountId,
         message: &str,
@@ -313,7 +318,7 @@ pub enum ClientError {
     EventNotFound,
 
     #[error("No data found at provided storage key")]
-    DataNotFound,
+    StorageEntryIsEmpty,
 }
 
 impl From<LangError> for ClientError {

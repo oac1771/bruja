@@ -8,10 +8,7 @@
     - wrap state in lazy 
 
 larger refactor:
-    - dont use contract-extrinsics pallet and just call runtime apis directly
-        - figure out when to use and not use dry run for mutable/immutable calls to the chain
     - use smalldot with worker 
     - figure out how to use substrate wasm builder for ink contract to not need to use cargo contract cli
         to build wasm binary
-
     - make contract e2e test run against runtime only if possible similar to ink_e2e sandbox feature .

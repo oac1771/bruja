@@ -1,4 +1,4 @@
-use catalog::catalog::WorkerRegistered;
+use catalog::catalog::{JobSubmitted, WorkerRegistered, Keccak256HashOutput};
 use clap::Parser;
 use ink::env::DefaultEnvironment;
 use std::str::FromStr;
@@ -12,6 +12,7 @@ pub struct Foo {}
 impl Foo {
     pub async fn handle(&self) {
         let signer = Keypair::from_uri(&SecretUri::from_str("//Alice").unwrap()).unwrap();
+
         let artifact_file = "./target/ink/catalog/catalog.contract";
         let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&artifact_file, &signer).await.unwrap();
@@ -20,20 +21,32 @@ impl Foo {
         println!("{}", address);
 
         let worker_registerd = contract_client
-            .write::<WorkerRegistered, u32>(
-                address.clone(),
-                "register_worker",
-                10,
-            )
-            .await;
+            .write::<WorkerRegistered, u32>(address.clone(), "register_worker", 10)
+            .await
+            .unwrap();
 
         println!("{:?}", worker_registerd);
 
-        let foo = contract_client
-            .read::<u32, Vec<()>>(address, "get_worker", vec![])
-            .await;
+        let worker = contract_client
+            .read::<u32, Vec<()>>(address.clone(), "get_worker", vec![])
+            .await
+            .unwrap();
 
-        println!("{}", foo.unwrap());
+        println!("{}", worker);
 
+        let job_submitted = contract_client
+            .write::<JobSubmitted, Vec<u8>>(address.clone(), "submit_job", vec![1, 2, 3, 4, 5])
+            .await
+            .unwrap();
+
+        println!("job submitted {:?}", job_submitted);
+
+
+        let job_ids: Vec<Keccak256HashOutput> = contract_client
+            .get_storage(address.clone(), "jobs", signer.public_key().into())
+            .await
+            .unwrap();
+
+        println!("job_ids: {:?}", job_ids);
     }
 }

@@ -16,6 +16,7 @@ pub mod catalog {
     pub type Keccak256HashOutput = <Keccak256 as HashOutput>::Type;
     type Workers = Mapping<AccountId, u32>;
     type Jobs = Mapping<AccountId, Vec<Keccak256HashOutput>>;
+    type Work = Mapping<Keccak256HashOutput, Vec<u8>>;
 
     #[derive(Debug, PartialEq, Eq, Encode, Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
@@ -48,6 +49,7 @@ pub mod catalog {
     pub struct Catalog {
         workers: Workers,
         jobs: Jobs,
+        work: Work
     }
 
     impl Default for Catalog {
@@ -62,15 +64,15 @@ pub mod catalog {
             Self {
                 workers: Mapping::new(),
                 jobs: Mapping::new(),
+                work: Mapping::new()
             }
         }
 
         #[ink(message)]
         pub fn get_worker(&self) -> u32 {
             let caller = self.env().caller();
-            let result = self.workers.get(&caller).unwrap_or(0);
 
-            result
+            self.workers.get(caller).unwrap_or(0)
         }
 
         #[ink(message)]
@@ -94,6 +96,7 @@ pub mod catalog {
             };
 
             self.jobs.insert(who, &ids);
+            self.work.insert(id, &code);
             self.env().emit_event(JobSubmitted { who, id });
         }
 

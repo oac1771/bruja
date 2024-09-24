@@ -5,6 +5,7 @@ use serde::Deserialize;
 pub struct InkProject {
     source: Source,
     spec: Spec,
+    storage: Storage,
 }
 
 impl InkProject {
@@ -37,6 +38,22 @@ impl InkProject {
             })?;
 
         Ok(message)
+    }
+
+    pub fn get_storage_field(&self, field_name: &str) -> Result<&Field, InkProjectError> {
+        let storage_field = self
+            .storage
+            .root
+            .layout
+            .structure
+            .fields
+            .iter()
+            .find(|field| field.name == field_name)
+            .ok_or_else(|| InkProjectError::StorageFieldNotFound {
+                val: field_name.to_string(),
+            })?;
+
+        Ok(storage_field)
     }
 }
 
@@ -88,7 +105,72 @@ impl Message {
     pub fn get_label(&self) -> &str {
         &self.label
     }
+}
 
+#[derive(Deserialize, Debug)]
+struct Storage {
+    root: Root,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+struct Root {
+    layout: Layout,
+    root_key: String,
+    ty: u8,
+}
+
+#[derive(Deserialize, Debug)]
+struct Layout {
+    #[serde(rename = "struct")]
+    structure: Struct,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+struct Struct {
+    fields: Vec<Field>,
+    name: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct Field {
+    layout: FieldLayout,
+    name: String,
+}
+
+impl Field {
+    pub fn get_storage_key(&self) -> Result<Vec<u8>, InkProjectError> {
+        let root_key = &self.layout.root.root_key;
+        let bytes = hex::decode(&root_key[2..])?;
+
+        Ok(bytes)
+    }
+}
+
+#[derive(Deserialize, Debug)]
+struct FieldLayout {
+    root: RootLayout,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+struct RootLayout {
+    layout: LeafLayout,
+    root_key: String,
+    ty: u8,
+}
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+struct LeafLayout {
+    leaf: Leaf,
+}
+
+#[allow(dead_code)]
+#[derive(Deserialize, Debug)]
+struct Leaf {
+    key: String,
+    ty: u8,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -104,4 +186,7 @@ pub enum InkProjectError {
 
     #[error("Message not found: {val}")]
     MessageNotFound { val: String },
+
+    #[error("StorageField not found: {val}")]
+    StorageFieldNotFound { val: String },
 }

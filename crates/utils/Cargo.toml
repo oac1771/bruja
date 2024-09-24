@@ -24,7 +24,6 @@ pallet-contracts = { workspace = true, default-features = false }
 sp-runtime = { workspace = true, default-features = false }
 sp-weights = { workspace = true, default-features = false }
 
-
 [features]
 default = ["std"]
 std = [
