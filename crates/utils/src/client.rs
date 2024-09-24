@@ -107,6 +107,7 @@ where
     ) -> Result<Ev, ClientError> {
         let message = self.ink_project.get_message(message)?;
         let mut data = message.get_selector()?;
+
         let gas_limit = Weight {
             ref_time: 500_000_000_000,
             proof_size: PROOF_SIZE,
@@ -172,14 +173,15 @@ where
         Ok(result)
     }
 
+    // this should take in label of which storage item you want to query
     pub async fn get_storage<D: Decode>(
         &self,
-        address: <C as Config>::AccountId,
+        contract_address: <C as Config>::AccountId,
     ) -> Result<D, ClientError> {
         let jobs_key: u32 = 0;
 
         let storage_key = (jobs_key, self.signer.account_id()).encode();
-        let params = (address, storage_key.clone()).encode();
+        let params = (contract_address, storage_key.clone()).encode();
 
         let raw_bytes = self
             .call_runtime_api::<Result<Option<Vec<u8>>, ContractAccessError>>(
@@ -214,7 +216,7 @@ where
             )
             .await?;
 
-        let gas_consumed = result.gas_consumed;
+        let gas_consumed = result.gas_required;
 
         Ok(gas_consumed.into())
     }
@@ -241,6 +243,7 @@ where
         Payload<Tx>: TxPayload,
     {
         let client = OnlineClient::<C>::from_rpc_client(self.rpc_client.clone()).await?;
+
         let signed_extrinsic = client
             .tx()
             .create_signed(&tx_payload, self.signer, Default::default())

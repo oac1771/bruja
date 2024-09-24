@@ -1,10 +1,10 @@
-use catalog::catalog::WorkerRegistered;
+// use catalog::catalog::WorkerRegistered;
 use clap::Parser;
 use ink::env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::SubstrateConfig;
 use subxt_signer::{sr25519::Keypair, SecretUri};
-use utils::client::{Args, Client};
+use utils::client::Client;
 
 #[derive(Debug, Parser)]
 pub struct Foo {}
