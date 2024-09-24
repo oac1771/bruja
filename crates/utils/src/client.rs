@@ -26,7 +26,6 @@ use subxt::{
     OnlineClient,
 };
 
-const PROOF_SIZE: u64 = u64::MAX / 2;
 
 pub struct Client<'a, C, E, S> {
     ink_project: InkProject,
@@ -36,11 +35,10 @@ pub struct Client<'a, C, E, S> {
     _env: PhantomData<E>,
 }
 
-// figure out gas estimates
-// figure out how to deserialize json nicely and get job key from storage
 // fix Args enum encoding
-// create fn that takes Vec<Arg> and spit out Vec<u8>
-// impl Call::new()
+    // create fn that takes Vec<Arg> and spit out Vec<u8>
+// figure out how to deserialize json nicely and get job key from storage
+
 
 impl<'a, C: Config, E: Environment, S: Signer<C> + Clone> Client<'a, C, E, S>
 where
@@ -99,7 +97,7 @@ where
         Ok(instantiated.contract)
     }
 
-    pub async fn mutable_call<Ev: Decode>(
+    pub async fn write<Ev: Decode>(
         &self,
         address: <C as Config>::AccountId,
         message: &str,
@@ -108,16 +106,13 @@ where
         let message = self.ink_project.get_message(message)?;
         let mut data = message.get_selector()?;
 
-        let gas_limit = Weight {
-            ref_time: 500_000_000_000,
-            proof_size: PROOF_SIZE,
-        };
+        let gas_limit = self.call(address.clone(), message.get_label(), args.clone()).await?.gas_required;
 
         args.encode_to(&mut data);
 
         let call_tx = chain::tx()
             .contracts()
-            .call(address.into(), 0, gas_limit, None, data);
+            .call(address.into(), 0, gas_limit.into(), None, data);
 
         let events = self.submit_extrinsic(call_tx).await?;
 
@@ -130,43 +125,14 @@ where
         Ok(result)
     }
 
-    // do you even need a gas limit for runtime api call?
-    // try without it
-    pub async fn immutable_call<D: Decode>(
+    pub async fn read<D: Decode>(
         &self,
         address: <C as Config>::AccountId,
         message: &str,
         args: Vec<Args>,
     ) -> Result<D, ClientError> {
-        let message = self.ink_project.get_message(message)?;
 
-        let mut input_data = message.get_selector()?;
-
-        let gas_limit = Weight {
-            ref_time: 500_000_000_000,
-            proof_size: PROOF_SIZE,
-        };
-
-        args.encode_to(&mut input_data);
-
-        let params = Call::new(
-            self.signer.account_id(),
-            address,
-            0_u128,
-            Some(gas_limit),
-            None,
-            input_data,
-        )
-        .encode();
-
-        let exec_return = self
-            .call_runtime_api::<ContractExecResult<E::Balance, ()>>(
-                "ContractsApi_call",
-                Some(&params),
-                None,
-            )
-            .await?
-            .result?;
+        let exec_return = self.call(address, message, args).await?.result?;
 
         let result = <MessageResult<D>>::decode(&mut exec_return.data.as_slice())??;
 
@@ -221,6 +187,38 @@ where
         Ok(gas_consumed.into())
     }
 
+    async fn call(
+        &self,
+        address: <C as Config>::AccountId,
+        message: &str,
+        args: Vec<Args>,
+    ) -> Result<ContractExecResult<E::Balance, ()>, ClientError> {
+        let message = self.ink_project.get_message(message)?;
+
+        let mut input_data = message.get_selector()?;
+
+        args.encode_to(&mut input_data);
+
+        let params = Call::new(
+            self.signer.account_id(),
+            address,
+            0_u128,
+            None,
+            None,
+            input_data,
+        )
+        .encode();
+
+        let contract_result = self
+            .call_runtime_api::<ContractExecResult<E::Balance, ()>>(
+                "ContractsApi_call",
+                Some(&params),
+                None,
+            )
+            .await?;
+
+        Ok(contract_result)
+    }
     async fn call_runtime_api<R: Decode>(
         &self,
         function: &str,
@@ -412,7 +410,6 @@ impl<AccountId, Balance> Call<AccountId, Balance> {
 
 impl<AccountId, Balance, Hash> Instantiate<AccountId, Balance, Hash> {
     fn new(origin: AccountId, value: Balance, code: Vec<u8>, data: Vec<u8>, salt: Vec<u8>) -> Self {
-
         Self {
             origin,
             value,
@@ -434,7 +431,7 @@ impl From<sp_weights::Weight> for Weight {
     }
 }
 
-#[derive(Encode)]
+#[derive(Encode, Clone)]
 pub enum Args {
     Vec(Vec<u8>),
     U32(u32),

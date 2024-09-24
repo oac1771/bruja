@@ -84,6 +84,11 @@ impl Message {
 
         Ok(bytes)
     }
+
+    pub fn get_label(&self) -> &str {
+        &self.label
+    }
+
 }
 
 #[derive(Debug, thiserror::Error)]
