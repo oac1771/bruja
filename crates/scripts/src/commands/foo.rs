@@ -4,7 +4,7 @@ use ink::env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::SubstrateConfig;
 use subxt_signer::{sr25519::Keypair, SecretUri};
-use utils::client::{Client, Args};
+use utils::client::Client;
 
 #[derive(Debug, Parser)]
 pub struct Foo {}
@@ -20,17 +20,17 @@ impl Foo {
         println!("{}", address);
 
         let worker_registerd = contract_client
-            .write::<WorkerRegistered>(
+            .write::<WorkerRegistered, u32>(
                 address.clone(),
                 "register_worker",
-                vec![Args::U32(10)],
+                10,
             )
             .await;
 
         println!("{:?}", worker_registerd);
 
         let foo = contract_client
-            .read::<u32>(address, "get_worker", vec![])
+            .read::<u32, Vec<()>>(address, "get_worker", vec![])
             .await;
 
         println!("{}", foo.unwrap());

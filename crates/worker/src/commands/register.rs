@@ -10,7 +10,7 @@ use utils::client::Client;
 #[derive(Debug, Parser)]
 pub struct RegisterCmd {
     #[arg(long)]
-    val: String,
+    val: u32,
 
     #[arg(long)]
     address: String,
@@ -25,30 +25,29 @@ impl RegisterCmd {
             Client::new(&config.artifact_file_path, &config.signer).await?;
         let args = self.args();
 
-        let result = match client
-            .mutable_call::<WorkerRegistered>("register_worker", contract_address, args)
+         match client
+            .write::<WorkerRegistered, Vec<u32>>(contract_address, "register_worker", args)
             .await
         {
             Ok(event) => {
                 if event.who.as_ref() == config.signer.public_key().0 {
                     println!("Successfully registered worker!");
-                    Ok(())
                 } else {
-                    Err(Error::Other(String::from(
+                    return Err(Error::Other(String::from(
                         "WorkerRegistered Event did not contain expected value",
-                    )))
+                    )));
                 }
             }
-            Err(err) => Err(Error::Other(format!(
+            Err(err) => return Err(Error::Other(format!(
                 "Error during registration: {:?}",
                 err
             ))),
         };
 
-        result
+        Ok(())
     }
 
-    fn args(&self) -> Vec<&str> {
-        vec![&self.val]
+    fn args(&self) -> Vec<u32> {
+        vec![self.val]
     }
 }

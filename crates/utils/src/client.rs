@@ -26,7 +26,6 @@ use subxt::{
     OnlineClient,
 };
 
-
 pub struct Client<'a, C, E, S> {
     ink_project: InkProject,
     signer: &'a S,
@@ -35,10 +34,7 @@ pub struct Client<'a, C, E, S> {
     _env: PhantomData<E>,
 }
 
-// fix Args enum encoding
-    // create fn that takes Vec<Arg> and spit out Vec<u8>
 // figure out how to deserialize json nicely and get job key from storage
-
 
 impl<'a, C: Config, E: Environment, S: Signer<C> + Clone> Client<'a, C, E, S>
 where
@@ -97,11 +93,11 @@ where
         Ok(instantiated.contract)
     }
 
-    pub async fn write<Ev: Decode>(
+    pub async fn write<Ev: Decode, Args: Encode + Clone>(
         &self,
         address: <C as Config>::AccountId,
         message: &str,
-        args: Vec<Args>,
+        args: Args,
     ) -> Result<Ev, ClientError> {
         let message = self.ink_project.get_message(message)?;
         let mut data = message.get_selector()?;
@@ -109,7 +105,7 @@ where
         let gas_limit = self.call(address.clone(), message.get_label(), args.clone()).await?.gas_required;
 
         args.encode_to(&mut data);
-
+        
         let call_tx = chain::tx()
             .contracts()
             .call(address.into(), 0, gas_limit.into(), None, data);
@@ -125,11 +121,11 @@ where
         Ok(result)
     }
 
-    pub async fn read<D: Decode>(
+    pub async fn read<D: Decode, Args: Encode + Clone>(
         &self,
         address: <C as Config>::AccountId,
         message: &str,
-        args: Vec<Args>,
+        args: Args,
     ) -> Result<D, ClientError> {
 
         let exec_return = self.call(address, message, args).await?.result?;
@@ -187,11 +183,11 @@ where
         Ok(gas_consumed.into())
     }
 
-    async fn call(
+    async fn call<Args: Encode>(
         &self,
         address: <C as Config>::AccountId,
         message: &str,
-        args: Vec<Args>,
+        args: Args,
     ) -> Result<ContractExecResult<E::Balance, ()>, ClientError> {
         let message = self.ink_project.get_message(message)?;
 
@@ -429,10 +425,4 @@ impl From<sp_weights::Weight> for Weight {
             proof_size: value.proof_size(),
         }
     }
-}
-
-#[derive(Encode, Clone)]
-pub enum Args {
-    Vec(Vec<u8>),
-    U32(u32),
 }
