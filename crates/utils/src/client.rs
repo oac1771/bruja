@@ -139,14 +139,14 @@ where
 
     pub async fn get_storage<D: Decode>(
         &self,
-        contract_address: <C as Config>::AccountId,
+        contract_address: C::AccountId,
         field_name: &str,
-        key: C::AccountId,
+        key: &[u8],
     ) -> Result<D, ClientError> {
         let field = self.ink_project.get_storage_field(field_name)?;
         let mut field_key = field.get_storage_key()?;
 
-        field_key.append(&mut key.encode());
+        field_key.append(&mut key.to_vec());
 
         let params = (contract_address, field_key).encode();
 
@@ -162,6 +162,12 @@ where
         let data = D::decode(&mut raw_bytes.as_slice())?;
 
         Ok(data)
+    }
+
+    pub async fn online_client(&self) -> Result<OnlineClient<C>, ClientError> {
+        let client = OnlineClient::<C>::from_rpc_client(self.rpc_client.clone()).await?;
+
+        Ok(client)
     }
 
     async fn estimate_gas_instantiate(

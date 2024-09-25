@@ -23,7 +23,7 @@ pub async fn run() {
 
     let result = match args.command {
         Command::Register(cmd) => cmd.handle(config).await,
-        Command::Start(cmd) => cmd.handle().await,
+        Command::Start(cmd) => cmd.handle(config).await,
     };
 
     if let Err(err) = result {

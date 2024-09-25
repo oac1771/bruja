@@ -31,7 +31,7 @@ impl RegisterCmd {
             Ok(event) => {
                 if event.who.as_ref() == config.signer.public_key().0 {
                     println!("Successfully registered worker!");
-                    return Ok(())
+                    return Ok(());
                 } else {
                     return Err(Error::Other(String::from(
                         "WorkerRegistered Event did not contain expected value",
@@ -45,7 +45,5 @@ impl RegisterCmd {
                 )))
             }
         };
-
     }
-
 }

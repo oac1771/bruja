@@ -49,7 +49,7 @@ pub mod catalog {
     pub struct Catalog {
         workers: Workers,
         jobs: Jobs,
-        work: Work
+        work: Work,
     }
 
     impl Default for Catalog {
@@ -64,7 +64,7 @@ pub mod catalog {
             Self {
                 workers: Mapping::new(),
                 jobs: Mapping::new(),
-                work: Mapping::new()
+                work: Mapping::new(),
             }
         }
 

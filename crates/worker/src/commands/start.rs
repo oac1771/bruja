@@ -1,13 +1,13 @@
-use crate::error::Error;
+use crate::{config::Config, error::Error};
 use catalog::catalog::{JobSubmitted, WorkerRegistered};
-use utils::chain::contracts::events::ContractEmitted;
+use utils::{chain::contracts::events::ContractEmitted, client::Client};
 
 use clap::Parser;
 use codec::Decode;
+use ink_env::DefaultEnvironment;
 use std::str::FromStr;
-use subxt::{
-    blocks::Block, storage::StorageClient, utils::AccountId32, OnlineClient, SubstrateConfig,
-};
+use subxt::{blocks::Block, utils::AccountId32, OnlineClient, SubstrateConfig};
+use subxt_signer::sr25519::Keypair;
 
 enum WatchedEvents {
     Job(JobSubmitted),
@@ -22,13 +22,15 @@ pub struct StartCmd {
 }
 
 impl StartCmd {
-    pub async fn handle(&self) -> Result<(), Error> {
-        let client = OnlineClient::<SubstrateConfig>::new().await?;
-        let storage_client = client.storage();
+    pub async fn handle(&self, config: Config) -> Result<(), Error> {
+        let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
+            Client::new(&config.artifact_file_path, &config.signer).await?;
+        let client = contract_client.online_client().await?;
+
         let mut blocks_sub = client.blocks().subscribe_finalized().await?;
 
         while let Some(block) = blocks_sub.next().await {
-            if let Err(error) = self.process_block(block, &storage_client).await {
+            if let Err(error) = self.process_block(block, &contract_client).await {
                 println!("Error Processing Block: {}", error);
             }
         }
@@ -39,7 +41,7 @@ impl StartCmd {
     async fn process_block(
         &self,
         block: Result<Block<SubstrateConfig, OnlineClient<SubstrateConfig>>, subxt::Error>,
-        storage_client: &StorageClient<SubstrateConfig, OnlineClient<SubstrateConfig>>,
+        contract_client: &Client<'_, SubstrateConfig, DefaultEnvironment, Keypair>,
     ) -> Result<(), Error> {
         let contract_address =
             AccountId32::from_str(&self.address).map_err(|err| Error::Other(err.to_string()))?;
@@ -55,22 +57,29 @@ impl StartCmd {
                 .filter_map(|ev| ev.ok())
                 .filter(|ev| ev.contract == contract_address);
 
-            self.handle_events(events, storage_client)?;
+            self.handle_events(events, contract_client).await?;
         }
 
         Ok(())
     }
 
-    fn handle_events(
+    async fn handle_events(
         &self,
         events: impl Iterator<Item = ContractEmitted>,
-        _storage_client: &StorageClient<SubstrateConfig, OnlineClient<SubstrateConfig>>,
+        contract_client: &Client<'_, SubstrateConfig, DefaultEnvironment, Keypair>,
     ) -> Result<(), Error> {
         for event in events {
-            match self.determine_event(event) {
-                WatchedEvents::Job(job) => {
+            match self.determine_event(&event) {
+                WatchedEvents::Job(job_event) => {
                     println!("Job Event!");
-                    println!("Id: {:?}", job.id);
+                    let job = contract_client
+                        .get_storage::<Vec<u8>>(
+                            event.contract,
+                            "work",
+                            &job_event.id,
+                        )
+                        .await?;
+                    println!("code: {:?}", job);
                 }
                 WatchedEvents::Registration(registration) => {
                     println!("Registration Event!: {:?}", registration.who)
@@ -82,7 +91,7 @@ impl StartCmd {
         Ok(())
     }
 
-    fn determine_event(&self, event: ContractEmitted) -> WatchedEvents {
+    fn determine_event(&self, event: &ContractEmitted) -> WatchedEvents {
         if let Ok(event) = <JobSubmitted as Decode>::decode(&mut event.data.as_slice()) {
             WatchedEvents::Job(event)
         } else if let Ok(event) = <WorkerRegistered as Decode>::decode(&mut event.data.as_slice()) {

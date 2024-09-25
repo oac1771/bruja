@@ -1,4 +1,4 @@
-use catalog::catalog::{JobSubmitted, WorkerRegistered, Keccak256HashOutput};
+use catalog::catalog::{JobSubmitted, Keccak256HashOutput, WorkerRegistered};
 use clap::Parser;
 use ink::env::DefaultEnvironment;
 use std::str::FromStr;
@@ -41,9 +41,8 @@ impl Foo {
 
         println!("job submitted {:?}", job_submitted);
 
-
         let job_ids: Vec<Keccak256HashOutput> = contract_client
-            .get_storage(address.clone(), "jobs", signer.public_key().into())
+            .get_storage(address.clone(), "jobs", &signer.public_key().0)
             .await
             .unwrap();
 
