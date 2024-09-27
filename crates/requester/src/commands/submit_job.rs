@@ -21,10 +21,20 @@ impl SubmitJobCmd {
         let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer).await?;
 
-        let args: Vec<u8> = vec![1, 2, 3, 5];
+        let wat = r#"
+            (module
+                (import "host" "host_func" (func $host_hello (param i32)))
+
+                (func (export "hello")
+                    i32.const 420
+                    call $host_hello)
+            )
+        "#
+        .as_bytes()
+        .to_vec();
 
         match client
-            .write::<JobSubmitted, Vec<u8>>(contract_address, "submit_job", args)
+            .write::<JobSubmitted, Vec<u8>>(contract_address, "submit_job", wat)
             .await
         {
             Ok(_) => {

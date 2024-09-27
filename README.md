@@ -8,6 +8,11 @@ mise install
 brew install qemu lima docker
 ```
 
+Install Cargo Make
+```
+cargo install --no-default-features cargo-make
+```
+
 Install Dev Dependencies
 ```
 cargo make install-dev-dependencies

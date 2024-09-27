@@ -1,13 +1,19 @@
-- create requester
-    - look for available workers
-        - see if there is a way to read storage without calling the contract itself
-- worker:
-    - listen for submitted job events
+- figure out integration test that uses or does not use docker compose
 
-- make contract upgradeable
-    - wrap state in lazy 
+- requester
+    - look for available workers, and send preferred worker in submit job request
+
+- worker
+    - figure out wasmtime 
+
+- catalog
+    - make contract upgradeable 
+
+- runtime
+    - governance pallet so you can kill process 
 
 larger refactor:
+    - peer to peer to return response from worker. Still have to figure out payment 
     - use smalldot with worker 
     - figure out how to use substrate wasm builder for ink contract to not need to use cargo contract cli
         to build wasm binary

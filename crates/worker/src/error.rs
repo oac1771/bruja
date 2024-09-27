@@ -20,6 +20,13 @@ pub enum Error {
         #[from]
         source: codec::Error,
     },
+
+    #[error("WasmTimeError: {source}")]
+    WasmTimeError {
+        #[from]
+        source: anyhow::Error,
+    },
+
     #[error("Error: {0}")]
     Other(String),
 }

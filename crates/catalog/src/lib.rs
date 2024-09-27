@@ -117,7 +117,7 @@ pub mod catalog {
         };
 
         #[ink::test]
-        fn set_worker_emits_event() {
+        fn register_worker_emits_event() {
             let val = 10;
             let who = AccountId::from([1; 32]);
             let mut catalog = Catalog::default();
@@ -146,11 +146,13 @@ pub mod catalog {
             let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
             let job_submitted_event =
                 <JobSubmitted as Decode>::decode(&mut emitted_events[0].data.as_slice()).unwrap();
-            let jobs = catalog.jobs.get(who).unwrap();
+            let job_ids = catalog.jobs.get(who).unwrap();
+            let work = catalog.work.get(job_ids[0]).unwrap();
 
             assert_eq!(job_submitted_event.who, who);
             assert_eq!(job_submitted_event.id, expected_hash);
-            assert_eq!(jobs.len(), 1);
+            assert_eq!(job_ids[0], expected_hash);
+            assert_eq!(work, code);
         }
 
         #[ink::test]

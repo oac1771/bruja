@@ -34,8 +34,6 @@ pub struct Client<'a, C, E, S> {
     _env: PhantomData<E>,
 }
 
-// figure out how to deserialize json nicely and get job key from storage
-
 impl<'a, C: Config, E: Environment, S: Signer<C> + Clone> Client<'a, C, E, S>
 where
     C::Hash: From<[u8; 32]> + EncodeAsType + IntoVisitor,
@@ -137,7 +135,7 @@ where
         Ok(result)
     }
 
-    pub async fn get_storage<D: Decode>(
+    pub async fn read_storage<D: Decode>(
         &self,
         contract_address: C::AccountId,
         field_name: &str,
@@ -226,6 +224,7 @@ where
 
         Ok(contract_result)
     }
+
     async fn call_runtime_api<R: Decode>(
         &self,
         function: &str,

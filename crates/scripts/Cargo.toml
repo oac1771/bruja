@@ -19,3 +19,4 @@ subxt-signer = { workspace = true, features = ["subxt"] }
 subxt = { workspace = true }
 
 ink = { workspace = true }
+wasmtime = { workspace = true }

@@ -15,3 +15,11 @@ services:
     environment:
       - SURI=//Alice
       - ARTIFACT_FILE_PATH=catalog.contract
+
+  requester:
+    image: $DOCKER_IMAGE
+    container_name: requester
+    command: sleep inf
+    environment:
+      - SURI=//Bob
+      - ARTIFACT_FILE_PATH=catalog.contract

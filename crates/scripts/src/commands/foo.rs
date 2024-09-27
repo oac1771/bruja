@@ -42,7 +42,7 @@ impl Foo {
         println!("job submitted {:?}", job_submitted);
 
         let job_ids: Vec<Keccak256HashOutput> = contract_client
-            .get_storage(address.clone(), "jobs", &signer.public_key().0)
+            .read_storage(address.clone(), "jobs", &signer.public_key().0)
             .await
             .unwrap();
 

@@ -1,5 +1,5 @@
 use crate::{config::Config, error::Error};
-use catalog::catalog::{JobSubmitted, WorkerRegistered};
+use catalog::catalog::JobSubmitted;
 use utils::{chain::contracts::events::ContractEmitted, client::Client};
 
 use clap::Parser;
@@ -8,10 +8,10 @@ use ink_env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::{blocks::Block, utils::AccountId32, OnlineClient, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
+use wasmtime::{Caller, Engine, Linker, Module, Store};
 
 enum WatchedEvents {
     Job(JobSubmitted),
-    Registration(WorkerRegistered),
     DecodeErr,
 }
 
@@ -23,6 +23,8 @@ pub struct StartCmd {
 
 impl StartCmd {
     pub async fn handle(&self, config: Config) -> Result<(), Error> {
+        println!("Starting worker...");
+
         let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer).await?;
         let client = contract_client.online_client().await?;
@@ -31,7 +33,7 @@ impl StartCmd {
 
         while let Some(block) = blocks_sub.next().await {
             if let Err(error) = self.process_block(block, &contract_client).await {
-                println!("Error Processing Block: {}", error);
+                println!("Error Processing Block Data: {}", error);
             }
         }
 
@@ -71,18 +73,11 @@ impl StartCmd {
         for event in events {
             match self.determine_event(&event) {
                 WatchedEvents::Job(job_event) => {
-                    println!("Job Event!");
+                    println!("Found Job Event");
                     let job = contract_client
-                        .get_storage::<Vec<u8>>(
-                            event.contract,
-                            "work",
-                            &job_event.id,
-                        )
+                        .read_storage::<Vec<u8>>(event.contract, "work", &job_event.id)
                         .await?;
-                    println!("code: {:?}", job);
-                }
-                WatchedEvents::Registration(registration) => {
-                    println!("Registration Event!: {:?}", registration.who)
+                    self.start_job(job).await?;
                 }
                 WatchedEvents::DecodeErr => {}
             }
@@ -94,10 +89,39 @@ impl StartCmd {
     fn determine_event(&self, event: &ContractEmitted) -> WatchedEvents {
         if let Ok(event) = <JobSubmitted as Decode>::decode(&mut event.data.as_slice()) {
             WatchedEvents::Job(event)
-        } else if let Ok(event) = <WorkerRegistered as Decode>::decode(&mut event.data.as_slice()) {
-            WatchedEvents::Registration(event)
         } else {
             WatchedEvents::DecodeErr
         }
+    }
+
+    async fn start_job(&self, job: Vec<u8>) -> Result<(), Error> {
+        let engine = Engine::default();
+        let module =
+            Module::new(&engine, job).map_err(|err| Error::WasmTimeError { source: err })?;
+        let mut store: Store<u32> = Store::new(&engine, 4);
+        let mut linker = Linker::new(&engine);
+        
+        linker
+            .func_wrap(
+                "host",
+                "host_func",
+                |caller: Caller<'_, u32>, param: i32| {
+                    println!("Got {} from WebAssembly", param);
+                    println!("my host state is: {}", caller.data());
+                },
+            )
+            .map_err(|err| Error::WasmTimeError { source: err })?;
+        let instance = linker
+            .instantiate(&mut store, &module)
+            .map_err(|err| Error::WasmTimeError { source: err })?;
+        let hello = instance
+            .get_typed_func::<(), ()>(&mut store, "hello")
+            .map_err(|err| Error::WasmTimeError { source: err })?;
+
+        hello
+            .call(&mut store, ())
+            .map_err(|err| Error::WasmTimeError { source: err })?;
+
+        Ok(())
     }
 }
