@@ -100,7 +100,7 @@ impl StartCmd {
             Module::new(&engine, job).map_err(|err| Error::WasmTimeError { source: err })?;
         let mut store: Store<u32> = Store::new(&engine, 4);
         let mut linker = Linker::new(&engine);
-        
+
         linker
             .func_wrap(
                 "host",
