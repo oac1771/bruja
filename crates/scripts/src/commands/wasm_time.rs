@@ -1,4 +1,5 @@
 use clap::Parser;
+use ink::scale::{Decode, Encode};
 use wasmtime::*;
 
 #[derive(Debug, Parser)]
@@ -10,41 +11,69 @@ impl WasmTime {
         let mut linker: Linker<()> = Linker::new(&engine);
         let mut store: Store<()> = Store::new(&engine, ());
 
-        let wat = r#"
-                (module
-                    (import "host" "host_func" (func $host_hello (param i32)))
+        // let wat = r#"
+        //         (module
+        //             (import "host" "host_func" (func $host_hello (param i32)))
 
-                    (func (export "hello")
-                        i32.const 420
-                        call $host_hello)
-                )
-            "#;
+        //             (func (export "hello")
+        //                 i32.const 420
+        //                 call $host_hello)
+        //         )
+        //     "#;
 
-        let module = Module::new(&engine, wat).unwrap();
+        // let module = Module::new(&engine, wat).unwrap();
 
-        module.imports().for_each(|i| {
-            match i.ty() {
-                ExternType::Func(func) => {
-                    linker.func_new(i.module(), i.name(), func, |_, params, _| {
-                        let foo = params[0].unwrap_i32();
-                        println!("from wasm binary {:?}", foo);
-                        Ok(())
-                    }).unwrap();
-                },
-                _ => {}
+        let module = Module::from_file(&engine, "../work/pkg/work_bg.wasm").unwrap();
+
+        module.imports().for_each(|i| match i.ty() {
+            ExternType::Func(func) => {
+                println!("{}, {}", i.module(), i.name());
+                linker
+                    .func_new(i.module(), i.name(), func, |_, _, _| Ok(()))
+                    .unwrap();
             }
-
+            _ => {}
         });
 
         let instance = linker.instantiate(&mut store, &module).unwrap();
 
         module.exports().for_each(|e| {
-            let func = instance
-                .get_typed_func::<(), ()>(&mut store, e.name())
-                .unwrap();
-            func.call(&mut store, ()).unwrap();
-            
-        });
+            match e.ty() {
+                ExternType::Func(func) => {
+                    let foo = 10_u32.encode();
+                    let params = params(func, vec![foo]);
+                    let mut results: Vec<Val> = vec![Val::I32(0)];
 
+                    instance
+                        .get_func(&mut store, e.name())
+                        .unwrap()
+                        .call(&mut store, &params, &mut results)
+                        .unwrap();
+
+                    println!("results {:?}", results);
+
+                    // let func = instance
+                    //     .get_typed_func::<(), Vec<Val>>(&mut store, e.name())
+                    //     .unwrap();
+                    // let foo = func.call(&mut store, ()).unwrap();
+                    // println!("foo {}", foo);
+                }
+                _ => {}
+            }
+        });
     }
+}
+
+fn params(func: FuncType, raw_params: Vec<Vec<u8>>) -> Vec<Val> {
+    func.params()
+        .zip(raw_params)
+        .map(|(val_type, raw_param)| {
+            if let ValType::I32 = val_type {
+                let p = <i32 as Decode>::decode(&mut raw_param.as_slice()).unwrap();
+                Val::I32(p)
+            } else {
+                Val::AnyRef(None)
+            }
+        })
+        .collect::<Vec<Val>>()
 }
