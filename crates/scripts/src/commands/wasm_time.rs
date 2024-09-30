@@ -25,28 +25,27 @@ impl WasmTime {
 
         let instance = linker.instantiate(&mut store, &module).unwrap();
 
-        module.exports().for_each(|e| {
-            match e.ty() {
-                ExternType::Func(func) => {
-                    let foo = 10_u32.encode();
-                    let (params, mut results) = build_input_output(func, vec![foo]);
+        module.exports().for_each(|e| match e.ty() {
+            ExternType::Func(func) => {
+                let foo = 10_u32.encode();
+                let (params, mut results) = build_input_output(func, vec![foo]);
 
-                    instance
-                        .get_func(&mut store, e.name())
-                        .unwrap()
-                        .call(&mut store, &params, &mut results)
-                        .unwrap();
+                instance
+                    .get_func(&mut store, e.name())
+                    .unwrap()
+                    .call(&mut store, &params, &mut results)
+                    .unwrap();
 
-                    println!("results {:?}", results);
-                }
-                _ => {}
+                println!("results {:?}", results);
             }
+            _ => {}
         });
     }
 }
 
 fn build_input_output(func: FuncType, raw_params: Vec<Vec<u8>>) -> (Vec<Val>, Vec<Val>) {
-    let params = func.params()
+    let params = func
+        .params()
         .zip(raw_params)
         .map(|(val_type, raw_param)| {
             if let ValType::I32 = val_type {
@@ -58,14 +57,13 @@ fn build_input_output(func: FuncType, raw_params: Vec<Vec<u8>>) -> (Vec<Val>, Ve
         })
         .collect::<Vec<Val>>();
 
-    let results = func.results().map(|val_type| {
-        match val_type {
-            ValType::I32 => {
-                Val::I32(0)
-            },
-            _ => Val::AnyRef(None)
-        }
-    }).collect::<Vec<Val>>();
+    let results = func
+        .results()
+        .map(|val_type| match val_type {
+            ValType::I32 => Val::I32(0),
+            _ => Val::AnyRef(None),
+        })
+        .collect::<Vec<Val>>();
 
     (params, results)
 }

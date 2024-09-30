@@ -1,4 +1,4 @@
-use crate::{config::Config, error::Error};
+use crate::{config::Config, error::Error, services::job::start_job};
 use catalog::catalog::JobSubmitted;
 use utils::{chain::contracts::events::ContractEmitted, client::Client};
 
@@ -8,7 +8,6 @@ use ink_env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::{blocks::Block, utils::AccountId32, OnlineClient, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
-use wasmtime::{Caller, Engine, Linker, Module, Store};
 
 enum WatchedEvents {
     Job(JobSubmitted),
@@ -77,7 +76,9 @@ impl StartCmd {
                     let job = contract_client
                         .read_storage::<Vec<u8>>(event.contract, "work", &job_event.id)
                         .await?;
-                    self.start_job(job).await?;
+                    start_job(job)
+                        .await
+                        .map_err(|err| Error::WasmTimeError { source: err })?;
                 }
                 WatchedEvents::DecodeErr => {}
             }
@@ -92,36 +93,5 @@ impl StartCmd {
         } else {
             WatchedEvents::DecodeErr
         }
-    }
-
-    async fn start_job(&self, job: Vec<u8>) -> Result<(), Error> {
-        let engine = Engine::default();
-        let module =
-            Module::new(&engine, job).map_err(|err| Error::WasmTimeError { source: err })?;
-        let mut store: Store<u32> = Store::new(&engine, 4);
-        let mut linker = Linker::new(&engine);
-
-        linker
-            .func_wrap(
-                "host",
-                "host_func",
-                |caller: Caller<'_, u32>, param: i32| {
-                    println!("Got {} from WebAssembly", param);
-                    println!("my host state is: {}", caller.data());
-                },
-            )
-            .map_err(|err| Error::WasmTimeError { source: err })?;
-        let instance = linker
-            .instantiate(&mut store, &module)
-            .map_err(|err| Error::WasmTimeError { source: err })?;
-        let hello = instance
-            .get_typed_func::<(), ()>(&mut store, "hello")
-            .map_err(|err| Error::WasmTimeError { source: err })?;
-
-        hello
-            .call(&mut store, ())
-            .map_err(|err| Error::WasmTimeError { source: err })?;
-
-        Ok(())
     }
 }
