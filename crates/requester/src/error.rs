@@ -20,6 +20,25 @@ pub enum Error {
         #[from]
         source: codec::Error,
     },
+
+    #[error("Std Error: {source}")]
+    StdError {
+        #[from]
+        source: std::io::Error,
+    },
+
+    #[error("WasmTimeError: {source}")]
+    WasmTimeError {
+        #[from]
+        source: anyhow::Error,
+    },
+
+    #[error("Parse Error: {source}")]
+    ParseIntError {
+        #[from]
+        source: std::num::ParseIntError,
+    },
+
     #[error("Error: {0}")]
     Other(String),
 }

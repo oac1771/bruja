@@ -8,6 +8,16 @@ pub async fn start_job(raw_job: Vec<u8>) -> Result<(), Error> {
     let mut store: Store<()> = Store::new(&engine, ());
     let module = Module::new(&engine, &raw_job)?;
 
+    define_host_fn(&module, &mut linker)?;
+
+    let instance = linker.instantiate(&mut store, &module)?;
+
+    execute_export_functions(&module, store, instance)?;
+
+    Ok(())
+}
+
+fn define_host_fn<T>(module: &Module, linker: &mut Linker<T>) -> Result<(), Error> {
     println!("Linking Host Functions...");
     module.imports().try_for_each(|i| match i.ty() {
         ExternType::Func(func) => {
@@ -17,8 +27,14 @@ pub async fn start_job(raw_job: Vec<u8>) -> Result<(), Error> {
         _ => Ok(()),
     })?;
 
-    let instance = linker.instantiate(&mut store, &module)?;
+    Ok(())
+}
 
+fn execute_export_functions<T>(
+    module: &Module,
+    mut store: Store<T>,
+    instance: Instance,
+) -> Result<(), Error> {
     println!("Executing Export Functions...");
     module.exports().try_for_each(|e| match e.ty() {
         ExternType::Func(func) => {
@@ -39,17 +55,18 @@ pub async fn start_job(raw_job: Vec<u8>) -> Result<(), Error> {
     Ok(())
 }
 
-fn build_input_output(func: FuncType, raw_params: Vec<Vec<u8>>) -> Result<(Vec<Val>, Vec<Val>), CodecError> {
+fn build_input_output(
+    func: FuncType,
+    raw_params: Vec<Vec<u8>>,
+) -> Result<(Vec<Val>, Vec<Val>), CodecError> {
     let params = func
         .params()
         .zip(raw_params)
         .map(|(val_type, raw_param)| match val_type {
-            ValType::I32 => {
-                match <i32 as Decode>::decode(&mut raw_param.as_slice()) {
-                    Ok(p) => Ok(Val::I32(p)),
-                    Err(err) => Err(err)
-                }
-            }
+            ValType::I32 => match <i32 as Decode>::decode(&mut raw_param.as_slice()) {
+                Ok(p) => Ok(Val::I32(p)),
+                Err(err) => Err(err),
+            },
             _ => Ok(Val::AnyRef(None)),
         })
         .collect::<Result<Vec<Val>, CodecError>>()?;

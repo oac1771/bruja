@@ -1,13 +1,13 @@
 #[cfg(test)]
 mod tests {
 
-    use catalog::catalog::{Catalog, CatalogError, CatalogRef, JobSubmitted};
+    use catalog::catalog::{Catalog, CatalogRef, Job, JobSubmitted};
 
     use codec::Decode;
     use ink::env::DefaultEnvironment;
     use ink_e2e::{alice, events::ContractEmitted, ContractsBackend};
 
-    type E2EResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+    type E2EResult<T> = Result<T, Box<dyn std::error::Error>>;
 
     #[ink_e2e::test]
     async fn submit_job_emits_event<Client: E2EBackend>(mut client: Client) -> E2EResult<()> {
@@ -19,10 +19,11 @@ mod tests {
             .await
             .unwrap();
         let code = vec![1, 2, 3, 4];
+        let job = Job::new(code, vec![]);
 
         let mut call_builder = contract.call_builder::<Catalog>();
 
-        let submit_job = call_builder.submit_job(code);
+        let submit_job = call_builder.submit_job(job);
         let response = client.call(&alice, &submit_job).submit().await.unwrap();
 
         let contract_emmitted_event = response

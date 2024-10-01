@@ -16,7 +16,7 @@ pub mod catalog {
     pub type Keccak256HashOutput = <Keccak256 as HashOutput>::Type;
     type Workers = Mapping<AccountId, u32>;
     type Jobs = Mapping<AccountId, Vec<Keccak256HashOutput>>;
-    type Work = Mapping<Keccak256HashOutput, Vec<u8>>;
+    type Work = Mapping<Keccak256HashOutput, Job>;
 
     #[derive(Debug, PartialEq, Eq, Encode, Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
@@ -38,11 +38,17 @@ pub mod catalog {
         pub id: Keccak256HashOutput,
     }
 
-    #[derive(Debug, Encode, Decode)]
+    #[derive(Debug, Encode, Decode, PartialEq, Clone)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo), derive(StorageLayout))]
     pub struct Job {
         code: Vec<u8>,
-        id: Keccak256HashOutput,
+        params: Vec<Vec<u8>>,
+    }
+
+    impl Job {
+        pub fn new(code: Vec<u8>, params: Vec<Vec<u8>>) -> Self {
+            Self { code, params }
+        }
     }
 
     #[ink(storage)]
@@ -84,9 +90,9 @@ pub mod catalog {
         }
 
         #[ink(message)]
-        pub fn submit_job(&mut self, code: Vec<u8>) {
+        pub fn submit_job(&mut self, job: Job) {
             let who = self.env().caller();
-            let id = self.hash(&code);
+            let id = self.hash(&job.code);
 
             let ids = if let Some(mut ids) = self.jobs.get(who) {
                 ids.push(id);
@@ -96,7 +102,7 @@ pub mod catalog {
             };
 
             self.jobs.insert(who, &ids);
-            self.work.insert(id, &code);
+            self.work.insert(id, &job);
             self.env().emit_event(JobSubmitted { who, id });
         }
 
@@ -115,6 +121,14 @@ pub mod catalog {
             primitives::AccountId,
             scale::Decode,
         };
+
+        impl Job {
+            fn test(code: Vec<u8>) -> Self {
+                let params: Vec<Vec<u8>> = vec![];
+
+                Self { params, code }
+            }
+        }
 
         #[ink::test]
         fn register_worker_emits_event() {
@@ -140,8 +154,10 @@ pub mod catalog {
             let mut catalog = Catalog::default();
             let code = vec![1, 2, 3, 4];
 
-            catalog.submit_job(code.clone());
-            let expected_hash = catalog.hash(&code);
+            let job = Job::test(code.clone());
+
+            catalog.submit_job(job.clone());
+            let expected_hash = catalog.hash(&code.clone());
 
             let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
             let job_submitted_event =
@@ -152,18 +168,22 @@ pub mod catalog {
             assert_eq!(job_submitted_event.who, who);
             assert_eq!(job_submitted_event.id, expected_hash);
             assert_eq!(job_ids[0], expected_hash);
-            assert_eq!(work, code);
+            assert_eq!(work, job);
         }
 
         #[ink::test]
         fn submit_job_appends_to_existing_jobs() {
             let who = AccountId::from([1; 32]);
             let mut catalog = Catalog::default();
+
             let code_1 = vec![1, 2, 3, 4];
             let code_2 = vec![1, 2, 3, 5];
 
-            catalog.submit_job(code_1.clone());
-            catalog.submit_job(code_2.clone());
+            let job_1 = Job::test(code_1.clone());
+            let job_2 = Job::test(code_2.clone());
+
+            catalog.submit_job(job_1.clone());
+            catalog.submit_job(job_2.clone());
 
             let expected_hash_1 = catalog.hash(&code_1);
             let expected_hash_2 = catalog.hash(&code_2);

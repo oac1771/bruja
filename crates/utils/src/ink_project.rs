@@ -107,37 +107,43 @@ impl Message {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Deserialize)]
 struct Storage {
     root: Root,
 }
 
-#[allow(dead_code)]
-#[derive(Deserialize, Debug)]
+#[derive(Debug, Deserialize)]
 struct Root {
-    layout: Layout,
-    root_key: String,
-    ty: u8,
+    layout: LayoutStruct,
 }
 
-#[derive(Deserialize, Debug)]
-struct Layout {
+#[derive(Debug, Deserialize)]
+struct LayoutStruct {
     #[serde(rename = "struct")]
-    structure: Struct,
+    structure: StructLayout,
 }
 
-#[allow(dead_code)]
-#[derive(Deserialize, Debug)]
-struct Struct {
+#[derive(Debug, Deserialize)]
+struct StructLayout {
     fields: Vec<Field>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct Field {
+    layout: RootLayout,
     name: String,
 }
 
-#[derive(Deserialize, Debug)]
-pub struct Field {
-    layout: FieldLayout,
-    name: String,
+#[derive(Debug, Deserialize)]
+struct RootLayout {
+    root: InnerRoot,
 }
+
+#[derive(Debug, Deserialize)]
+struct InnerRoot {
+    root_key: String,
+}
+
 
 impl Field {
     pub fn get_storage_key(&self) -> Result<Vec<u8>, InkProjectError> {
@@ -146,31 +152,6 @@ impl Field {
 
         Ok(bytes)
     }
-}
-
-#[derive(Deserialize, Debug)]
-struct FieldLayout {
-    root: RootLayout,
-}
-
-#[allow(dead_code)]
-#[derive(Deserialize, Debug)]
-struct RootLayout {
-    layout: LeafLayout,
-    root_key: String,
-    ty: u8,
-}
-#[allow(dead_code)]
-#[derive(Deserialize, Debug)]
-struct LeafLayout {
-    leaf: Leaf,
-}
-
-#[allow(dead_code)]
-#[derive(Deserialize, Debug)]
-struct Leaf {
-    key: String,
-    ty: u8,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -189,4 +170,18 @@ pub enum InkProjectError {
 
     #[error("StorageField not found: {val}")]
     StorageFieldNotFound { val: String },
+}
+
+#[cfg(test)]
+mod test {
+
+    use super::*;
+    use std::{fs::File, io::BufReader};
+
+    #[test]
+    fn deserialize_ink_project() {
+        let file = File::open("../../target/ink/catalog/catalog.contract").unwrap();
+        let reader = BufReader::new(file);
+        let _: InkProject = serde_json::from_reader(reader).unwrap();
+    }
 }

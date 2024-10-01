@@ -1,6 +1,8 @@
 - figure out integration test that uses or does not use docker compose
+- use logging crate. Trac/subscbribe
 
 - requester
+    - submit code with params
     - look for available workers, and send preferred worker in submit job request
 
 - worker
@@ -14,6 +16,7 @@
 
 larger refactor:
     - peer to peer to return response from worker. Still have to figure out payment 
+    - use zk snark as proof that worker completed work
     - use smalldot with worker 
     - figure out how to use substrate wasm builder for ink contract to not need to use cargo contract cli
         to build wasm binary

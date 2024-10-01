@@ -20,3 +20,5 @@ subxt = { workspace = true }
 ink_env = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
+wasmtime = { workspace = true }
+anyhow = { workspace = true }
