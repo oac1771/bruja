@@ -22,6 +22,6 @@ pub async fn run() {
     };
 
     if let Err(err) = result {
-        println!("Error {:?}", err);
+        tracing::error!("Error {:?}", err);
     }
 }

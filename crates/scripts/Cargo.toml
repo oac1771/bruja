@@ -21,8 +21,8 @@ subxt = { workspace = true }
 ink = { workspace = true }
 wasmtime = { workspace = true }
 
-libp2p = { version = "0.52.4", features = ["tcp", "tls", "dns", "async-std", "noise", "yamux", "websocket", "ping", "macros"] }
-futures = "0.3.21"
+libp2p = { workspace = true, features = ["tcp", "tls", "dns", "async-std", "noise", "yamux", "websocket", "ping", "macros"] }
+futures = { workspace = true }
 async-std = { version = "1.12.0", features = ["attributes"] }
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-tracing = "0.1.40"
+tracing-subscriber = { workspace = true , features = ["env-filter"] }
+tracing = { workspace = true }

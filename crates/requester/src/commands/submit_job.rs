@@ -9,7 +9,8 @@ use subxt_signer::sr25519::Keypair;
 use utils::client::Client;
 use wasmtime::{Engine, Module, ValType};
 
-// this should take export fn name which maps params
+use tracing::{info, instrument};
+
 #[derive(Debug, Parser)]
 pub struct SubmitJobCmd {
     #[arg(long)]
@@ -27,7 +28,10 @@ pub struct SubmitJobCmd {
 }
 
 impl SubmitJobCmd {
+
+    #[instrument(skip_all)]
     pub async fn handle(&self, config: &Config) -> Result<(), Error> {
+
         let contract_address = AccountId32::from_str(&self.address).map_err(|err| {
             Error::Other(format!(
                 "Parsing provided contract address {}",
@@ -56,10 +60,11 @@ impl SubmitJobCmd {
             .await
         {
             Ok(_) => {
-                println!("Job Submitted!");
+                info!("Job Submitted!");
+                
             }
             Err(err) => {
-                println!("Job Submission unsuccessful {:?}", err);
+                info!("Job Submission unsuccessful {:?}", err);
             }
         }
 

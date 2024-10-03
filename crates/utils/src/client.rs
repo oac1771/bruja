@@ -106,7 +106,6 @@ where
             .await?;
 
         Ok(gas_limit)
-
     }
 
     pub async fn write<Ev: Decode, Args: Encode + Clone>(

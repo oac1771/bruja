@@ -3,17 +3,16 @@ use futures::prelude::*;
 use libp2p::swarm::SwarmEvent;
 use libp2p::{ping, Multiaddr};
 use std::time::Duration;
-use tracing_subscriber::EnvFilter;
 use tracing::{info, instrument};
+use tracing_subscriber::EnvFilter;
 
 #[derive(Debug, Parser)]
 pub struct P2P {
     #[arg(long)]
-    peer: Option<String>
+    peer: Option<String>,
 }
 
 impl P2P {
-
     #[instrument]
     pub async fn handle(&self) {
         tracing_subscriber::fmt()
@@ -37,7 +36,9 @@ impl P2P {
 
         // Tell the swarm to listen on all interfaces and a random, OS-assigned
         // port.
-        swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap()).unwrap();
+        swarm
+            .listen_on("/ip4/0.0.0.0/tcp/0".parse().unwrap())
+            .unwrap();
 
         // Dial the peer identified by the multi-address given as the second
         // command-line argument, if any.

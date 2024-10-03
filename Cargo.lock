@@ -8104,6 +8104,8 @@ dependencies = [
  "subxt-signer 0.35.3",
  "thiserror",
  "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.18",
  "utils",
  "wasmtime 25.0.1",
 ]
