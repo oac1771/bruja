@@ -3,7 +3,7 @@ use catalog::catalog::{Job, JobSubmitted};
 use clap::Parser;
 use codec::Encode;
 use ink_env::DefaultEnvironment;
-use std::{fs::File, io::Read, str::FromStr};
+use std::{fs::File, io::Read, path::Path, str::FromStr};
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
 use utils::client::Client;
@@ -38,9 +38,7 @@ impl SubmitJobCmd {
         let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer).await?;
 
-        let mut file = File::open(&self.path)?;
-        let mut code: Vec<u8> = Vec::new();
-        file.read(&mut code)?;
+        let code = self.read_file()?;
 
         let params: Vec<Vec<u8>> = if let Some(params) = &self.params {
             let p = params.split(",").collect::<Vec<&str>>();
@@ -52,6 +50,7 @@ impl SubmitJobCmd {
         };
 
         let job = Job::new(code, params);
+
 
         match client
             .write::<JobSubmitted, Job>(contract_address, "submit_job", job)
@@ -66,6 +65,21 @@ impl SubmitJobCmd {
         }
 
         Ok(())
+    }
+
+    fn read_file(&self) -> Result<Vec<u8>, Error> {
+        let path = Path::new(&self.path);
+
+        if path.exists() {
+            let mut file = File::open(path)?;
+            let mut code: Vec<u8> = Vec::new();
+            file.read_to_end(&mut code)?;
+
+            return Ok(code)
+        } else {
+            return Err(Error::Other(format!("Path: {:?} does not exist", self.path)))
+        }
+
     }
 
     fn build_params(&self, p: &Vec<&str>, module: &Module) -> Result<Vec<Vec<u8>>, Error> {

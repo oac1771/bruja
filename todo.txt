@@ -3,6 +3,8 @@
 
 - requester
     - submit code with params
+    - payment
+        - look into module.resources_required()
     - look for available workers, and send preferred worker in submit job request
 
 - worker

@@ -67,6 +67,7 @@ pub mod catalog {
     impl Catalog {
         #[ink(constructor)]
         pub fn new() -> Self {
+            ink::env::debug_println!("created new instance at {}", Self::env().block_number());
             Self {
                 workers: Mapping::new(),
                 jobs: Mapping::new(),
@@ -91,6 +92,7 @@ pub mod catalog {
 
         #[ink(message)]
         pub fn submit_job(&mut self, job: Job) {
+            ink::env::debug_message("Some message");
             let who = self.env().caller();
             let id = self.hash(&job.code);
 

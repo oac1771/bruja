@@ -91,6 +91,25 @@ where
         Ok(instantiated.contract)
     }
 
+    pub async fn write_foo<Ev: Decode, Args: Encode + Clone>(
+        &self,
+        address: <C as Config>::AccountId,
+        message: &str,
+        args: Args,
+    ) -> Result<ContractExecResult<E::Balance, ()>, ClientError> {
+        let message = self.ink_project.get_message(message)?;
+        let mut data = message.get_selector()?;
+        args.encode_to(&mut data);
+
+        let gas_limit = self
+            .call(address.clone(), message.get_label(), &args)
+            .await?;
+
+        Ok(gas_limit)
+
+    }
+
+
     pub async fn write<Ev: Decode, Args: Encode + Clone>(
         &self,
         address: <C as Config>::AccountId,
@@ -99,13 +118,12 @@ where
     ) -> Result<Ev, ClientError> {
         let message = self.ink_project.get_message(message)?;
         let mut data = message.get_selector()?;
+        args.encode_to(&mut data);
 
         let gas_limit = self
-            .call(address.clone(), message.get_label(), args.clone())
+            .call(address.clone(), message.get_label(), &args)
             .await?
             .gas_required;
-
-        args.encode_to(&mut data);
 
         let call_tx = chain::tx()
             .contracts()
@@ -128,7 +146,7 @@ where
         message: &str,
         args: Args,
     ) -> Result<D, ClientError> {
-        let exec_return = self.call(address, message, args).await?.result?;
+        let exec_return = self.call(address, message, &args).await?.result?;
 
         let result = <MessageResult<D>>::decode(&mut exec_return.data.as_slice())??;
 
@@ -196,7 +214,7 @@ where
         &self,
         address: <C as Config>::AccountId,
         message: &str,
-        args: Args,
+        args: &Args,
     ) -> Result<ContractExecResult<E::Balance, ()>, ClientError> {
         let message = self.ink_project.get_message(message)?;
 
