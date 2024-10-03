@@ -144,7 +144,6 @@ struct InnerRoot {
     root_key: String,
 }
 
-
 impl Field {
     pub fn get_storage_key(&self) -> Result<Vec<u8>, InkProjectError> {
         let root_key = &self.layout.root.root_key;

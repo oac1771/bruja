@@ -69,7 +69,6 @@ fn schedule<T: pallet_contracts::Config>() -> pallet_contracts::Schedule<T> {
     pallet_contracts::Schedule {
         limits: pallet_contracts::Limits {
             runtime_memory: 1024 * 1024 * 1024,
-			// payload_len: 128 * 1024,
             ..Default::default()
         },
         ..Default::default()

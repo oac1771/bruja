@@ -51,7 +51,6 @@ impl SubmitJobCmd {
 
         let job = Job::new(code, params);
 
-
         match client
             .write::<JobSubmitted, Job>(contract_address, "submit_job", job)
             .await
@@ -75,11 +74,13 @@ impl SubmitJobCmd {
             let mut code: Vec<u8> = Vec::new();
             file.read_to_end(&mut code)?;
 
-            return Ok(code)
+            return Ok(code);
         } else {
-            return Err(Error::Other(format!("Path: {:?} does not exist", self.path)))
+            return Err(Error::Other(format!(
+                "Path: {:?} does not exist",
+                self.path
+            )));
         }
-
     }
 
     fn build_params(&self, p: &Vec<&str>, module: &Module) -> Result<Vec<Vec<u8>>, Error> {

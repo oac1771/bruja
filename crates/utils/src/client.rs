@@ -109,7 +109,6 @@ where
 
     }
 
-
     pub async fn write<Ev: Decode, Args: Encode + Clone>(
         &self,
         address: <C as Config>::AccountId,
