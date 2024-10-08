@@ -39,6 +39,7 @@ wasmtime = { version = "25.0.1" }
 libp2p = { version = "0.52.4" }
 tracing-subscriber = { version = "0.3" }
 tracing = { version = "0.1.40" }
+rand = { version = "0.8.5" }
 
 sc-cli = { version = "0.44.0", default-features = false }
 sc-executor = { version = "0.39.0", default-features = false }

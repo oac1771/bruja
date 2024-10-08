@@ -18,8 +18,9 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 codec = { workspace = true }
 hex = { workspace = true }
-rand = "0.8.5"
-libp2p = { workspace = true, features = ["tcp", "tls", "dns", "noise", "yamux", "websocket", "ping", "macros", "mdns", "tokio"] }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+rand = { workspace = true }
+libp2p = { workspace = true, features = ["tcp", "tls", "dns", "noise", "yamux", "websocket", "ping", "macros", "mdns", "tokio", "gossipsub"] }
 futures = { workspace = true }
 tracing = { workspace = true, features = ["attributes"] }
 
