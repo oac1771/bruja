@@ -13068,8 +13068,10 @@ checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 name = "utils"
 version = "0.0.14"
 dependencies = [
+ "futures",
  "hex",
  "ink",
+ "libp2p",
  "pallet-contracts 34.0.0",
  "parity-scale-codec",
  "rand",
@@ -13080,6 +13082,7 @@ dependencies = [
  "subxt 0.35.3",
  "subxt-signer 0.35.3",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]

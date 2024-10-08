@@ -19,6 +19,9 @@ thiserror = { workspace = true }
 codec = { workspace = true }
 hex = { workspace = true }
 rand = "0.8.5"
+libp2p = { workspace = true, features = ["tcp", "tls", "dns", "noise", "yamux", "websocket", "ping", "macros", "mdns", "tokio"] }
+futures = { workspace = true }
+tracing = { workspace = true, features = ["attributes"] }
 
 pallet-contracts = { workspace = true, default-features = false }
 sp-runtime = { workspace = true, default-features = false }

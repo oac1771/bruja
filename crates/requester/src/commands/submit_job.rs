@@ -6,7 +6,7 @@ use ink_env::DefaultEnvironment;
 use std::{fs::File, io::Read, path::Path, str::FromStr};
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
-use utils::client::Client;
+use utils::{client::Client, networking::start};
 use wasmtime::{Engine, Module, ValType};
 
 use tracing::{info, instrument};
@@ -28,45 +28,44 @@ pub struct SubmitJobCmd {
 }
 
 impl SubmitJobCmd {
-
     #[instrument(skip_all)]
     pub async fn handle(&self, config: &Config) -> Result<(), Error> {
+        // let contract_address = AccountId32::from_str(&self.address).map_err(|err| {
+        //     Error::Other(format!(
+        //         "Parsing provided contract address {}",
+        //         err.to_string()
+        //     ))
+        // })?;
 
-        let contract_address = AccountId32::from_str(&self.address).map_err(|err| {
-            Error::Other(format!(
-                "Parsing provided contract address {}",
-                err.to_string()
-            ))
-        })?;
+        // let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
+        //     Client::new(&config.artifact_file_path, &config.signer).await?;
 
-        let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
-            Client::new(&config.artifact_file_path, &config.signer).await?;
+        // let code = self.read_file()?;
 
-        let code = self.read_file()?;
+        // let params: Vec<Vec<u8>> = if let Some(params) = &self.params {
+        //     let p = params.split(",").collect::<Vec<&str>>();
+        //     let engine = Engine::default();
+        //     let module = Module::from_file(&engine, &self.path)?;
+        //     self.build_params(&p, &module)?
+        // } else {
+        //     vec![]
+        // };
 
-        let params: Vec<Vec<u8>> = if let Some(params) = &self.params {
-            let p = params.split(",").collect::<Vec<&str>>();
-            let engine = Engine::default();
-            let module = Module::from_file(&engine, &self.path)?;
-            self.build_params(&p, &module)?
-        } else {
-            vec![]
-        };
+        // let job = Job::new(code, params);
 
-        let job = Job::new(code, params);
+        // match client
+        //     .write::<JobSubmitted, Job>(contract_address, "submit_job", job)
+        //     .await
+        // {
+        //     Ok(_) => {
+        //         info!("Job Submitted!");
+        //     }
+        //     Err(err) => {
+        //         info!("Job Submission unsuccessful {:?}", err);
+        //     }
+        // }
 
-        match client
-            .write::<JobSubmitted, Job>(contract_address, "submit_job", job)
-            .await
-        {
-            Ok(_) => {
-                info!("Job Submitted!");
-                
-            }
-            Err(err) => {
-                info!("Job Submission unsuccessful {:?}", err);
-            }
-        }
+        let foo = start().await.unwrap();
 
         Ok(())
     }
