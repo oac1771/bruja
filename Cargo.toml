@@ -31,12 +31,13 @@ thiserror = { version = "1.0.63" }
 anyhow = { version = "1.0.86" }
 ink = { version = "5.0.0", default-features = false }
 tokio = { version = "1.37.0" }
+tokio-util = { version = "0.7.12" }
 hex = { version = "0.4.3", default-features = false }
 ink_env = { version = "5.0.0" }
 subxt = { version = "0.35.3" }
 subxt-signer = { version = "0.35.3" }
 wasmtime = { version = "25.0.1" }
-libp2p = { version = "0.52.4" }
+libp2p = { version = "0.54.1" }
 tracing-subscriber = { version = "0.3" }
 tracing = { version = "0.1.40" }
 rand = { version = "0.8.5" }

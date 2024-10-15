@@ -6,10 +6,14 @@ use ink_env::DefaultEnvironment;
 use std::{fs::File, io::Read, path::Path, str::FromStr};
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
-use utils::{client::Client, networking::start};
-use wasmtime::{Engine, Module, ValType};
-
+use tokio::{
+    select,
+    time::{sleep, Duration},
+};
+// use tokio_util::sync::CancellationToken;
 use tracing::{info, instrument};
+use utils::{client::Client, p2p::NodeBuilder};
+use wasmtime::{Engine, Module, ValType};
 
 #[derive(Debug, Parser)]
 pub struct SubmitJobCmd {
@@ -30,42 +34,52 @@ pub struct SubmitJobCmd {
 impl SubmitJobCmd {
     #[instrument(skip_all)]
     pub async fn handle(&self, config: &Config) -> Result<(), Error> {
-        // let contract_address = AccountId32::from_str(&self.address).map_err(|err| {
-        //     Error::Other(format!(
-        //         "Parsing provided contract address {}",
-        //         err.to_string()
-        //     ))
-        // })?;
+        let contract_address = AccountId32::from_str(&self.address).map_err(|err| {
+            Error::Other(format!(
+                "Parsing provided contract address {}",
+                err.to_string()
+            ))
+        })?;
 
-        // let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
-        //     Client::new(&config.artifact_file_path, &config.signer).await?;
+        let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
+            Client::new(&config.artifact_file_path, &config.signer).await?;
 
-        // let code = self.read_file()?;
+        let code = self.read_file()?;
 
-        // let params: Vec<Vec<u8>> = if let Some(params) = &self.params {
-        //     let p = params.split(",").collect::<Vec<&str>>();
-        //     let engine = Engine::default();
-        //     let module = Module::from_file(&engine, &self.path)?;
-        //     self.build_params(&p, &module)?
-        // } else {
-        //     vec![]
-        // };
+        let params: Vec<Vec<u8>> = if let Some(params) = &self.params {
+            let p = params.split(",").collect::<Vec<&str>>();
+            let engine = Engine::default();
+            let module = Module::from_file(&engine, &self.path)?;
+            self.build_params(&p, &module)?
+        } else {
+            vec![]
+        };
 
-        // let job = Job::new(code, params);
+        let job = Job::new(code, params);
 
-        // match client
-        //     .write::<JobSubmitted, Job>(contract_address, "submit_job", job)
-        //     .await
-        // {
-        //     Ok(_) => {
-        //         info!("Job Submitted!");
-        //     }
-        //     Err(err) => {
-        //         info!("Job Submission unsuccessful {:?}", err);
-        //     }
-        // }
+        match client
+            .write::<JobSubmitted, Job>(contract_address, "submit_job", job)
+            .await
+        {
+            Ok(_) => {
+                info!("Job Submitted!");
+            }
+            Err(err) => {
+                info!("Job Submission unsuccessful {:?}", err);
+            }
+        }
 
-        let foo = start().await.unwrap();
+        let node = NodeBuilder::build()?;
+        let (handle, node_client) = node.run().await?;
+        node_client.subscribe("foo").await?;
+
+        // add cancelation token here: https://docs.rs/tokio-util/latest/tokio_util/sync/struct.CancellationToken.html
+        select! {
+            _ = handle => {},
+            _ = sleep(Duration::from_secs(1000)) => {
+                info!("Process has timed out")
+            }
+        };
 
         Ok(())
     }

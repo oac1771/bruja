@@ -1,30 +1,38 @@
-use subxt::Error as SubxtError;
-use utils::client::ClientError;
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error("Contract Client Returned Error: {source}")]
+    #[error("{source}")]
     ContractClientError {
         #[from]
-        source: ClientError,
+        source: utils::client::ClientError,
     },
 
-    #[error("Subxt client Error: {source}")]
+    #[error("{source}")]
     SubxtError {
         #[from]
-        source: SubxtError,
+        source: subxt::Error,
     },
 
-    #[error("Codec Decode Error: {source}")]
+    #[error("{source}")]
     DecodeError {
         #[from]
         source: codec::Error,
     },
 
-    #[error("WasmTimeError: {source}")]
+    // #[error("{source}")]
+    // SendError {
+    //     #[from]
+    //     source: tokio::sync::mpsc::error::SendError<T>,
+    // },
+    #[error("{source}")]
     WasmTimeError {
         #[from]
         source: anyhow::Error,
+    },
+
+    #[error("{source}")]
+    P2pError {
+        #[from]
+        source: utils::p2p::Error,
     },
 
     #[error("Error: {0}")]
