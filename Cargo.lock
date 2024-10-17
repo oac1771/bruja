@@ -12985,6 +12985,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
 
 [[package]]
+name = "tests"
+version = "0.0.14"
+dependencies = [
+ "ink_env",
+ "subxt 0.35.3",
+ "subxt-signer 0.35.3",
+ "tokio",
+ "tracing",
+ "tracing-subscriber 0.3.18",
+ "utils",
+ "worker",
+]
+
+[[package]]
 name = "thiserror"
 version = "1.0.63"
 source = "registry+https://github.com/rust-lang/crates.io-index"

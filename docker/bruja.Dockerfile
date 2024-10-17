@@ -6,7 +6,7 @@ LABEL stage=intermediate
 COPY . .
 
 RUN cargo contract build --manifest-path crates/catalog/Cargo.toml --release
-RUN cargo build --exclude scripts --exclude catalog --workspace --release
+RUN cargo build --exclude scripts --exclude catalog --exclude tests --workspace --release
 
 ##############################################################################
 FROM docker.io/library/ubuntu:20.04

@@ -20,7 +20,7 @@ subxt = { workspace = true }
 ink_env = { workspace = true }
 thiserror = { workspace = true }
 anyhow = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "signal"] }
 wasmtime = { workspace = true }
 tracing-subscriber = { workspace = true , features = ["env-filter"] }
 tracing = { workspace = true, features = ["attributes"] }

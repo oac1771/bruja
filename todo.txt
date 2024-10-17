@@ -1,5 +1,5 @@
 - figure out integration test that uses or does not use docker compose
-- use logging crate. Trac/subscbribe
+- cancelation token to kill process in case governance says to do it
 
 - requester
     - submit code with params

@@ -8,10 +8,7 @@ use ink_env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::{blocks::Block, utils::AccountId32, OnlineClient, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
-use tokio::{
-    select,
-    time::{sleep, Duration},
-};
+use tokio::{select, signal};
 use tracing::{info, instrument};
 
 enum WatchedEvents {
@@ -22,14 +19,13 @@ enum WatchedEvents {
 #[derive(Debug, Parser)]
 pub struct StartCmd {
     #[arg(long)]
-    address: String,
+    pub address: String,
 }
 
 impl StartCmd {
     #[instrument(skip_all)]
-
     pub async fn handle(&self, config: Config) -> Result<(), Error> {
-        info!("Starting worker...");
+        info!("Starting worker");
 
         let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer).await?;
@@ -48,8 +44,8 @@ impl StartCmd {
 
         select! {
             _ = handle => {},
-            _ = sleep(Duration::from_secs(1000)) => {
-                println!("TimeOut")
+            _ = signal::ctrl_c() => {
+                info!("Shutting down...")
             }
         };
 

@@ -1,0 +1,20 @@
+[package]
+name = "tests"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+license.workspace = true
+homepage.workspace = true
+repository.workspace = true
+
+[dependencies]
+tracing-subscriber = { workspace = true , features = ["env-filter"] }
+tracing = { workspace = true, features = ["attributes"] }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+subxt-signer = { workspace = true }
+subxt = { workspace = true }
+ink_env = { workspace = true }
+
+worker = { workspace = true }
+utils = { workspace = true }
+

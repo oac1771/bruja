@@ -1,4 +1,4 @@
-use crate::commands::{foo::Foo, instantiate::InstantiateCmd, p2p::P2P, wasm_time::WasmTime};
+use crate::commands::{foo::Foo, instantiate::InstantiateCmd, wasm_time::WasmTime};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
@@ -13,7 +13,6 @@ enum Command {
     Instantiate(InstantiateCmd),
     Foo(Foo),
     WasmTime(WasmTime),
-    P2P(P2P),
 }
 
 pub async fn run() {
@@ -23,6 +22,5 @@ pub async fn run() {
         Command::Instantiate(cmd) => cmd.handle().await,
         Command::Foo(cmd) => cmd.handle().await,
         Command::WasmTime(cmd) => cmd.handle().await,
-        Command::P2P(cmd) => cmd.handle().await,
     };
 }

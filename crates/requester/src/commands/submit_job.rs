@@ -6,11 +6,7 @@ use ink_env::DefaultEnvironment;
 use std::{fs::File, io::Read, path::Path, str::FromStr};
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
-use tokio::{
-    select,
-    time::{sleep, Duration},
-};
-// use tokio_util::sync::CancellationToken;
+use tokio::{select, signal};
 use tracing::{info, instrument};
 use utils::{client::Client, p2p::NodeBuilder};
 use wasmtime::{Engine, Module, ValType};
@@ -73,11 +69,10 @@ impl SubmitJobCmd {
         let (handle, node_client) = node.run().await?;
         node_client.subscribe("foo").await?;
 
-        // add cancelation token here: https://docs.rs/tokio-util/latest/tokio_util/sync/struct.CancellationToken.html
         select! {
             _ = handle => {},
-            _ = sleep(Duration::from_secs(1000)) => {
-                info!("Process has timed out")
+            _ = signal::ctrl_c() => {
+                info!("Shutting down...")
             }
         };
 

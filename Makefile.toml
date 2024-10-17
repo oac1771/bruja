@@ -54,5 +54,5 @@ rustup target add wasm32-unknown-unknown
 [tasks.cargo-build]
 script='''
 cargo contract build --manifest-path crates/catalog/Cargo.toml
-cargo build --exclude scripts --workspace
+cargo build --exclude scripts --exclude tests --workspace
 '''

@@ -12,7 +12,7 @@ members = [
 	"crates/node",
 	"crates/runtime",
 	"crates/catalog",
-	"crates/utils", "crates/worker", "crates/scripts", "crates/requester",
+	"crates/utils", "crates/worker", "crates/scripts", "crates/requester", "crates/tests"
 ]
 
 [workspace.dependencies]
@@ -80,5 +80,7 @@ substrate-build-script-utils = { version = "11.0.0", default-features = false }
 substrate-wasm-builder = { version = "23.0.0", default-features = false }
 
 runtime = { path = "crates/runtime" }
-catalog = { path = "crates/catalog"}
-utils = { path = "crates/utils"}
+catalog = { path = "crates/catalog" }
+utils = { path = "crates/utils" }
+requester = { path = "crates/requester"}
+worker = { path = "crates/worker"}

@@ -15,7 +15,7 @@ enum Command {
 
 pub async fn run() {
     let args = Cli::parse();
-    let config = Config::new();
+    let config = Config::default();
 
     let result = match args.command {
         Command::SubmitJob(cmd) => cmd.handle(&config).await,
