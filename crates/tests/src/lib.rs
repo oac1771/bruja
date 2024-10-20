@@ -1,12 +1,23 @@
 #[cfg(test)]
 mod tests {
+    use futures::{future::BoxFuture, FutureExt};
     use ink_env::DefaultEnvironment;
-    use std::sync::{Arc, Mutex};
-    use subxt::SubstrateConfig;
+    use serde::Deserialize;
+    use serde_json::Deserializer;
+    use std::{
+        io::Cursor,
+        sync::{Arc, Mutex},
+    };
+    use subxt::{utils::AccountId32, SubstrateConfig};
     use subxt_signer::sr25519::Keypair;
+    use tracing_subscriber::util::SubscriberInitExt;
     use utils::client::Client;
+    use worker::{
+        commands::register::RegisterCmd,
+        config::Config,
+    };
 
-    use worker::{commands::register::RegisterCmd, config::Config};
+    const ARTIFACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
 
     struct BufferWriter {
         buffer: Arc<Mutex<Vec<u8>>>,
@@ -24,37 +35,124 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn foo() {
-        let log_buffer = Arc::new(Mutex::new(Vec::new()));
-
-        // Clone the buffer so it can be passed to the tracing subscriber
-        let log_buffer_for_tracing = log_buffer.clone();
-    
-        // Configure the tracing subscriber to write logs into the memory buffer
-        tracing_subscriber::fmt()
-            .with_writer(move || {
-                // Returns a writer to capture logs into the memory buffer
-                let buffer_clone = log_buffer_for_tracing.clone();
-                BufferWriter { buffer: buffer_clone }
-            })
-            .init();
-
-        let config = Config::new("//Alice", "../../target/ink/catalog/catalog.contract".to_string());
+    async fn instantiate_contract(suri: &str) -> AccountId32 {
+        let config = Config::new(suri, ARTIFACT_FILE_PATH.to_string());
         let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer)
                 .await
                 .unwrap();
         let address = contract_client.instantiate("new").await.unwrap();
-        let cmd = RegisterCmd {
-            address: address.to_string(),
-            val: 10
-        };
 
-        let _foo = cmd.handle(config).await.unwrap();
+        address
+    }
 
-        let logs = log_buffer.lock().unwrap();
-        let log_output = String::from_utf8(logs.clone()).expect("Failed to read logs as UTF-8");
-        println!("Captured logs:\n{}", log_output);
+    #[derive(Deserialize)]
+    struct Log {
+        fields: Fields,
+        target: String,
+    }
+
+    #[derive(Deserialize)]
+    struct Fields {
+        message: String
+    }
+
+    struct WorkerRunner {
+        log_buffer: Arc<Mutex<Vec<u8>>>,
+        config: Config,
+        address: AccountId32,
+    }
+
+    impl WorkerRunner {
+        fn new(log_buffer: Arc<Mutex<Vec<u8>>>, address: AccountId32, suri: &str) -> Self {
+            let config = Config::new(suri, ARTIFACT_FILE_PATH.to_string());
+            Self {
+                log_buffer,
+                config,
+                address,
+            }
+        }
+
+        async fn register(&self, val: u32) {
+            let register_cmd = RegisterCmd {
+                address: self.address.to_string(),
+                val,
+            };
+
+            register_cmd.handle(&self.config).await.unwrap();
+            let logs = self.parse_logs("Successfully registered worker!");
+            assert!(logs.len() > 0);
+        }
+
+        fn parse_logs(&self, msg: &str) -> Vec<Log> {
+            let logs = self.log_buffer.lock().unwrap();
+            let log_output = String::from_utf8(logs.clone()).unwrap();
+            let cursor = Cursor::new(log_output);
+
+            Deserializer::from_reader(cursor)
+                .into_iter::<Log>()
+                .filter_map(|log| {
+                    let log = log.unwrap();
+                    if log.target.contains("worker::") && log.fields.message == msg {
+                        Some(log)
+                    } else {
+                        None
+                    }
+                }).collect::<Vec<Log>>()
+
+        }
+    }
+
+    async fn test<'a, T>(test: T)
+    where
+        T: FnOnce(Arc<Mutex<Vec<u8>>>) -> BoxFuture<'a, Result<(), anyhow::Error>>,
+    {
+        let log_buffer = Arc::new(Mutex::new(Vec::new()));
+        let buffer = log_buffer.clone();
+
+        let _guard = tracing_subscriber::fmt()
+            .json()
+            .with_writer(move || BufferWriter {
+                buffer: buffer.clone(),
+            })
+            .set_default();
+
+        let result = test(log_buffer).await;
+
+        if let Err(err) = result {
+            panic!("{}", err);
+        }
+    }
+
+    #[tokio::test]
+    async fn foo() {
+        test(|log_buffer| {
+            async move {
+                let address = instantiate_contract("//Alice").await;
+
+                let worker_runner = WorkerRunner::new(log_buffer.clone(), address, "//Alice");
+                worker_runner.register(10).await;
+
+                Ok(())
+            }
+            .boxed()
+        })
+        .await;
+    }
+
+    #[tokio::test]
+    async fn bar() {
+        test(|log_buffer| {
+            async move {
+                let address = instantiate_contract("//Bob").await;
+
+                let worker_runner = WorkerRunner::new(log_buffer.clone(), address, "//Bob");
+                worker_runner.register(10).await;
+
+                Ok(())
+            }
+            .boxed()
+        })
+        .await;
     }
 }

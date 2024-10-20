@@ -5,8 +5,8 @@ use ink_env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
-use utils::client::Client;
 use tracing::{info, instrument};
+use utils::client::Client;
 
 #[derive(Debug, Parser)]
 pub struct RegisterCmd {
@@ -19,7 +19,7 @@ pub struct RegisterCmd {
 
 impl RegisterCmd {
     #[instrument(skip_all)]
-    pub async fn handle(&self, config: Config) -> Result<(), Error> {
+    pub async fn handle(&self, config: &Config) -> Result<(), Error> {
         let contract_address =
             AccountId32::from_str(&self.address).map_err(|err| Error::Other(err.to_string()))?;
 
@@ -40,15 +40,12 @@ impl RegisterCmd {
                     )))
                 }
             }
-            Err(err) => {
-                Err(Error::Other(format!(
-                    "Error during registration: {:?}",
-                    err
-                )))
-            }
+            Err(err) => Err(Error::Other(format!(
+                "Error during registration: {:?}",
+                err
+            ))),
         }?;
 
-        return Ok(result)
-
+        return Ok(result);
     }
 }

@@ -8,7 +8,6 @@ pub struct Config {
 
 impl Config {
     pub fn new(suri: &str, artifact_file_path: String) -> Self {
-
         let signer = Keypair::from_uri(&SecretUri::from_str(&suri).unwrap()).unwrap();
 
         Self {

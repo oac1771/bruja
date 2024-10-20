@@ -7,13 +7,17 @@ license.workspace = true
 homepage.workspace = true
 repository.workspace = true
 
-[dependencies]
-tracing-subscriber = { workspace = true , features = ["env-filter"] }
+[dev-dependencies]
+tracing-subscriber = { workspace = true , features = ["json"] }
 tracing = { workspace = true, features = ["attributes"] }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 subxt-signer = { workspace = true }
 subxt = { workspace = true }
 ink_env = { workspace = true }
+futures = { workspace = true }
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 worker = { workspace = true }
 utils = { workspace = true }

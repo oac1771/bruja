@@ -24,7 +24,7 @@ pub struct StartCmd {
 
 impl StartCmd {
     #[instrument(skip_all)]
-    pub async fn handle(&self, config: Config) -> Result<(), Error> {
+    pub async fn handle(&self, config: &Config) -> Result<(), Error> {
         info!("Starting worker");
 
         let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =

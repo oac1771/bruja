@@ -26,6 +26,8 @@ larger refactor:
         - requester gets job acceptance
         - requester sends payload to worker
 
+    - figure out drink so you can have a lighter runtime process and not need one chain
+        - also means you wouldnt need to specify dev accounts per test
     - peer to peer to return response from worker. Still have to figure out payment 
     - use zk snark as proof that worker completed work
     - use smalldot with worker 

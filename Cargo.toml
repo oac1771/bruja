@@ -12,7 +12,11 @@ members = [
 	"crates/node",
 	"crates/runtime",
 	"crates/catalog",
-	"crates/utils", "crates/worker", "crates/scripts", "crates/requester", "crates/tests"
+	"crates/utils", 
+	"crates/worker", 
+	"crates/scripts", 
+	"crates/requester", 
+	"crates/tests"
 ]
 
 [workspace.dependencies]

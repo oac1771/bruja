@@ -12988,7 +12988,11 @@ checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
 name = "tests"
 version = "0.0.14"
 dependencies = [
+ "anyhow",
+ "futures",
  "ink_env",
+ "serde",
+ "serde_json",
  "subxt 0.35.3",
  "subxt-signer 0.35.3",
  "tokio",
@@ -13399,12 +13403,15 @@ dependencies = [
  "once_cell",
  "parking_lot 0.12.3",
  "regex",
+ "serde",
+ "serde_json",
  "sharded-slab",
  "smallvec",
  "thread_local",
  "tracing",
  "tracing-core",
  "tracing-log 0.2.0",
+ "tracing-serde",
 ]
 
 [[package]]
