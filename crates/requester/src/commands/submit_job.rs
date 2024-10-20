@@ -42,7 +42,7 @@ impl SubmitJobCmd {
 
         let code = self.read_file()?;
 
-        let params: Vec<Vec<u8>> = if let Some(params) = &self.params {
+        let params = if let Some(params) = &self.params {
             let p = params.split(",").collect::<Vec<&str>>();
             let engine = Engine::default();
             let module = Module::from_file(&engine, &self.path)?;
@@ -59,22 +59,21 @@ impl SubmitJobCmd {
         {
             Ok(_) => {
                 info!("Job Submitted!");
+                let node = NodeBuilder::build()?;
+                let (handle, node_client) = node.run().await?;
+                node_client.subscribe("foo").await?;
+        
+                select! {
+                    _ = handle => {},
+                    _ = signal::ctrl_c() => {
+                        info!("Shutting down...")
+                    }
+                };
             }
             Err(err) => {
-                info!("Job Submission unsuccessful {:?}", err);
+                info!("Job submission unsuccessful: {:?}", err);
             }
         }
-
-        let node = NodeBuilder::build()?;
-        let (handle, node_client) = node.run().await?;
-        node_client.subscribe("foo").await?;
-
-        select! {
-            _ = handle => {},
-            _ = signal::ctrl_c() => {
-                info!("Shutting down...")
-            }
-        };
 
         Ok(())
     }
@@ -102,7 +101,7 @@ impl SubmitJobCmd {
             .ok_or_else(|| Error::Other("Func Not Found".to_string()))?;
         let f = extern_type
             .func()
-            .ok_or_else(|| Error::Other("".to_string()))?;
+            .ok_or_else(|| Error::Other("Extern type func not found".to_string()))?;
 
         let p = f
             .params()

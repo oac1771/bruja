@@ -22,3 +22,7 @@ serde_json = { workspace = true }
 worker = { workspace = true }
 utils = { workspace = true }
 
+[[test]]
+name = "integration-tests"
+path = "tests/integration_tests.rs.rs"
+test = false

@@ -91,23 +91,6 @@ where
         Ok(instantiated.contract)
     }
 
-    pub async fn write_foo<Ev: Decode, Args: Encode + Clone>(
-        &self,
-        address: <C as Config>::AccountId,
-        message: &str,
-        args: Args,
-    ) -> Result<ContractExecResult<E::Balance, ()>, ClientError> {
-        let message = self.ink_project.get_message(message)?;
-        let mut data = message.get_selector()?;
-        args.encode_to(&mut data);
-
-        let gas_limit = self
-            .call(address.clone(), message.get_label(), &args)
-            .await?;
-
-        Ok(gas_limit)
-    }
-
     pub async fn write<Ev: Decode, Args: Encode + Clone>(
         &self,
         address: <C as Config>::AccountId,
