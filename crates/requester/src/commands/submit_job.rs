@@ -14,22 +14,22 @@ use wasmtime::{Engine, Module, ValType};
 #[derive(Debug, Parser)]
 pub struct SubmitJobCmd {
     #[arg(long)]
-    address: String,
+    pub address: String,
 
     #[arg(long)]
-    path: String,
+    pub path: String,
 
     #[arg(long)]
-    func_name: String,
+    pub func_name: String,
 
     /// A comma seperated list of paramameters to pass to your function
     #[arg(long)]
-    params: Option<String>,
+    pub params: Option<String>,
 }
 
 impl SubmitJobCmd {
     #[instrument(skip_all)]
-    pub async fn handle(&self, config: &Config) -> Result<(), Error> {
+    pub async fn handle(&self, config: Config) -> Result<(), Error> {
         let contract_address = AccountId32::from_str(&self.address).map_err(|err| {
             Error::Other(format!(
                 "Parsing provided contract address {}",
@@ -53,27 +53,22 @@ impl SubmitJobCmd {
 
         let job = Job::new(code, params);
 
-        match client
+        client
             .write::<JobSubmitted, Job>(contract_address, "submit_job", job)
-            .await
-        {
-            Ok(_) => {
-                info!("Job Submitted!");
-                let node = NodeBuilder::build()?;
-                let (handle, node_client) = node.run().await?;
-                node_client.subscribe("foo").await?;
+            .await?;
+
+        info!("Job Submitted!");
         
-                select! {
-                    _ = handle => {},
-                    _ = signal::ctrl_c() => {
-                        info!("Shutting down...")
-                    }
-                };
+        let node = NodeBuilder::build()?;
+        let (handle, node_client) = node.start()?;
+        node_client.subscribe(&self.address).await?;
+
+        select! {
+            _ = handle => {},
+            _ = signal::ctrl_c() => {
+                info!("Shutting down...")
             }
-            Err(err) => {
-                info!("Job submission unsuccessful: {:?}", err);
-            }
-        }
+        };
 
         Ok(())
     }

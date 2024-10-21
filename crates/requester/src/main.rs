@@ -1,9 +1,4 @@
-mod cli;
-mod commands;
-mod config;
-mod error;
-
-use cli::run;
+use requester::cli::run;
 use tracing_subscriber::{filter::LevelFilter, fmt::layer, prelude::*};
 
 #[tokio::main]

@@ -2,6 +2,7 @@
 mod tests {
     use futures::{future::BoxFuture, FutureExt};
     use ink_env::DefaultEnvironment;
+    use requester::{commands::submit_job::SubmitJobCmd, config::Config as ConfigR};
     use serde::Deserialize;
     use serde_json::Deserializer;
     use std::{
@@ -12,10 +13,7 @@ mod tests {
     use subxt_signer::sr25519::Keypair;
     use tracing_subscriber::util::SubscriberInitExt;
     use utils::client::Client;
-    use worker::{
-        commands::register::RegisterCmd,
-        config::Config,
-    };
+    use worker::{commands::register::RegisterCmd, config::Config as ConfigW};
 
     const ARTIFACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
 
@@ -36,7 +34,7 @@ mod tests {
     }
 
     async fn instantiate_contract(suri: &str) -> AccountId32 {
-        let config = Config::new(suri, ARTIFACT_FILE_PATH.to_string());
+        let config = ConfigW::new(suri, ARTIFACT_FILE_PATH.to_string());
         let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer)
                 .await
@@ -54,18 +52,24 @@ mod tests {
 
     #[derive(Deserialize)]
     struct Fields {
-        message: String
+        message: String,
     }
 
     struct WorkerRunner {
         log_buffer: Arc<Mutex<Vec<u8>>>,
-        config: Config,
+        config: ConfigW,
+        address: AccountId32,
+    }
+
+    struct RequesterRunner {
+        _log_buffer: Arc<Mutex<Vec<u8>>>,
+        config: ConfigR,
         address: AccountId32,
     }
 
     impl WorkerRunner {
         fn new(log_buffer: Arc<Mutex<Vec<u8>>>, address: AccountId32, suri: &str) -> Self {
-            let config = Config::new(suri, ARTIFACT_FILE_PATH.to_string());
+            let config = ConfigW::new(suri, ARTIFACT_FILE_PATH.to_string());
             Self {
                 log_buffer,
                 config,
@@ -91,15 +95,35 @@ mod tests {
 
             Deserializer::from_reader(cursor)
                 .into_iter::<Log>()
-                .filter_map(|log| {
-                    let log = log.unwrap();
-                    if log.target.contains("worker::") && log.fields.message == msg {
-                        Some(log)
-                    } else {
-                        None
-                    }
-                }).collect::<Vec<Log>>()
+                .filter_map(|log| log.ok())
+                .filter(|log| log.target.contains("worker::") && log.fields.message == msg)
+                .collect::<Vec<Log>>()
+        }
+    }
 
+    impl RequesterRunner {
+        fn new(log_buffer: Arc<Mutex<Vec<u8>>>, address: AccountId32, suri: &str) -> Self {
+            let config = ConfigR::new(suri, ARTIFACT_FILE_PATH.to_string());
+            Self {
+                _log_buffer: log_buffer,
+                config,
+                address,
+            }
+        }
+
+        async fn submit_job(&self, path: &str, func_name: &str, params: Option<String>) {
+            let submit_job_cmd = SubmitJobCmd {
+                address: self.address.to_string(),
+                path: path.to_string(),
+                func_name: func_name.to_string(),
+                params: params,
+            };
+            let config = self.config.clone();
+
+            let join_handle = tokio::spawn(async move {
+                let _ = submit_job_cmd.handle(config).await.unwrap();
+            });
+            let _foo = join_handle.await;
         }
     }
 
@@ -110,7 +134,7 @@ mod tests {
         let log_buffer = Arc::new(Mutex::new(Vec::new()));
         let buffer = log_buffer.clone();
 
-        let _guard = tracing_subscriber::fmt()
+        let _ = tracing_subscriber::fmt()
             .json()
             .with_writer(move || BufferWriter {
                 buffer: buffer.clone(),
@@ -146,8 +170,10 @@ mod tests {
             async move {
                 let address = instantiate_contract("//Bob").await;
 
-                let worker_runner = WorkerRunner::new(log_buffer.clone(), address, "//Bob");
-                worker_runner.register(10).await;
+                let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
+                requester_runner
+                    .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
+                    .await;
 
                 Ok(())
             }

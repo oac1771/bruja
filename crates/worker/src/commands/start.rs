@@ -9,7 +9,7 @@ use std::str::FromStr;
 use subxt::{blocks::Block, utils::AccountId32, OnlineClient, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
 use tokio::{select, signal};
-use tracing::{info, instrument};
+use tracing::{error, info, instrument};
 
 enum WatchedEvents {
     Job(JobSubmitted),
@@ -35,12 +35,13 @@ impl StartCmd {
 
         while let Some(block) = blocks_sub.next().await {
             if let Err(error) = self.process_block(block, &contract_client).await {
-                info!("Error Processing Block Data: {}", error);
+                error!("Error Processing Block Data: {}", error);
             }
         }
 
         let node = NodeBuilder::build()?;
-        let (handle, _) = node.run().await?;
+        let (handle, node_client) = node.start()?;
+        node_client.subscribe(&self.address).await?;
 
         select! {
             _ = handle => {},
@@ -93,7 +94,7 @@ impl StartCmd {
                         .await
                         .map_err(|err| Error::WasmTimeError { source: err })?;
                 }
-                WatchedEvents::DecodeErr => {}
+                WatchedEvents::DecodeErr => error!("Error decoding event: {:?}", event.data),
             }
         }
 

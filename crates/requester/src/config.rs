@@ -1,14 +1,15 @@
 use std::{env::var, str::FromStr};
 use subxt_signer::{sr25519::Keypair, SecretUri};
 
+#[derive(Clone)]
 pub struct Config {
     pub signer: Keypair,
     pub artifact_file_path: String,
 }
 
 impl Config {
-    pub fn _new(suri: String, artifact_file_path: String) -> Self {
-        let signer = Keypair::from_uri(&SecretUri::from_str(&suri).unwrap()).unwrap();
+    pub fn new(suri: &str, artifact_file_path: String) -> Self {
+        let signer = Keypair::from_uri(&SecretUri::from_str(suri).unwrap()).unwrap();
 
         Self {
             signer,

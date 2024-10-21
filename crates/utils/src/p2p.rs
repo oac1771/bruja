@@ -78,11 +78,11 @@ impl NodeBuilder {
 }
 
 impl Node {
-    pub async fn run(mut self) -> Result<(JoinHandle<Result<(), Error>>, NodeClient), Error> {
+    pub fn start(mut self) -> Result<(JoinHandle<Result<(), Error>>, NodeClient), Error> {
         let (cmd_tx, cmd_rx) = mpsc::channel::<Command>(100);
 
         let handle = spawn(async move {
-            match self.start(cmd_rx).await {
+            match self.run(cmd_rx).await {
                 Ok(_) => Ok(()),
                 Err(err) => Err(err),
             }
@@ -93,16 +93,16 @@ impl Node {
         Ok((handle, node_client))
     }
 
-    async fn start(&mut self, mut cmd_rx: Receiver<Command>) -> Result<(), Error> {
+    async fn run(&mut self, mut cmd_rx: Receiver<Command>) -> Result<(), Error> {
         loop {
             select! {
-                Some(cmd) = cmd_rx.recv() => self.handle_cmd(cmd).await,
-                event = self.swarm.select_next_some() => self.handle_event(event).await
+                Some(cmd) = cmd_rx.recv() => self.handle_cmd(cmd),
+                event = self.swarm.select_next_some() => self.handle_event(event)
             }
         }
     }
 
-    async fn handle_cmd(&mut self, cmd: Command) {
+    fn handle_cmd(&mut self, cmd: Command) {
         match cmd {
             Command::Publish { topic, val } => {
                 let topic = gossipsub::IdentTopic::new(topic);
@@ -129,7 +129,7 @@ impl Node {
         };
     }
 
-    async fn handle_event(&mut self, event: SwarmEvent<BehaviorEvent>) {
+    fn handle_event(&mut self, event: SwarmEvent<BehaviorEvent>) {
         match event {
             SwarmEvent::Behaviour(BehaviorEvent::Gossipsub(gossipsub::Event::Message {
                 propagation_source: peer_id,

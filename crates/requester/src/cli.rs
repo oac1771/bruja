@@ -1,5 +1,6 @@
 use crate::{commands::submit_job::SubmitJobCmd, config::Config};
 use clap::{Parser, Subcommand};
+use tracing::error;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -18,10 +19,10 @@ pub async fn run() {
     let config = Config::default();
 
     let result = match args.command {
-        Command::SubmitJob(cmd) => cmd.handle(&config).await,
+        Command::SubmitJob(cmd) => cmd.handle(config).await,
     };
 
     if let Err(err) = result {
-        tracing::error!("Error {:?}", err);
+        error!("Error {:?}", err);
     }
 }
