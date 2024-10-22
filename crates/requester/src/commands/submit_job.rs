@@ -1,5 +1,5 @@
 use crate::{config::Config, error::Error};
-use catalog::catalog::{Job, JobSubmitted};
+use catalog::catalog::{JobRequest, JobRequestSubmitted};
 use clap::Parser;
 use codec::Encode;
 use ink_env::DefaultEnvironment;
@@ -51,14 +51,14 @@ impl SubmitJobCmd {
             vec![]
         };
 
-        let job = Job::new(code, params);
+        let job = JobRequest::new(code, params, vec![]);
 
         client
-            .write::<JobSubmitted, Job>(contract_address, "submit_job", job)
+            .write::<JobRequestSubmitted, JobRequest>(contract_address, "submit_job", job)
             .await?;
 
         info!("Job Submitted!");
-        
+
         let node = NodeBuilder::build()?;
         let (handle, node_client) = node.start()?;
         node_client.subscribe(&self.address).await?;
@@ -78,7 +78,7 @@ impl SubmitJobCmd {
 
         if path.exists() {
             let mut file = File::open(path)?;
-            let mut code: Vec<u8> = Vec::new();
+            let mut code = Vec::new();
             file.read_to_end(&mut code)?;
 
             return Ok(code);

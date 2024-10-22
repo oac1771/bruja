@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
 
-    use catalog::catalog::{Catalog, CatalogRef, Job, JobSubmitted};
+    use catalog::catalog::{Catalog, CatalogRef, JobRequest, JobRequestSubmitted};
 
     use codec::Decode;
     use ink::env::DefaultEnvironment;
@@ -18,12 +18,16 @@ mod tests {
             .submit()
             .await
             .unwrap();
+
         let code = vec![1, 2, 3, 4];
-        let job = Job::new(code, vec![]);
+        let params = vec![vec![1, 2, 3, 4]];
+        let resources = vec![];
+
+        let job_request = JobRequest::new(code, params, resources);
 
         let mut call_builder = contract.call_builder::<Catalog>();
 
-        let submit_job = call_builder.submit_job(job);
+        let submit_job = call_builder.submit_job(job_request);
         let response = client.call(&alice, &submit_job).submit().await.unwrap();
 
         let contract_emmitted_event = response
@@ -33,7 +37,8 @@ mod tests {
             .unwrap();
 
         let job_submitted_event =
-            <JobSubmitted as Decode>::decode(&mut contract_emmitted_event.data.as_slice()).unwrap();
+            <JobRequestSubmitted as Decode>::decode(&mut contract_emmitted_event.data.as_slice())
+                .unwrap();
 
         assert_eq!(job_submitted_event.who, alice.public_key().0.into());
 

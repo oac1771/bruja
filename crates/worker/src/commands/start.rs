@@ -1,5 +1,5 @@
 use crate::{config::Config, error::Error, services::job::start_job};
-use catalog::catalog::JobSubmitted;
+use catalog::catalog::JobRequestSubmitted;
 use utils::{chain::contracts::events::ContractEmitted, client::Client, p2p::NodeBuilder};
 
 use clap::Parser;
@@ -12,7 +12,7 @@ use tokio::{select, signal};
 use tracing::{error, info, instrument};
 
 enum WatchedEvents {
-    Job(JobSubmitted),
+    Job(JobRequestSubmitted),
     DecodeErr,
 }
 
@@ -102,7 +102,7 @@ impl StartCmd {
     }
 
     fn determine_event(&self, event: &ContractEmitted) -> WatchedEvents {
-        if let Ok(event) = <JobSubmitted as Decode>::decode(&mut event.data.as_slice()) {
+        if let Ok(event) = <JobRequestSubmitted as Decode>::decode(&mut event.data.as_slice()) {
             WatchedEvents::Job(event)
         } else {
             WatchedEvents::DecodeErr

@@ -166,19 +166,28 @@ mod tests {
 
     #[tokio::test]
     async fn submit_job() {
-        test(|log_buffer| {
-            async move {
-                let address = instantiate_contract("//Bob").await;
+        let _ = tracing_subscriber::fmt().init();
+        let log_buffer = Arc::new(Mutex::new(Vec::new()));
+        let address = instantiate_contract("//Bob").await;
 
-                let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
-                requester_runner
-                    .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
-                    .await;
+        let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
+        requester_runner
+            .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
+            .await;
 
-                Ok(())
-            }
-            .boxed()
-        })
-        .await;
+        // test(|log_buffer| {
+        //     async move {
+        //         let address = instantiate_contract("//Bob").await;
+
+        //         let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
+        //         requester_runner
+        //             .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
+        //             .await;
+
+        //         Ok(())
+        //     }
+        //     .boxed()
+        // })
+        // .await;
     }
 }

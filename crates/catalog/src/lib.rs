@@ -10,13 +10,12 @@ pub mod catalog {
             hash_bytes,
         },
         prelude::{vec, vec::Vec},
-        storage::{traits::StorageLayout, Mapping},
+        storage::Mapping,
     };
 
-    pub type Keccak256HashOutput = <Keccak256 as HashOutput>::Type;
+    pub type HashId = <Keccak256 as HashOutput>::Type;
     type Workers = Mapping<AccountId, u32>;
-    type Jobs = Mapping<AccountId, Vec<Keccak256HashOutput>>;
-    type Work = Mapping<Keccak256HashOutput, Job>;
+    type Requests = Mapping<AccountId, Vec<HashId>>;
 
     #[derive(Debug, PartialEq, Eq, Encode, Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
@@ -33,29 +32,40 @@ pub mod catalog {
 
     #[derive(Debug)]
     #[ink(event)]
-    pub struct JobSubmitted {
+    pub struct JobRequestSubmitted {
         pub who: AccountId,
-        pub id: Keccak256HashOutput,
+        pub id: HashId,
+        pub resources: Vec<u8>,
     }
 
     #[derive(Debug, Encode, Decode, PartialEq, Clone)]
-    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo), derive(StorageLayout))]
-    pub struct Job {
-        code: Vec<u8>,
-        params: Vec<Vec<u8>>,
+    #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
+    pub struct JobRequest {
+        id: HashId,
+        resources: Vec<u8>,
     }
 
-    impl Job {
-        pub fn new(code: Vec<u8>, params: Vec<Vec<u8>>) -> Self {
-            Self { code, params }
+    impl JobRequest {
+        pub fn new(mut code: Vec<u8>, params: Vec<Vec<u8>>, resources: Vec<u8>) -> Self {
+            params.encode().encode_to(&mut code);
+            let id = hash(&code);
+
+            Self { id, resources }
+        }
+
+        pub fn id(&self) -> HashId {
+            self.id
+        }
+
+        pub fn resources(&self) -> &Vec<u8> {
+            &self.resources
         }
     }
 
     #[ink(storage)]
     pub struct Catalog {
         workers: Workers,
-        jobs: Jobs,
-        work: Work,
+        requests: Requests,
     }
 
     impl Default for Catalog {
@@ -67,11 +77,9 @@ pub mod catalog {
     impl Catalog {
         #[ink(constructor)]
         pub fn new() -> Self {
-            ink::env::debug_println!("created new instance at {}", Self::env().block_number());
             Self {
                 workers: Mapping::new(),
-                jobs: Mapping::new(),
-                work: Mapping::new(),
+                requests: Mapping::new(),
             }
         }
 
@@ -91,28 +99,31 @@ pub mod catalog {
         }
 
         #[ink(message)]
-        pub fn submit_job(&mut self, job: Job) {
-            ink::env::debug_message("Some message");
+        pub fn submit_job(&mut self, job_request: JobRequest) {
             let who = self.env().caller();
-            let id = self.hash(&job.code);
+            let id = job_request.id();
+            let resources = job_request.resources();
 
-            let ids = if let Some(mut ids) = self.jobs.get(who) {
+            let ids = if let Some(mut ids) = self.requests.get(who) {
                 ids.push(id);
                 ids
             } else {
                 vec![id]
             };
 
-            self.jobs.insert(who, &ids);
-            self.work.insert(id, &job);
-            self.env().emit_event(JobSubmitted { who, id });
+            self.requests.insert(who, &ids);
+            self.env().emit_event(JobRequestSubmitted {
+                who,
+                id,
+                resources: resources.to_vec(),
+            });
         }
+    }
 
-        fn hash(&self, data: &[u8]) -> Keccak256HashOutput {
-            let mut output = Keccak256HashOutput::default();
-            hash_bytes::<Keccak256>(data, &mut output);
-            output
-        }
+    fn hash(data: &[u8]) -> HashId {
+        let mut output = HashId::default();
+        hash_bytes::<Keccak256>(data, &mut output);
+        output
     }
 
     #[cfg(test)]
@@ -124,11 +135,12 @@ pub mod catalog {
             scale::Decode,
         };
 
-        impl Job {
+        impl JobRequest {
             fn test(code: Vec<u8>) -> Self {
                 let params: Vec<Vec<u8>> = vec![];
+                let resources: Vec<u8> = vec![];
 
-                Self { params, code }
+                Self::new(code, params, resources)
             }
         }
 
@@ -156,21 +168,20 @@ pub mod catalog {
             let mut catalog = Catalog::default();
             let code = vec![1, 2, 3, 4];
 
-            let job = Job::test(code.clone());
+            let job_request = JobRequest::test(code.clone());
 
-            catalog.submit_job(job.clone());
-            let expected_hash = catalog.hash(&code.clone());
+            catalog.submit_job(job_request.clone());
 
             let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
             let job_submitted_event =
-                <JobSubmitted as Decode>::decode(&mut emitted_events[0].data.as_slice()).unwrap();
-            let job_ids = catalog.jobs.get(who).unwrap();
-            let work = catalog.work.get(job_ids[0]).unwrap();
+                <JobRequestSubmitted as Decode>::decode(&mut emitted_events[0].data.as_slice())
+                    .unwrap();
+            let job_ids = catalog.requests.get(who).unwrap();
 
             assert_eq!(job_submitted_event.who, who);
-            assert_eq!(job_submitted_event.id, expected_hash);
-            assert_eq!(job_ids[0], expected_hash);
-            assert_eq!(work, job);
+            assert_eq!(job_submitted_event.id, job_request.id());
+            assert_eq!(job_submitted_event.resources, job_request.resources().clone());
+            assert_eq!(job_ids[0], job_request.id());
         }
 
         #[ink::test]
@@ -181,29 +192,28 @@ pub mod catalog {
             let code_1 = vec![1, 2, 3, 4];
             let code_2 = vec![1, 2, 3, 5];
 
-            let job_1 = Job::test(code_1.clone());
-            let job_2 = Job::test(code_2.clone());
+            let job_1_request = JobRequest::test(code_1.clone());
+            let job_2_request = JobRequest::test(code_2.clone());
 
-            catalog.submit_job(job_1.clone());
-            catalog.submit_job(job_2.clone());
-
-            let expected_hash_1 = catalog.hash(&code_1);
-            let expected_hash_2 = catalog.hash(&code_2);
+            catalog.submit_job(job_1_request.clone());
+            catalog.submit_job(job_2_request.clone());
 
             let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
 
             let job_submitted_event_1 =
-                <JobSubmitted as Decode>::decode(&mut emitted_events[0].data.as_slice()).unwrap();
+                <JobRequestSubmitted as Decode>::decode(&mut emitted_events[0].data.as_slice())
+                    .unwrap();
             let job_submitted_event_2 =
-                <JobSubmitted as Decode>::decode(&mut emitted_events[1].data.as_slice()).unwrap();
-            let jobs = catalog.jobs.get(who).unwrap();
+                <JobRequestSubmitted as Decode>::decode(&mut emitted_events[1].data.as_slice())
+                    .unwrap();
+            let jobs = catalog.requests.get(who).unwrap();
 
-            assert_eq!(job_submitted_event_1.id, expected_hash_1);
-            assert_eq!(job_submitted_event_2.id, expected_hash_2);
+            assert_eq!(job_submitted_event_1.id, job_1_request.id());
+            assert_eq!(job_submitted_event_2.id, job_2_request.id());
 
             assert_eq!(jobs.len(), 2);
-            assert_eq!(jobs[0], expected_hash_1);
-            assert_eq!(jobs[1], expected_hash_2);
+            assert_eq!(jobs[0], job_1_request.id());
+            assert_eq!(jobs[1], job_2_request.id());
         }
     }
 }

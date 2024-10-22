@@ -23,6 +23,6 @@ pub async fn run() {
     };
 
     if let Err(err) = result {
-        error!("Error {:?}", err);
+        error!("Error: {:?}", err);
     }
 }
