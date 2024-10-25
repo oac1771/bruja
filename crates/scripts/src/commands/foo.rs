@@ -1,55 +1,43 @@
-use catalog::catalog::{HashId, JobRequestSubmitted, WorkerRegistered};
 use clap::Parser;
-use ink::env::DefaultEnvironment;
-use std::str::FromStr;
-use subxt::SubstrateConfig;
-use subxt_signer::{sr25519::Keypair, SecretUri};
-use utils::client::Client;
+use std::sync::{Arc, Mutex};
+use tracing_subscriber::util::SubscriberInitExt;
 
 #[derive(Debug, Parser)]
 pub struct Foo {}
 
+struct BufferWriter {
+    buffer: Arc<Mutex<Vec<u8>>>,
+}
+
+impl std::io::Write for BufferWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let mut buffer = self.buffer.lock().unwrap();
+        buffer.extend_from_slice(buf);
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 impl Foo {
     pub async fn handle(&self) {
-        let signer = Keypair::from_uri(&SecretUri::from_str("//Alice").unwrap()).unwrap();
+        let log_buffer = Arc::new(Mutex::new(Vec::new()));
+        let buffer = log_buffer.clone();
 
-        let artifact_file = "./target/ink/catalog/catalog.contract";
-        let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
-            Client::new(&artifact_file, &signer).await.unwrap();
+        let _join_handle = tokio::spawn(async move {
+            let _guard = tracing_subscriber::fmt()
+                .json()
+                .with_writer(move || BufferWriter {
+                    buffer: buffer.clone(),
+                })
+                .set_default();
 
-        let address = contract_client.instantiate("new").await.unwrap();
-        println!("{}", address);
-
-        let worker_registerd = contract_client
-            .write::<WorkerRegistered, u32>(address.clone(), "register_worker", 10)
-            .await
-            .unwrap();
-
-        println!("{:?}", worker_registerd);
-
-        let worker = contract_client
-            .read::<u32, Vec<()>>(address.clone(), "get_worker", vec![])
-            .await
-            .unwrap();
-
-        println!("{}", worker);
-
-        let job_submitted = contract_client
-            .write::<JobRequestSubmitted, Vec<u8>>(
-                address.clone(),
-                "submit_job",
-                vec![1, 2, 3, 4, 5],
-            )
-            .await
-            .unwrap();
-
-        println!("job submitted {:?}", job_submitted);
-
-        let job_ids: Vec<HashId> = contract_client
-            .read_storage(address.clone(), "jobs", &signer.public_key().0)
-            .await
-            .unwrap();
-
-        println!("job_ids: {:?}", job_ids);
+            tracing::info!("task spawned");
+        });
+        tracing::info!("outside");
+        let foo = log_buffer.lock().unwrap().len();
+        println!("log length: {:?}", foo);
     }
 }

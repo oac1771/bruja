@@ -32,7 +32,7 @@ impl SubmitJobCmd {
     pub async fn handle(&self, config: Config) -> Result<(), Error> {
         let contract_address = AccountId32::from_str(&self.address).map_err(|err| {
             Error::Other(format!(
-                "Parsing provided contract address {}",
+                "Failed to parse provided contract address: {}",
                 err.to_string()
             ))
         })?;
@@ -40,24 +40,17 @@ impl SubmitJobCmd {
         let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer).await?;
 
-        let code = self.read_file()?;
-
-        let params = if let Some(params) = &self.params {
-            let p = params.split(",").collect::<Vec<&str>>();
-            let engine = Engine::default();
-            let module = Module::from_file(&engine, &self.path)?;
-            self.build_params(&p, &module)?
-        } else {
-            vec![]
-        };
-
-        let job = JobRequest::new(code, params, vec![]);
+        let job_request = self.build_job_request()?;
 
         client
-            .write::<JobRequestSubmitted, JobRequest>(contract_address, "submit_job", job)
+            .write::<JobRequestSubmitted, JobRequest>(
+                contract_address,
+                "submit_job_request",
+                job_request,
+            )
             .await?;
 
-        info!("Job Submitted!");
+        info!("Job Request Submitted!");
 
         let node = NodeBuilder::build()?;
         let (handle, node_client) = node.start()?;
@@ -71,6 +64,25 @@ impl SubmitJobCmd {
         };
 
         Ok(())
+    }
+
+    fn build_job_request(&self) -> Result<JobRequest, Error> {
+        let code = self.read_file()?;
+        let engine = Engine::default();
+        let module = Module::from_file(&engine, &self.path)?;
+
+        let _resources = module.resources_required();
+
+        let params = if let Some(params) = &self.params {
+            let p = params.split(",").collect::<Vec<&str>>();
+            self.build_params(&p, &module)?
+        } else {
+            vec![]
+        };
+
+        let job_request = JobRequest::new(code, params, vec![]);
+
+        Ok(job_request)
     }
 
     fn read_file(&self) -> Result<Vec<u8>, Error> {

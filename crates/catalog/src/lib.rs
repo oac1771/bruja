@@ -99,7 +99,7 @@ pub mod catalog {
         }
 
         #[ink(message)]
-        pub fn submit_job(&mut self, job_request: JobRequest) {
+        pub fn submit_job_request(&mut self, job_request: JobRequest) {
             let who = self.env().caller();
             let id = job_request.id();
             let resources = job_request.resources();
@@ -163,14 +163,14 @@ pub mod catalog {
         }
 
         #[ink::test]
-        fn submit_job_emits_event() {
+        fn submit_job_request_emits_event() {
             let who = AccountId::from([1; 32]);
             let mut catalog = Catalog::default();
             let code = vec![1, 2, 3, 4];
 
             let job_request = JobRequest::test(code.clone());
 
-            catalog.submit_job(job_request.clone());
+            catalog.submit_job_request(job_request.clone());
 
             let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
             let job_submitted_event =
@@ -180,12 +180,15 @@ pub mod catalog {
 
             assert_eq!(job_submitted_event.who, who);
             assert_eq!(job_submitted_event.id, job_request.id());
-            assert_eq!(job_submitted_event.resources, job_request.resources().clone());
+            assert_eq!(
+                job_submitted_event.resources,
+                job_request.resources().clone()
+            );
             assert_eq!(job_ids[0], job_request.id());
         }
 
         #[ink::test]
-        fn submit_job_appends_to_existing_jobs() {
+        fn submit_job_request_appends_to_existing_jobs() {
             let who = AccountId::from([1; 32]);
             let mut catalog = Catalog::default();
 
@@ -195,8 +198,8 @@ pub mod catalog {
             let job_1_request = JobRequest::test(code_1.clone());
             let job_2_request = JobRequest::test(code_2.clone());
 
-            catalog.submit_job(job_1_request.clone());
-            catalog.submit_job(job_2_request.clone());
+            catalog.submit_job_request(job_1_request.clone());
+            catalog.submit_job_request(job_2_request.clone());
 
             let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
 

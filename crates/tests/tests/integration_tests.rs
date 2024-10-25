@@ -6,7 +6,7 @@ mod tests {
     use serde::Deserialize;
     use serde_json::Deserializer;
     use std::{
-        io::Cursor,
+        io::{Cursor, Write},
         sync::{Arc, Mutex},
     };
     use subxt::{utils::AccountId32, SubstrateConfig};
@@ -21,7 +21,7 @@ mod tests {
         buffer: Arc<Mutex<Vec<u8>>>,
     }
 
-    impl std::io::Write for BufferWriter {
+    impl Write for BufferWriter {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
             let mut buffer = self.buffer.lock().unwrap();
             buffer.extend_from_slice(buf);
@@ -62,7 +62,7 @@ mod tests {
     }
 
     struct RequesterRunner {
-        _log_buffer: Arc<Mutex<Vec<u8>>>,
+        log_buffer: Arc<Mutex<Vec<u8>>>,
         config: ConfigR,
         address: AccountId32,
     }
@@ -105,25 +105,40 @@ mod tests {
         fn new(log_buffer: Arc<Mutex<Vec<u8>>>, address: AccountId32, suri: &str) -> Self {
             let config = ConfigR::new(suri, ARTIFACT_FILE_PATH.to_string());
             Self {
-                _log_buffer: log_buffer,
+                log_buffer,
                 config,
                 address,
             }
         }
 
         async fn submit_job(&self, path: &str, func_name: &str, params: Option<String>) {
-            let submit_job_cmd = SubmitJobCmd {
-                address: self.address.to_string(),
-                path: path.to_string(),
-                func_name: func_name.to_string(),
-                params: params,
-            };
-            let config = self.config.clone();
+            // let submit_job_cmd = SubmitJobCmd {
+            //     address: self.address.to_string(),
+            //     path: path.to_string(),
+            //     func_name: func_name.to_string(),
+            //     params: params,
+            // };
+            // let config = self.config.clone();
+
+            // let log_buffer = Arc::new(Mutex::new(Vec::new()));
+            // let buffer = log_buffer.clone();
 
             let join_handle = tokio::spawn(async move {
-                let _ = submit_job_cmd.handle(config).await.unwrap();
+                // let _guard = tracing_subscriber::fmt()
+                //     .json()
+                //     .with_writer(move || BufferWriter {
+                //         buffer: buffer.clone(),
+                //     })
+                //     .set_default();
+
+                tracing::info!("task spawned");
+                // submit_job_cmd.handle(config).await.unwrap();
             });
-            let _foo = join_handle.await;
+            tracing::info!("outside");
+            let foo = self.log_buffer.clone().lock().unwrap().len();
+            println!("log length: {:?}", foo);
+
+            // let _foo = join_handle.await;
         }
     }
 
@@ -134,7 +149,7 @@ mod tests {
         let log_buffer = Arc::new(Mutex::new(Vec::new()));
         let buffer = log_buffer.clone();
 
-        let _ = tracing_subscriber::fmt()
+        let _guard = tracing_subscriber::fmt()
             .json()
             .with_writer(move || BufferWriter {
                 buffer: buffer.clone(),
@@ -166,28 +181,29 @@ mod tests {
 
     #[tokio::test]
     async fn submit_job() {
-        let _ = tracing_subscriber::fmt().init();
-        let log_buffer = Arc::new(Mutex::new(Vec::new()));
-        let address = instantiate_contract("//Bob").await;
+        // let _ = tracing_subscriber::fmt().init();
+        // let log_buffer = Arc::new(Mutex::new(Vec::new()));
+        // let address = instantiate_contract("//Bob").await;
 
-        let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
-        requester_runner
-            .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
-            .await;
+        // let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
+        // requester_runner
+        //     .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
+        //     .await;
 
-        // test(|log_buffer| {
-        //     async move {
-        //         let address = instantiate_contract("//Bob").await;
+        test(|log_buffer| {
+            async move {
+                // let address = instantiate_contract("//Bob").await;
+                let address = AccountId32::from([0; 32]);
 
-        //         let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
-        //         requester_runner
-        //             .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
-        //             .await;
+                let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
+                requester_runner
+                    .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
+                    .await;
 
-        //         Ok(())
-        //     }
-        //     .boxed()
-        // })
-        // .await;
+                Ok(())
+            }
+            .boxed()
+        })
+        .await;
     }
 }

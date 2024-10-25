@@ -27,7 +27,7 @@ mod tests {
 
         let mut call_builder = contract.call_builder::<Catalog>();
 
-        let submit_job = call_builder.submit_job(job_request);
+        let submit_job = call_builder.submit_job_request(job_request);
         let response = client.call(&alice, &submit_job).submit().await.unwrap();
 
         let contract_emmitted_event = response
