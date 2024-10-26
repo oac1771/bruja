@@ -26,6 +26,6 @@ std = [
 ink-as-dependency = []
 
 [[test]]
-name = "e2e"
-path = "tests/test_e2e.rs"
+name = "contract-e2e"
+path = "tests/e2e.rs"
 test = false

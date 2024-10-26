@@ -62,4 +62,4 @@ jobs:
 
       - name: Contract Integration Tests
         shell: bash
-        run: cargo make test-contract
+        run: cargo make contract-tests

@@ -33,10 +33,15 @@ script='''
 docker compose -f docker/compose.yml down
 '''
 
-[tasks.test-contract]
+[tasks.contract-tests]
 env = { "CONTRACTS_NODE" = "../../target/debug/node" }
 script='''
-cargo test -p catalog --test e2e
+cargo test -p catalog --test contract-e2e
+'''
+
+[tasks.integration-tests]
+script='''
+cargo test -p tests --test integration-tests
 '''
 
 [tasks.local-node]

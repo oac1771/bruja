@@ -12988,8 +12988,6 @@ checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
 name = "tests"
 version = "0.0.1"
 dependencies = [
- "anyhow",
- "futures",
  "ink_env",
  "requester",
  "serde",

@@ -1,6 +1,5 @@
 #[cfg(test)]
 mod tests {
-    use futures::{future::BoxFuture, FutureExt};
     use ink_env::DefaultEnvironment;
     use requester::{commands::submit_job::SubmitJobCmd, config::Config as ConfigR};
     use serde::Deserialize;
@@ -21,6 +20,47 @@ mod tests {
     use worker::{commands::register::RegisterCmd, config::Config as ConfigW};
 
     const ARTIFACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
+
+    #[tokio::test]
+    async fn register_worker() {
+        let log_buffer = Arc::new(Mutex::new(Vec::new()));
+        let buffer = log_buffer.clone();
+
+        let _guard = tracing_subscriber::fmt()
+            .json()
+            .with_writer(move || BufferWriter {
+                buffer: buffer.clone(),
+            })
+            .set_default();
+        let address = instantiate_contract("//Alice").await;
+
+        let worker_runner = WorkerRunner::new(log_buffer.clone(), address, "//Alice");
+        worker_runner.register(10).await;
+
+    }
+
+    #[tokio::test]
+    async fn submit_job() {
+        let log_buffer = Arc::new(Mutex::new(Vec::new()));
+        let buffer = log_buffer.clone();
+
+        let _guard = tracing_subscriber::fmt()
+            .json()
+            .with_writer(move || BufferWriter {
+                buffer: buffer.clone(),
+            })
+            .set_default();
+
+        let address = instantiate_contract("//Bob").await;
+
+        let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
+        requester_runner
+            .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
+            .await;
+        requester_runner
+            .assert_log_entry("Job Request Submitted!")
+            .await;
+    }
 
     struct BufferWriter {
         buffer: Arc<Mutex<Vec<u8>>>,
@@ -160,63 +200,4 @@ mod tests {
         }
     }
 
-    async fn test<'a, T>(test: T)
-    where
-        T: FnOnce(Arc<Mutex<Vec<u8>>>) -> BoxFuture<'a, Result<(), anyhow::Error>>,
-    {
-        let log_buffer = Arc::new(Mutex::new(Vec::new()));
-        let buffer = log_buffer.clone();
-
-        let _guard = tracing_subscriber::fmt()
-            .json()
-            .with_writer(move || BufferWriter {
-                buffer: buffer.clone(),
-            })
-            .set_default();
-
-        let result = test(log_buffer).await;
-
-        if let Err(err) = result {
-            panic!("{}", err);
-        }
-    }
-
-    #[tokio::test]
-    async fn register_worker() {
-        test(|log_buffer| {
-            async move {
-                let address = instantiate_contract("//Alice").await;
-
-                let worker_runner = WorkerRunner::new(log_buffer.clone(), address, "//Alice");
-                worker_runner.register(10).await;
-
-                Ok(())
-            }
-            .boxed()
-        })
-        .await;
-    }
-
-    #[tokio::test]
-    async fn submit_job() {
-        let log_buffer = Arc::new(Mutex::new(Vec::new()));
-        let buffer = log_buffer.clone();
-
-        let _guard = tracing_subscriber::fmt()
-            .json()
-            .with_writer(move || BufferWriter {
-                buffer: buffer.clone(),
-            })
-            .set_default();
-
-        let address = instantiate_contract("//Bob").await;
-
-        let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
-        requester_runner
-            .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
-            .await;
-        requester_runner
-            .assert_log_entry("Job Request Submitted!")
-            .await;
-    }
 }

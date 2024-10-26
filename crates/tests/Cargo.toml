@@ -15,8 +15,6 @@ tokio-util = { workspace = true }
 subxt-signer = { workspace = true }
 subxt = { workspace = true }
 ink_env = { workspace = true }
-futures = { workspace = true }
-anyhow = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 
@@ -26,5 +24,5 @@ utils = { workspace = true }
 
 [[test]]
 name = "integration-tests"
-path = "tests/integration_tests.rs"
+path = "tests/integration.rs"
 test = false
