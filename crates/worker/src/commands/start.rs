@@ -24,9 +24,7 @@ pub struct StartCmd {
 
 impl StartCmd {
     #[instrument(skip_all)]
-    pub async fn handle(&self, config: &Config) -> Result<(), Error> {
-        info!("Starting worker");
-
+    pub async fn handle(&self, config: Config) -> Result<(), Error> {
         let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer).await?;
         let client = contract_client.online_client().await?;
@@ -34,6 +32,8 @@ impl StartCmd {
         let mut blocks_sub = client.blocks().subscribe_finalized().await?;
 
         while let Some(block) = blocks_sub.next().await {
+            info!("Starting worker");
+
             if let Err(error) = self.process_block(block, &contract_client).await {
                 error!("Error Processing Block Data: {}", error);
             }

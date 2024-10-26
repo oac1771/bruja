@@ -17,7 +17,10 @@ mod tests {
     use tracing::{Instrument, Span};
     use tracing_subscriber::util::SubscriberInitExt;
     use utils::client::Client;
-    use worker::{commands::register::RegisterCmd, config::Config as ConfigW};
+    use worker::{
+        commands::{register::RegisterCmd, start::StartCmd},
+        config::Config as ConfigW,
+    };
 
     const ARTIFACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
 
@@ -34,9 +37,11 @@ mod tests {
             .set_default();
         let address = instantiate_contract("//Alice").await;
 
-        let worker_runner = WorkerRunner::new(log_buffer.clone(), address, "//Alice");
+        let worker_runner = WorkerRunner::new(address, "//Alice");
         worker_runner.register(10).await;
-
+        worker_runner
+            .assert_log_entry("Successfully registered worker!", log_buffer.clone())
+            .await;
     }
 
     #[tokio::test]
@@ -53,12 +58,15 @@ mod tests {
 
         let address = instantiate_contract("//Bob").await;
 
-        let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
+        let requester_runner = RequesterRunner::new(address.clone(), "//Bob");
+        let worker_runner = WorkerRunner::new(address.clone(), "//Bob");
+
+        worker_runner.start().await;
         requester_runner
             .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
             .await;
         requester_runner
-            .assert_log_entry("Job Request Submitted!")
+            .assert_log_entry("Job Request Submitted!", log_buffer.clone())
             .await;
     }
 
@@ -101,25 +109,19 @@ mod tests {
     }
 
     struct WorkerRunner {
-        log_buffer: Arc<Mutex<Vec<u8>>>,
         config: ConfigW,
         address: AccountId32,
     }
 
     struct RequesterRunner {
-        log_buffer: Arc<Mutex<Vec<u8>>>,
         config: ConfigR,
         address: AccountId32,
     }
 
     impl WorkerRunner {
-        fn new(log_buffer: Arc<Mutex<Vec<u8>>>, address: AccountId32, suri: &str) -> Self {
+        fn new(address: AccountId32, suri: &str) -> Self {
             let config = ConfigW::new(suri, ARTIFACT_FILE_PATH.to_string());
-            Self {
-                log_buffer,
-                config,
-                address,
-            }
+            Self { config, address }
         }
 
         async fn register(&self, val: u32) {
@@ -128,32 +130,32 @@ mod tests {
                 val,
             };
 
-            register_cmd.handle(&self.config).await.unwrap();
-            let logs = self.parse_logs("Successfully registered worker!");
-            assert!(logs.len() > 0);
+            register_cmd.handle(self.config.clone()).await.unwrap();
         }
 
-        fn parse_logs(&self, msg: &str) -> Vec<Log> {
-            let logs = self.log_buffer.lock().unwrap();
-            let log_output = String::from_utf8(logs.clone()).unwrap();
-            let cursor = Cursor::new(log_output);
+        async fn start(&self) {
+            let start_cmd = StartCmd {
+                address: self.address.to_string(),
+            };
+            let config = self.config.clone();
 
-            Deserializer::from_reader(cursor)
-                .into_iter::<Log>()
-                .filter_map(|log| log.ok())
-                .filter(|log| log.target.contains("worker::") && log.fields.message == msg)
-                .collect::<Vec<Log>>()
+            let span = Span::current();
+
+            let _join_handle = tokio::spawn(async move { start_cmd.handle(config).await.unwrap() })
+                .instrument(span);
+        }
+    }
+
+    impl Runner for WorkerRunner {
+        fn label() -> String {
+            "worker::".to_string()
         }
     }
 
     impl RequesterRunner {
-        fn new(log_buffer: Arc<Mutex<Vec<u8>>>, address: AccountId32, suri: &str) -> Self {
+        fn new(address: AccountId32, suri: &str) -> Self {
             let config = ConfigR::new(suri, ARTIFACT_FILE_PATH.to_string());
-            Self {
-                log_buffer,
-                config,
-                address,
-            }
+            Self { config, address }
         }
 
         async fn submit_job(&self, path: &str, func_name: &str, params: Option<String>) {
@@ -171,33 +173,44 @@ mod tests {
                 tokio::spawn(async move { submit_job_cmd.handle(config).await.unwrap() })
                     .instrument(span);
         }
+    }
 
-        async fn assert_log_entry(&self, entry: &str) {
+    impl Runner for RequesterRunner {
+        fn label() -> String {
+            "requester::".to_string()
+        }
+    }
+
+    trait Runner {
+        fn label() -> String;
+
+        async fn assert_log_entry(&self, entry: &str, log_buffer: Arc<Mutex<Vec<u8>>>) {
             select! {
                 _ = sleep(Duration::from_secs(10)) => panic!("Failed to find entry: {}", entry.to_string()),
-                _ = self.parse_logs(entry) => println!("")
+                _ = self.parse_logs(entry, log_buffer) => {}
             }
         }
 
-        async fn parse_logs(&self, entry: &str) {
+        async fn parse_logs(&self, entry: &str, log_buffer: Arc<Mutex<Vec<u8>>>) {
             let mut logs: Vec<Log> = vec![];
 
             while logs.len() == 0 {
-                let log_buffer = self.log_buffer.lock().unwrap();
-                let log_output = String::from_utf8(log_buffer.clone()).unwrap();
-                std::mem::drop(log_buffer);
+                let buffer = log_buffer.lock().unwrap();
+                let log_output = String::from_utf8(buffer.clone()).unwrap();
+                std::mem::drop(buffer);
 
                 let cursor = Cursor::new(log_output);
 
                 logs = Deserializer::from_reader(cursor.clone())
                     .into_iter::<Log>()
                     .filter_map(|log| log.ok())
-                    .filter(|log| log.target.contains("requester::") && log.fields.message == entry)
+                    .filter(|log| {
+                        log.target.contains(&Self::label()) && log.fields.message == entry
+                    })
                     .collect::<Vec<Log>>();
 
                 let _ = sleep(Duration::from_millis(100)).await;
             }
         }
     }
-
 }

@@ -19,7 +19,7 @@ pub struct RegisterCmd {
 
 impl RegisterCmd {
     #[instrument(skip_all)]
-    pub async fn handle(&self, config: &Config) -> Result<(), Error> {
+    pub async fn handle(&self, config: Config) -> Result<(), Error> {
         let contract_address =
             AccountId32::from_str(&self.address).map_err(|err| Error::Other(err.to_string()))?;
 

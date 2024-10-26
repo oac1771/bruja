@@ -1,6 +1,7 @@
 use std::{env::var, str::FromStr};
 use subxt_signer::{sr25519::Keypair, SecretUri};
 
+#[derive(Clone)]
 pub struct Config {
     pub signer: Keypair,
     pub artifact_file_path: String,

@@ -22,8 +22,8 @@ pub async fn run() {
     let config = Config::default();
 
     let result = match args.command {
-        Command::Register(cmd) => cmd.handle(&config).await,
-        Command::Start(cmd) => cmd.handle(&config).await,
+        Command::Register(cmd) => cmd.handle(config).await,
+        Command::Start(cmd) => cmd.handle(config).await,
     };
 
     if let Err(err) = result {
