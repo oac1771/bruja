@@ -11,6 +11,7 @@ mod tests {
     };
     use subxt::{utils::AccountId32, SubstrateConfig};
     use subxt_signer::sr25519::Keypair;
+    use tracing::Instrument;
     use tracing_subscriber::util::SubscriberInitExt;
     use utils::client::Client;
     use worker::{commands::register::RegisterCmd, config::Config as ConfigW};
@@ -112,33 +113,24 @@ mod tests {
         }
 
         async fn submit_job(&self, path: &str, func_name: &str, params: Option<String>) {
-            // let submit_job_cmd = SubmitJobCmd {
-            //     address: self.address.to_string(),
-            //     path: path.to_string(),
-            //     func_name: func_name.to_string(),
-            //     params: params,
-            // };
-            // let config = self.config.clone();
+            let submit_job_cmd = SubmitJobCmd {
+                address: self.address.to_string(),
+                path: path.to_string(),
+                func_name: func_name.to_string(),
+                params: params,
+            };
+            let config = self.config.clone();
 
-            // let log_buffer = Arc::new(Mutex::new(Vec::new()));
-            // let buffer = log_buffer.clone();
+            let span = tracing::Span::current();
 
-            let join_handle = tokio::spawn(async move {
-                // let _guard = tracing_subscriber::fmt()
-                //     .json()
-                //     .with_writer(move || BufferWriter {
-                //         buffer: buffer.clone(),
-                //     })
-                //     .set_default();
+            let _join_handle = tokio::spawn(async move {
+                submit_job_cmd.handle(config).await.unwrap()
+            }).instrument(span);
 
-                tracing::info!("task spawned");
-                // submit_job_cmd.handle(config).await.unwrap();
-            });
-            tracing::info!("outside");
-            let foo = self.log_buffer.clone().lock().unwrap().len();
+            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+
+            let foo = self.log_buffer.lock().unwrap().len();
             println!("log length: {:?}", foo);
-
-            // let _foo = join_handle.await;
         }
     }
 
@@ -192,8 +184,8 @@ mod tests {
 
         test(|log_buffer| {
             async move {
-                // let address = instantiate_contract("//Bob").await;
-                let address = AccountId32::from([0; 32]);
+                let address = instantiate_contract("//Bob").await;
+                // let address = AccountId32::from([0; 32]);
 
                 let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
                 requester_runner

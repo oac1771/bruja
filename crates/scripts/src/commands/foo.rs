@@ -1,6 +1,6 @@
 use clap::Parser;
 use std::sync::{Arc, Mutex};
-use tracing_subscriber::util::SubscriberInitExt;
+use tracing::Dispatch;
 
 #[derive(Debug, Parser)]
 pub struct Foo {}
@@ -27,16 +27,23 @@ impl Foo {
         let buffer = log_buffer.clone();
 
         let _join_handle = tokio::spawn(async move {
-            let _guard = tracing_subscriber::fmt()
+            // Setting up a default dispatcher for this task only.
+            let subscriber = tracing_subscriber::fmt()
                 .json()
                 .with_writer(move || BufferWriter {
                     buffer: buffer.clone(),
                 })
-                .set_default();
+                .finish();
 
-            tracing::info!("task spawned");
+            let dispatch = Dispatch::new(subscriber);
+            tracing::dispatcher::with_default(&dispatch, || {
+                tracing::info!("task spawned");
+            });
         });
-        tracing::info!("outside");
+
+        // Delay the main thread to allow the task to run.
+        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+
         let foo = log_buffer.lock().unwrap().len();
         println!("log length: {:?}", foo);
     }
