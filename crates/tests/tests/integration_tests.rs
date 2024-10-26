@@ -11,7 +11,11 @@ mod tests {
     };
     use subxt::{utils::AccountId32, SubstrateConfig};
     use subxt_signer::sr25519::Keypair;
-    use tracing::Instrument;
+    use tokio::{
+        select,
+        time::{sleep, Duration},
+    };
+    use tracing::{Instrument, Span};
     use tracing_subscriber::util::SubscriberInitExt;
     use utils::client::Client;
     use worker::{commands::register::RegisterCmd, config::Config as ConfigW};
@@ -45,13 +49,13 @@ mod tests {
         address
     }
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     struct Log {
         fields: Fields,
         target: String,
     }
 
-    #[derive(Deserialize)]
+    #[derive(Deserialize, Debug)]
     struct Fields {
         message: String,
     }
@@ -121,16 +125,38 @@ mod tests {
             };
             let config = self.config.clone();
 
-            let span = tracing::Span::current();
+            let span = Span::current();
 
-            let _join_handle = tokio::spawn(async move {
-                submit_job_cmd.handle(config).await.unwrap()
-            }).instrument(span);
+            let _join_handle =
+                tokio::spawn(async move { submit_job_cmd.handle(config).await.unwrap() })
+                    .instrument(span);
+        }
 
-            tokio::time::sleep(tokio::time::Duration::from_secs(10)).await;
+        async fn assert_log_entry(&self, entry: &str) {
+            select! {
+                _ = sleep(Duration::from_secs(10)) => panic!("Failed to find entry: {}", entry.to_string()),
+                _ = self.parse_logs(entry) => println!("")
+            }
+        }
 
-            let foo = self.log_buffer.lock().unwrap().len();
-            println!("log length: {:?}", foo);
+        async fn parse_logs(&self, entry: &str) {
+            let mut logs: Vec<Log> = vec![];
+
+            while logs.len() == 0 {
+                let log_buffer = self.log_buffer.lock().unwrap();
+                let log_output = String::from_utf8(log_buffer.clone()).unwrap();
+                std::mem::drop(log_buffer);
+
+                let cursor = Cursor::new(log_output);
+
+                logs = Deserializer::from_reader(cursor.clone())
+                    .into_iter::<Log>()
+                    .filter_map(|log| log.ok())
+                    .filter(|log| log.target.contains("requester::") && log.fields.message == entry)
+                    .collect::<Vec<Log>>();
+
+                let _ = sleep(Duration::from_millis(100)).await;
+            }
         }
     }
 
@@ -173,29 +199,24 @@ mod tests {
 
     #[tokio::test]
     async fn submit_job() {
-        // let _ = tracing_subscriber::fmt().init();
-        // let log_buffer = Arc::new(Mutex::new(Vec::new()));
-        // let address = instantiate_contract("//Bob").await;
+        let log_buffer = Arc::new(Mutex::new(Vec::new()));
+        let buffer = log_buffer.clone();
 
-        // let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
-        // requester_runner
-        //     .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
-        //     .await;
+        let _guard = tracing_subscriber::fmt()
+            .json()
+            .with_writer(move || BufferWriter {
+                buffer: buffer.clone(),
+            })
+            .set_default();
 
-        test(|log_buffer| {
-            async move {
-                let address = instantiate_contract("//Bob").await;
-                // let address = AccountId32::from([0; 32]);
+        let address = instantiate_contract("//Bob").await;
 
-                let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
-                requester_runner
-                    .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
-                    .await;
-
-                Ok(())
-            }
-            .boxed()
-        })
-        .await;
+        let requester_runner = RequesterRunner::new(log_buffer.clone(), address, "//Bob");
+        requester_runner
+            .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
+            .await;
+        requester_runner
+            .assert_log_entry("Job Request Submitted!")
+            .await;
     }
 }
