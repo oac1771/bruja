@@ -62,11 +62,18 @@ mod tests {
         let worker_runner = WorkerRunner::new(address.clone(), "//Bob");
 
         worker_runner.start().await;
+        worker_runner
+            .assert_log_entry("Starting worker", log_buffer.clone())
+            .await;
+
         requester_runner
             .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
             .await;
         requester_runner
             .assert_log_entry("Job Request Submitted!", log_buffer.clone())
+            .await;
+        worker_runner
+            .assert_log_entry("Found JobRequest Event", log_buffer.clone())
             .await;
     }
 
@@ -204,9 +211,8 @@ mod tests {
                 logs = Deserializer::from_reader(cursor.clone())
                     .into_iter::<Log>()
                     .filter_map(|log| log.ok())
-                    .filter(|log| {
-                        log.target.contains(&Self::label()) && log.fields.message == entry
-                    })
+                    .filter(|log| log.target.contains(&Self::label()))
+                    .filter(|log| log.fields.message == entry)
                     .collect::<Vec<Log>>();
 
                 let _ = sleep(Duration::from_millis(100)).await;

@@ -12,7 +12,7 @@ use tokio::{select, signal};
 use tracing::{error, info, instrument};
 
 enum WatchedEvents {
-    Job(JobRequestSubmitted),
+    JobRequest(JobRequestSubmitted),
     DecodeErr,
 }
 
@@ -25,19 +25,7 @@ pub struct StartCmd {
 impl StartCmd {
     #[instrument(skip_all)]
     pub async fn handle(&self, config: Config) -> Result<(), Error> {
-        let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
-            Client::new(&config.artifact_file_path, &config.signer).await?;
-        let client = contract_client.online_client().await?;
-
-        let mut blocks_sub = client.blocks().subscribe_finalized().await?;
-
-        while let Some(block) = blocks_sub.next().await {
-            info!("Starting worker");
-
-            if let Err(error) = self.process_block(block, &contract_client).await {
-                error!("Error Processing Block Data: {}", error);
-            }
-        }
+        info!("Starting worker");
 
         let node = NodeBuilder::build()?;
         let (handle, node_client) = node.start()?;
@@ -45,8 +33,25 @@ impl StartCmd {
 
         select! {
             _ = handle => {},
+            _ = self.listen_blocks(config) => {},
             _ = signal::ctrl_c() => {
                 info!("Shutting down...")
+            }
+        };
+
+        Ok(())
+    }
+
+    async fn listen_blocks(&self, config: Config) -> Result<(), Error> {
+        let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
+            Client::new(&config.artifact_file_path, &config.signer).await?;
+        let client = contract_client.online_client().await?;
+
+        let mut blocks_sub = client.blocks().subscribe_finalized().await?;
+
+        while let Some(block) = blocks_sub.next().await {
+            if let Err(error) = self.process_block(block, &contract_client).await {
+                error!("Error Processing Block Data: {}", error);
             }
         };
 
@@ -85,8 +90,9 @@ impl StartCmd {
     ) -> Result<(), Error> {
         for event in events {
             match self.determine_event(&event) {
-                WatchedEvents::Job(job_event) => {
-                    info!("Found Job Event");
+                WatchedEvents::JobRequest(job_event) => {
+                    info!("Found JobRequest Event");
+
                     let job = contract_client
                         .read_storage::<Vec<u8>>(event.contract, "work", &job_event.id)
                         .await?;
@@ -103,7 +109,7 @@ impl StartCmd {
 
     fn determine_event(&self, event: &ContractEmitted) -> WatchedEvents {
         if let Ok(event) = <JobRequestSubmitted as Decode>::decode(&mut event.data.as_slice()) {
-            WatchedEvents::Job(event)
+            WatchedEvents::JobRequest(event)
         } else {
             WatchedEvents::DecodeErr
         }
