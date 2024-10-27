@@ -6,9 +6,9 @@ use ink_env::DefaultEnvironment;
 use std::{fs::File, io::Read, path::Path, str::FromStr};
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
-use tokio::{select, signal};
+use tokio::{select, signal, task::JoinHandle};
 use tracing::{info, instrument};
-use utils::{client::Client, p2p::NodeBuilder};
+use utils::{client::Client, p2p::{Error as P2pError, NodeBuilder, NodeClient}};
 use wasmtime::{Engine, Module, ValType};
 
 #[derive(Debug, Parser)]
@@ -30,9 +30,8 @@ pub struct SubmitJobCmd {
 impl SubmitJobCmd {
     #[instrument(skip_all)]
     pub async fn handle(&self, config: Config) -> Result<(), Error> {
-        let node = NodeBuilder::build()?;
-        let (handle, node_client) = node.start()?;
-        node_client.subscribe(&self.address).await?;
+
+        let (handle, _) = self.join_network().await?;
 
         select! {
             _ = handle => {},
@@ -43,6 +42,14 @@ impl SubmitJobCmd {
         };
 
         Ok(())
+    }
+
+    async fn join_network(&self) -> Result<(JoinHandle<Result<(), P2pError>>, NodeClient), Error> {
+        let node = NodeBuilder::build()?;
+        let (handle, node_client) = node.start()?;
+        node_client.subscribe(&self.address).await?;
+
+        Ok((handle, node_client))
     }
 
     async fn submit_job(&self, config: Config) -> Result<(), Error> {
@@ -67,6 +74,8 @@ impl SubmitJobCmd {
             .await?;
 
         info!("Job Request Submitted!");
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
 
         Ok(())
     }
