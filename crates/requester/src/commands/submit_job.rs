@@ -30,6 +30,22 @@ pub struct SubmitJobCmd {
 impl SubmitJobCmd {
     #[instrument(skip_all)]
     pub async fn handle(&self, config: Config) -> Result<(), Error> {
+        let node = NodeBuilder::build()?;
+        let (handle, node_client) = node.start()?;
+        node_client.subscribe(&self.address).await?;
+
+        select! {
+            _ = handle => {},
+            _ = self.submit_job(config) => {},
+            _ = signal::ctrl_c() => {
+                info!("Shutting down...")
+            }
+        };
+
+        Ok(())
+    }
+
+    async fn submit_job(&self, config: Config) -> Result<(), Error> {
         let contract_address = AccountId32::from_str(&self.address).map_err(|err| {
             Error::Other(format!(
                 "Failed to parse provided contract address: {}",
@@ -51,17 +67,6 @@ impl SubmitJobCmd {
             .await?;
 
         info!("Job Request Submitted!");
-
-        let node = NodeBuilder::build()?;
-        let (handle, node_client) = node.start()?;
-        node_client.subscribe(&self.address).await?;
-
-        select! {
-            _ = handle => {},
-            _ = signal::ctrl_c() => {
-                info!("Shutting down...")
-            }
-        };
 
         Ok(())
     }

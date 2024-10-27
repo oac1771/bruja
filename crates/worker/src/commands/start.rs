@@ -1,6 +1,10 @@
-use crate::{config::Config, error::Error, services::job::start_job};
+use crate::{config::Config, error::Error};
 use catalog::catalog::JobRequestSubmitted;
-use utils::{chain::contracts::events::ContractEmitted, client::Client, p2p::NodeBuilder};
+use utils::{
+    chain::contracts::events::ContractEmitted,
+    client::Client,
+    p2p::{NodeBuilder, NodeClient},
+};
 
 use clap::Parser;
 use codec::Decode;
@@ -33,7 +37,7 @@ impl StartCmd {
 
         select! {
             _ = handle => {},
-            _ = self.listen_blocks(config) => {},
+            _ = self.listen_blocks(config, node_client) => {},
             _ = signal::ctrl_c() => {
                 info!("Shutting down...")
             }
@@ -42,7 +46,7 @@ impl StartCmd {
         Ok(())
     }
 
-    async fn listen_blocks(&self, config: Config) -> Result<(), Error> {
+    async fn listen_blocks(&self, config: Config, node_client: NodeClient) -> Result<(), Error> {
         let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer).await?;
         let client = contract_client.online_client().await?;
@@ -50,10 +54,10 @@ impl StartCmd {
         let mut blocks_sub = client.blocks().subscribe_finalized().await?;
 
         while let Some(block) = blocks_sub.next().await {
-            if let Err(error) = self.process_block(block, &contract_client).await {
+            if let Err(error) = self.process_block(block, &node_client).await {
                 error!("Error Processing Block Data: {}", error);
             }
-        };
+        }
 
         Ok(())
     }
@@ -61,7 +65,7 @@ impl StartCmd {
     async fn process_block(
         &self,
         block: Result<Block<SubstrateConfig, OnlineClient<SubstrateConfig>>, subxt::Error>,
-        contract_client: &Client<'_, SubstrateConfig, DefaultEnvironment, Keypair>,
+        node_client: &NodeClient,
     ) -> Result<(), Error> {
         let contract_address =
             AccountId32::from_str(&self.address).map_err(|err| Error::Other(err.to_string()))?;
@@ -77,7 +81,7 @@ impl StartCmd {
                 .filter_map(|ev| ev.ok())
                 .filter(|ev| ev.contract == contract_address);
 
-            self.handle_events(events, contract_client).await?;
+            self.handle_events(events, node_client).await?;
         }
 
         Ok(())
@@ -86,23 +90,42 @@ impl StartCmd {
     async fn handle_events(
         &self,
         events: impl Iterator<Item = ContractEmitted>,
-        contract_client: &Client<'_, SubstrateConfig, DefaultEnvironment, Keypair>,
+        node_client: &NodeClient,
     ) -> Result<(), Error> {
         for event in events {
             match self.determine_event(&event) {
-                WatchedEvents::JobRequest(job_event) => {
+                WatchedEvents::JobRequest(job_request) => {
                     info!("Found JobRequest Event");
-
-                    let job = contract_client
-                        .read_storage::<Vec<u8>>(event.contract, "work", &job_event.id)
-                        .await?;
-                    start_job(job)
-                        .await
-                        .map_err(|err| Error::WasmTimeError { source: err })?;
+                    self.handle_job_request(job_request, node_client).await?;
                 }
                 WatchedEvents::DecodeErr => error!("Error decoding event: {:?}", event.data),
             }
         }
+
+        Ok(())
+    }
+
+    async fn handle_job_request(
+        &self,
+        job_request: JobRequestSubmitted,
+        node_client: &NodeClient,
+    ) -> Result<(), Error> {
+        // add logic here to decide if worker wants to accept this job
+        self.accept_job(job_request, node_client).await?;
+
+        Ok(())
+    }
+
+    async fn accept_job(
+        &self,
+        job_request: JobRequestSubmitted,
+        node_client: &NodeClient,
+    ) -> Result<(), Error> {
+        info!("Publishing job acceptance");
+
+        node_client
+            .publish(&self.address, job_request.id.to_vec())
+            .await?;
 
         Ok(())
     }

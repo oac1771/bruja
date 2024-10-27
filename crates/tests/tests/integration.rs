@@ -65,7 +65,6 @@ mod tests {
         worker_runner
             .assert_log_entry("Starting worker", log_buffer.clone())
             .await;
-
         requester_runner
             .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
             .await;
@@ -74,6 +73,10 @@ mod tests {
             .await;
         worker_runner
             .assert_log_entry("Found JobRequest Event", log_buffer.clone())
+            .await;
+
+        worker_runner
+            .assert_log_entry("Publishing job acceptance", log_buffer.clone())
             .await;
     }
 
@@ -111,8 +114,11 @@ mod tests {
     }
 
     #[derive(Deserialize, Debug)]
-    struct Fields {
-        message: String,
+    #[serde(untagged)]
+    enum Fields {
+        #[allow(unused)]
+        LocalPeerId { local_peer_id: String },
+        Message { message: String },
     }
 
     struct WorkerRunner {
@@ -210,9 +216,12 @@ mod tests {
 
                 logs = Deserializer::from_reader(cursor.clone())
                     .into_iter::<Log>()
-                    .filter_map(|log| log.ok())
+                    .map(|log| log.unwrap())
                     .filter(|log| log.target.contains(&Self::label()))
-                    .filter(|log| log.fields.message == entry)
+                    .filter(|log| match &log.fields {
+                        Fields::Message { message } => message == entry,
+                        _ => false,
+                    })
                     .collect::<Vec<Log>>();
 
                 let _ = sleep(Duration::from_millis(100)).await;
