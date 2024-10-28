@@ -2,7 +2,7 @@ use libp2p::{
     futures::prelude::*,
     gossipsub, mdns,
     swarm::{NetworkBehaviour, SwarmEvent},
-    Swarm,
+    PeerId, Swarm,
 };
 use std::{
     collections::hash_map::DefaultHasher,
@@ -13,6 +13,7 @@ use tokio::{
     io, select,
     sync::mpsc::{self, Receiver, Sender},
     task::{spawn, JoinHandle},
+    time::{sleep, Duration as TokioDuration, Instant},
 };
 use tracing::{error, info};
 
@@ -24,6 +25,7 @@ pub struct Node {
 
 pub struct NodeClient {
     cmd_tx: Sender<Command>,
+    resp_rx: Receiver<Response>,
 }
 
 impl NodeBuilder {
@@ -36,7 +38,6 @@ impl NodeBuilder {
                 libp2p::yamux::Config::default,
             )?
             .with_behaviour(|key| {
-                // To content-address message, we can take the hash of message and use it as an ID.
                 let message_id_fn = |message: &gossipsub::Message| {
                     let mut s = DefaultHasher::new();
                     message.data.hash(&mut s);
@@ -50,7 +51,6 @@ impl NodeBuilder {
                     .build()
                     .map_err(|msg| io::Error::new(io::ErrorKind::Other, msg))?;
 
-                // build a gossipsub network behaviour
                 let gossipsub = gossipsub::Behaviour::new(
                     gossipsub::MessageAuthenticity::Signed(key.clone()),
                     gossipsub_config,
@@ -80,29 +80,34 @@ impl NodeBuilder {
 impl Node {
     pub fn start(mut self) -> Result<(JoinHandle<Result<(), Error>>, NodeClient), Error> {
         let (cmd_tx, cmd_rx) = mpsc::channel::<Command>(100);
+        let (resp_tx, resp_rx) = mpsc::channel::<Response>(100);
 
         let handle = spawn(async move {
-            match self.run(cmd_rx).await {
+            match self.run(cmd_rx, resp_tx).await {
                 Ok(_) => Ok(()),
                 Err(err) => Err(err),
             }
         });
 
-        let node_client = NodeClient { cmd_tx };
+        let node_client = NodeClient { cmd_tx, resp_rx };
 
         Ok((handle, node_client))
     }
 
-    async fn run(&mut self, mut cmd_rx: Receiver<Command>) -> Result<(), Error> {
+    async fn run(
+        &mut self,
+        mut cmd_rx: Receiver<Command>,
+        resp_tx: Sender<Response>,
+    ) -> Result<(), Error> {
         loop {
             select! {
-                Some(cmd) = cmd_rx.recv() => self.handle_cmd(cmd),
+                Some(cmd) = cmd_rx.recv() => self.handle_cmd(cmd, &resp_tx).await,
                 event = self.swarm.select_next_some() => self.handle_event(event)
             }
         }
     }
 
-    fn handle_cmd(&mut self, cmd: Command) {
+    async fn handle_cmd(&mut self, cmd: Command, resp_tx: &Sender<Response>) {
         match cmd {
             Command::Publish { topic, val } => {
                 let topic = gossipsub::IdentTopic::new(topic);
@@ -126,6 +131,21 @@ impl Node {
                     }
                 }
             }
+            Command::CheckConnectedPeers => {
+                let peers = self
+                    .swarm
+                    .behaviour()
+                    .gossipsub
+                    .all_peers()
+                    .map(|(peer, _)| peer.clone())
+                    .collect::<Vec<PeerId>>();
+
+                let response = Response::ConnectedPeers { peers };
+
+                if let Err(err) = resp_tx.send(response).await {
+                    error!("Error CheckConnectedPeers response: {}", err);
+                }
+            }
         };
     }
 
@@ -144,7 +164,7 @@ impl Node {
                 topic,
             })) => info!("A remote subscribed to a topic: {topic}",),
             SwarmEvent::Behaviour(BehaviorEvent::Mdns(mdns::Event::Discovered(list))) => {
-                for (peer_id, _multiaddr) in list {
+                for (peer_id, _) in list {
                     info!("mDNS discovered a new peer: {peer_id}");
                     self.swarm
                         .behaviour_mut()
@@ -175,12 +195,8 @@ impl NodeClient {
             topic: topic.to_string(),
             val,
         };
-        self.cmd_tx
-            .send(cmd)
-            .await
-            .map_err(|err| Error::SendError {
-                err: err.to_string(),
-            })?;
+
+        self.send(cmd).await?;
 
         Ok(())
     }
@@ -189,6 +205,29 @@ impl NodeClient {
         let cmd = Command::Subscribe {
             topic: topic.to_string(),
         };
+        self.send(cmd).await?;
+
+        Ok(())
+    }
+
+    // pub async fn wait_for_peers(&mut self) -> Result<Vec<PeerId>, Error> {
+    //     let start = Instant::now();
+
+    //     while start.elapsed() < TokioDuration::from_secs(10) {
+    //         let peers = self.check_connected_peers().await?;
+    //         if peers.len() > 0 {
+    //             return Ok(peers);
+    //         } else {
+    //             sleep(TokioDuration::from_secs(1)).await;
+    //         }
+    //     }
+
+    //     Err(Error::Other {
+    //         err: "Timed out waiting for peers".to_string(),
+    //     })
+    // }
+
+    async fn send(&self, cmd: Command) -> Result<(), Error> {
         self.cmd_tx
             .send(cmd)
             .await
@@ -204,6 +243,11 @@ impl NodeClient {
 pub enum Command {
     Publish { topic: String, val: Vec<u8> },
     Subscribe { topic: String },
+    CheckConnectedPeers,
+}
+
+pub enum Response {
+    ConnectedPeers { peers: Vec<PeerId> },
 }
 
 #[derive(NetworkBehaviour)]

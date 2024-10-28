@@ -8,7 +8,10 @@ use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
 use tokio::{select, signal, task::JoinHandle};
 use tracing::{info, instrument};
-use utils::{client::Client, p2p::{Error as P2pError, NodeBuilder, NodeClient}};
+use utils::{
+    client::Client,
+    p2p::{Error as P2pError, NodeBuilder, NodeClient},
+};
 use wasmtime::{Engine, Module, ValType};
 
 #[derive(Debug, Parser)]
@@ -30,12 +33,11 @@ pub struct SubmitJobCmd {
 impl SubmitJobCmd {
     #[instrument(skip_all)]
     pub async fn handle(&self, config: Config) -> Result<(), Error> {
-
-        let (handle, _) = self.join_network().await?;
+        let (handle, node_client) = self.join_network().await?;
 
         select! {
             _ = handle => {},
-            _ = self.submit_job(config) => {},
+            _ = self.submit_job(config, node_client) => {},
             _ = signal::ctrl_c() => {
                 info!("Shutting down...")
             }
@@ -52,7 +54,7 @@ impl SubmitJobCmd {
         Ok((handle, node_client))
     }
 
-    async fn submit_job(&self, config: Config) -> Result<(), Error> {
+    async fn submit_job(&self, config: Config, node_client: NodeClient) -> Result<(), Error> {
         let contract_address = AccountId32::from_str(&self.address).map_err(|err| {
             Error::Other(format!(
                 "Failed to parse provided contract address: {}",
@@ -74,6 +76,8 @@ impl SubmitJobCmd {
             .await?;
 
         info!("Job Request Submitted!");
+
+        self.wait_for_job_acceptance(node_client).await;
 
         tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
 
@@ -137,5 +141,9 @@ impl SubmitJobCmd {
             .collect::<Result<Vec<Vec<u8>>, Error>>()?;
 
         Ok(p)
+    }
+
+    async fn wait_for_job_acceptance(&self, node_client: NodeClient) {
+        
     }
 }

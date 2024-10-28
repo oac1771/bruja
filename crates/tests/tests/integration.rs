@@ -62,11 +62,12 @@ mod tests {
         let worker_runner = WorkerRunner::new(address.clone(), "//Bob");
 
         worker_runner.start().await;
-        worker_runner
-            .assert_log_entry("Starting worker", log_buffer.clone())
-            .await;
+
         requester_runner
             .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
+            .await;
+        worker_runner
+            .assert_log_entry("Starting worker", log_buffer.clone())
             .await;
         requester_runner
             .assert_log_entry("Job Request Submitted!", log_buffer.clone())
@@ -74,9 +75,8 @@ mod tests {
         worker_runner
             .assert_log_entry("Found JobRequest Event", log_buffer.clone())
             .await;
-
         worker_runner
-            .assert_log_entry("Publishing job acceptance", log_buffer.clone())
+            .assert_log_entry("Published job acceptance", log_buffer.clone())
             .await;
     }
 
@@ -117,8 +117,12 @@ mod tests {
     #[serde(untagged)]
     enum Fields {
         #[allow(unused)]
-        LocalPeerId { local_peer_id: String },
-        Message { message: String },
+        LocalPeerId {
+            local_peer_id: String,
+        },
+        Message {
+            message: String,
+        },
     }
 
     struct WorkerRunner {
@@ -199,7 +203,7 @@ mod tests {
 
         async fn assert_log_entry(&self, entry: &str, log_buffer: Arc<Mutex<Vec<u8>>>) {
             select! {
-                _ = sleep(Duration::from_secs(10)) => panic!("Failed to find entry: {}", entry.to_string()),
+                _ = sleep(Duration::from_secs(10)) => panic!("Failed to find log entry: {}", entry.to_string()),
                 _ = self.parse_logs(entry, log_buffer) => {}
             }
         }

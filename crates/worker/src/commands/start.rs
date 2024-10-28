@@ -121,12 +121,10 @@ impl StartCmd {
         job_request: JobRequestSubmitted,
         node_client: &NodeClient,
     ) -> Result<(), Error> {
-        info!("Publishing job acceptance");
-
         node_client
             .publish(&self.address, job_request.id.to_vec())
             .await?;
-
+        info!("Published job acceptance");
         Ok(())
     }
 
