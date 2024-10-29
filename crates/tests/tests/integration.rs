@@ -207,8 +207,12 @@ mod tests {
 
         async fn assert_log_entry(&self, entry: &str, log_buffer: Arc<Mutex<Vec<u8>>>) {
             select! {
-                _ = sleep(Duration::from_secs(10)) => panic!("Failed to find log entry: {}", entry.to_string()),
-                _ = self.parse_logs(entry, log_buffer) => {}
+                _ = sleep(Duration::from_secs(10)) => {
+                    let buffer = log_buffer.lock().unwrap();
+                    let output = String::from_utf8(buffer.clone()).unwrap();
+                    panic!("Failed to find log entry: {}\nLogs: {}", entry.to_string(), output)
+                },
+                _ = self.parse_logs(entry, log_buffer.clone()) => {}
             }
         }
 
