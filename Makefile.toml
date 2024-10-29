@@ -54,6 +54,7 @@ script='''
 cargo install --force --locked cargo-contract
 cargo install subxt-cli
 rustup target add wasm32-unknown-unknown
+rustup component add rust-src
 '''
 
 [tasks.cargo-build]

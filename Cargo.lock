@@ -1254,6 +1254,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cbor4ii"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "472931dd4dfcc785075b09be910147f9c6258883fc4591d0dac6116392b2daa6"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "cc"
 version = "1.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5107,7 +5116,7 @@ dependencies = [
  "libp2p-noise 0.43.2",
  "libp2p-ping 0.43.1",
  "libp2p-quic 0.9.3",
- "libp2p-request-response",
+ "libp2p-request-response 0.25.3",
  "libp2p-swarm 0.43.7",
  "libp2p-tcp 0.40.1",
  "libp2p-upnp 0.1.1",
@@ -5142,7 +5151,7 @@ dependencies = [
  "libp2p-noise 0.45.0",
  "libp2p-ping 0.45.0",
  "libp2p-quic 0.11.1",
- "libp2p-relay",
+ "libp2p-request-response 0.27.0",
  "libp2p-swarm 0.45.1",
  "libp2p-tcp 0.42.0",
  "libp2p-tls 0.5.0",
@@ -5465,7 +5474,6 @@ dependencies = [
  "libp2p-gossipsub",
  "libp2p-identity",
  "libp2p-ping 0.45.0",
- "libp2p-relay",
  "libp2p-swarm 0.45.1",
  "pin-project",
  "prometheus-client 0.22.3",
@@ -5609,31 +5617,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "libp2p-relay"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "10df23d7f5b5adcc129f4a69d6fbd05209e356ccf9e8f4eb10b2692b79c77247"
-dependencies = [
- "asynchronous-codec 0.7.0",
- "bytes",
- "either",
- "futures",
- "futures-bounded 0.2.4",
- "futures-timer",
- "libp2p-core 0.42.0",
- "libp2p-identity",
- "libp2p-swarm 0.45.1",
- "quick-protobuf",
- "quick-protobuf-codec 0.3.1",
- "rand",
- "static_assertions",
- "thiserror",
- "tracing",
- "void",
- "web-time",
-]
-
-[[package]]
 name = "libp2p-request-response"
 version = "0.25.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5649,6 +5632,28 @@ dependencies = [
  "rand",
  "smallvec",
  "void",
+]
+
+[[package]]
+name = "libp2p-request-response"
+version = "0.27.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1356c9e376a94a75ae830c42cdaea3d4fe1290ba409a22c809033d1b7dcab0a6"
+dependencies = [
+ "async-trait",
+ "cbor4ii",
+ "futures",
+ "futures-bounded 0.2.4",
+ "futures-timer",
+ "libp2p-core 0.42.0",
+ "libp2p-identity",
+ "libp2p-swarm 0.45.1",
+ "rand",
+ "serde",
+ "smallvec",
+ "tracing",
+ "void",
+ "web-time",
 ]
 
 [[package]]

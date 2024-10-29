@@ -25,6 +25,11 @@ Install Dev Dependencies
 cargo make install-dev-dependencies
 ```
 
+You will need to install proto. To install on macOs run the following command:
+
+```
+brew install protobuf
+```
 
 # Build
 Run the following command to build bruja project:

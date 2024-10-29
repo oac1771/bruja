@@ -3,9 +3,11 @@ use libp2p::{
     futures::prelude::*,
     gossipsub::{self, MessageId},
     mdns,
+    request_response::{self, ProtocolSupport},
     swarm::{NetworkBehaviour, SwarmEvent},
-    PeerId, Swarm,
+    PeerId, StreamProtocol, Swarm,
 };
+use serde::{Deserialize, Serialize};
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
@@ -27,8 +29,8 @@ pub struct Node {
 }
 
 pub struct NodeClient {
-    cmd_tx: Sender<Command>,
-    resp_rx: Receiver<Response>,
+    req_tx: Sender<ClientRequest>,
+    resp_rx: Receiver<ClientResponse>,
 }
 
 impl NodeBuilder {
@@ -63,7 +65,19 @@ impl NodeBuilder {
                     mdns::Config::default(),
                     key.public().to_peer_id(),
                 )?;
-                Ok(Behavior { gossipsub, mdns })
+                let request_response = request_response::cbor::Behaviour::new(
+                    [(
+                        StreamProtocol::new("/file-exchange/1"),
+                        ProtocolSupport::Full,
+                    )],
+                    request_response::Config::default(),
+                );
+
+                Ok(Behavior {
+                    gossipsub,
+                    mdns,
+                    request_response,
+                })
             })
             .map_err(|err| Error::Other {
                 err: err.to_string(),
@@ -84,37 +98,41 @@ impl NodeBuilder {
 
 impl Node {
     pub fn start(mut self) -> Result<(JoinHandle<Result<(), Error>>, NodeClient), Error> {
-        let (cmd_tx, cmd_rx) = mpsc::channel::<Command>(100);
-        let (resp_tx, resp_rx) = mpsc::channel::<Response>(100);
+        let (req_tx, req_rx) = mpsc::channel::<ClientRequest>(100);
+        let (resp_tx, resp_rx) = mpsc::channel::<ClientResponse>(100);
 
         let handle = spawn(async move {
-            match self.run(cmd_rx, resp_tx).await {
+            match self.run(req_rx, resp_tx).await {
                 Ok(_) => Ok(()),
                 Err(err) => Err(err),
             }
         });
 
-        let node_client = NodeClient { cmd_tx, resp_rx };
+        let node_client = NodeClient { req_tx, resp_rx };
 
         Ok((handle, node_client))
     }
 
     async fn run(
         &mut self,
-        mut cmd_rx: Receiver<Command>,
-        resp_tx: Sender<Response>,
+        mut req_rx: Receiver<ClientRequest>,
+        resp_tx: Sender<ClientResponse>,
     ) -> Result<(), Error> {
         loop {
             select! {
-                Some(cmd) = cmd_rx.recv() => self.handle_cmd(cmd, &resp_tx).await,
+                Some(request) = req_rx.recv() => self.handle_client_request(request, &resp_tx).await,
                 event = self.swarm.select_next_some() => self.handle_event(event)
             }
         }
     }
 
-    async fn handle_cmd(&mut self, cmd: Command, resp_tx: &Sender<Response>) {
-        match cmd {
-            Command::Publish { topic, msg } => {
+    async fn handle_client_request(
+        &mut self,
+        request: ClientRequest,
+        resp_tx: &Sender<ClientResponse>,
+    ) {
+        match request {
+            ClientRequest::Publish { topic, msg } => {
                 let topic = gossipsub::IdentTopic::new(topic);
                 match self
                     .swarm
@@ -130,7 +148,7 @@ impl Node {
                     }
                 }
             }
-            Command::Subscribe { topic } => {
+            ClientRequest::Subscribe { topic } => {
                 let topic = gossipsub::IdentTopic::new(topic);
                 match self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
                     Ok(_) => {
@@ -141,13 +159,13 @@ impl Node {
                     }
                 }
             }
-            Command::ReadMessages => {
+            ClientRequest::ReadMessages => {
                 let msgs = self
                     .messages
                     .values()
                     .map(|data| data.clone())
                     .collect::<Vec<(PeerId, Message)>>();
-                if let Err(err) = resp_tx.send(Response::Messages { msgs }).await {
+                if let Err(err) = resp_tx.send(ClientResponse::Messages { msgs }).await {
                     error!("Error Sending Messages: {}", err);
                 }
             }
@@ -203,30 +221,30 @@ impl Node {
 
 impl NodeClient {
     pub async fn publish(&self, topic: &str, msg: Message) -> Result<(), Error> {
-        let cmd = Command::Publish {
+        let req = ClientRequest::Publish {
             topic: topic.to_string(),
             msg,
         };
 
-        self.send(cmd).await?;
+        self.send(req).await?;
 
         Ok(())
     }
 
     pub async fn subscribe(&self, topic: &str) -> Result<(), Error> {
-        let cmd = Command::Subscribe {
+        let req = ClientRequest::Subscribe {
             topic: topic.to_string(),
         };
-        self.send(cmd).await?;
+        self.send(req).await?;
 
         Ok(())
     }
 
     pub async fn read_messages(&mut self) -> Result<Vec<(PeerId, Message)>, Error> {
-        let cmd = Command::ReadMessages;
-        self.send(cmd).await?;
+        let req = ClientRequest::ReadMessages;
+        self.send(req).await?;
 
-        while let Some(Response::Messages { msgs }) = self.resp_rx.recv().await {
+        while let Some(ClientResponse::Messages { msgs }) = self.resp_rx.recv().await {
             return Ok(msgs);
         }
 
@@ -257,9 +275,9 @@ impl NodeClient {
         })
     }
 
-    async fn send(&self, cmd: Command) -> Result<(), Error> {
-        self.cmd_tx
-            .send(cmd)
+    async fn send(&self, req: ClientRequest) -> Result<(), Error> {
+        self.req_tx
+            .send(req)
             .await
             .map_err(|err| Error::SendError {
                 err: err.to_string(),
@@ -270,13 +288,12 @@ impl NodeClient {
 }
 
 #[derive(Debug)]
-pub enum Command {
+pub enum ClientRequest {
     Publish { topic: String, msg: Message },
     Subscribe { topic: String },
     ReadMessages,
 }
-
-pub enum Response {
+pub enum ClientResponse {
     Messages { msgs: Vec<(PeerId, Message)> },
 }
 
@@ -285,10 +302,17 @@ pub enum Message {
     JobAcceptance { job_id: Vec<u8> },
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct FileRequest(String);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct FileResponse(Vec<u8>);
+
 #[derive(NetworkBehaviour)]
 struct Behavior {
     gossipsub: gossipsub::Behaviour,
     mdns: mdns::tokio::Behaviour,
+    request_response: request_response::cbor::Behaviour<FileRequest, FileResponse>,
 }
 
 #[derive(Debug, thiserror::Error)]

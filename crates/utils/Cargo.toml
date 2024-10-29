@@ -20,7 +20,7 @@ codec = { workspace = true }
 hex = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
 rand = { workspace = true }
-libp2p = { workspace = true, features = ["tcp", "tls", "dns", "noise", "yamux", "websocket", "ping", "macros", "mdns", "tokio", "gossipsub", "relay"] }
+libp2p = { workspace = true, features = ["tcp", "tls", "dns", "yamux", "websocket", "macros", "mdns", "tokio", "gossipsub", "request-response", "cbor"] }
 futures = { workspace = true }
 tracing = { workspace = true, features = ["attributes"] }
 
