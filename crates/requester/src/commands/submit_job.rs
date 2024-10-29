@@ -10,7 +10,7 @@ use tokio::{select, signal, task::JoinHandle};
 use tracing::{info, instrument};
 use utils::{
     client::Client,
-    p2p::{Error as P2pError, NodeBuilder, NodeClient},
+    p2p::{Error as P2pError, GossipMessage, NodeBuilder, NodeClient, Payload},
 };
 use wasmtime::{Engine, Module, ValType};
 
@@ -58,7 +58,7 @@ impl SubmitJobCmd {
         self.submit_job(config).await?;
         info!("Job Request Submitted!");
 
-        let _messages = node_client.wait_for_messages().await?;
+        let _gossip_messages = node_client.wait_for_gossip_messages().await?;
 
         info!("Messages received!");
 
@@ -148,5 +148,18 @@ impl SubmitJobCmd {
             .collect::<Result<Vec<Vec<u8>>, Error>>()?;
 
         Ok(p)
+    }
+
+    async fn _send_job(
+        &self,
+        gossip_message: GossipMessage,
+        mut node_client: NodeClient,
+    ) -> Result<(), Error> {
+        let payload = Payload::Job;
+        let _foo = node_client
+            .send_request(gossip_message.peer_id(), payload)
+            .await?;
+
+        Ok(())
     }
 }

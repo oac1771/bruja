@@ -3,7 +3,7 @@ use libp2p::{
     futures::prelude::*,
     gossipsub::{self, MessageId},
     mdns,
-    request_response::{self, ProtocolSupport},
+    request_response::{self, OutboundRequestId, ProtocolSupport},
     swarm::{NetworkBehaviour, SwarmEvent},
     PeerId, StreamProtocol, Swarm,
 };
@@ -25,7 +25,7 @@ pub struct NodeBuilder;
 
 pub struct Node {
     swarm: Swarm<Behavior>,
-    messages: HashMap<MessageId, (PeerId, Message)>,
+    gossip_messages: HashMap<MessageId, GossipMessage>,
 }
 
 pub struct NodeClient {
@@ -90,9 +90,12 @@ impl NodeBuilder {
         let addr = "/ip4/0.0.0.0/tcp/0".parse()?;
         swarm.listen_on(addr)?;
 
-        let messages: HashMap<MessageId, (PeerId, Message)> = HashMap::new();
+        let gossip_messages: HashMap<MessageId, GossipMessage> = HashMap::new();
 
-        Ok(Node { swarm, messages })
+        Ok(Node {
+            swarm,
+            gossip_messages,
+        })
     }
 }
 
@@ -159,14 +162,24 @@ impl Node {
                     }
                 }
             }
-            ClientRequest::ReadMessages => {
+            ClientRequest::ReadGossipMessages => {
                 let msgs = self
-                    .messages
+                    .gossip_messages
                     .values()
                     .map(|data| data.clone())
-                    .collect::<Vec<(PeerId, Message)>>();
+                    .collect::<Vec<GossipMessage>>();
                 if let Err(err) = resp_tx.send(ClientResponse::Messages { msgs }).await {
                     error!("Error Sending Messages: {}", err);
+                }
+            }
+            ClientRequest::SendRequest { payload, peer_id } => {
+                let request_id = self
+                    .swarm
+                    .behaviour_mut()
+                    .request_response
+                    .send_request(&peer_id, Request(payload.encode()));
+                if let Err(err) = resp_tx.send(ClientResponse::RequestId { request_id }).await {
+                    error!("Error sending request_id: {}", err);
                 }
             }
         };
@@ -182,7 +195,11 @@ impl Node {
                 info!("Received message: with id: {id} from peer: {peer_id}");
                 match <Message as Decode>::decode(&mut message.data.as_slice()) {
                     Ok(msg) => {
-                        self.messages.insert(id, (peer_id, msg));
+                        let gsp_msg = GossipMessage {
+                            peer_id,
+                            message: msg,
+                        };
+                        self.gossip_messages.insert(id, gsp_msg);
                     }
                     Err(err) => {
                         error!("Error Decoding Message: {}", err);
@@ -240,8 +257,8 @@ impl NodeClient {
         Ok(())
     }
 
-    pub async fn read_messages(&mut self) -> Result<Vec<(PeerId, Message)>, Error> {
-        let req = ClientRequest::ReadMessages;
+    pub async fn read_gossip_messages(&mut self) -> Result<Vec<GossipMessage>, Error> {
+        let req = ClientRequest::ReadGossipMessages;
         self.send(req).await?;
 
         while let Some(ClientResponse::Messages { msgs }) = self.resp_rx.recv().await {
@@ -253,18 +270,18 @@ impl NodeClient {
         })
     }
 
-    pub async fn wait_for_messages(&mut self) -> Result<Vec<(PeerId, Message)>, Error> {
+    pub async fn wait_for_gossip_messages(&mut self) -> Result<Vec<GossipMessage>, Error> {
         let start = Instant::now();
 
         while start.elapsed() < TokioDuration::from_secs(10) {
-            match self.read_messages().await {
+            match self.read_gossip_messages().await {
                 Ok(msgs) => {
                     if msgs.len() > 0 {
                         return Ok(msgs);
                     }
                 }
                 Err(err) => {
-                    error!("error reading messages: {}", err);
+                    error!("Error reading messages: {}", err);
                 }
             }
             sleep(TokioDuration::from_secs(1)).await;
@@ -272,6 +289,23 @@ impl NodeClient {
 
         Err(Error::Other {
             err: "Timed out waiting for messages".to_string(),
+        })
+    }
+
+    pub async fn send_request(
+        &mut self,
+        peer_id: PeerId,
+        payload: Payload,
+    ) -> Result<OutboundRequestId, Error> {
+        let req = ClientRequest::SendRequest { peer_id, payload };
+        self.send(req).await?;
+
+        while let Some(ClientResponse::RequestId { request_id }) = self.resp_rx.recv().await {
+            return Ok(request_id);
+        }
+
+        Err(Error::Other {
+            err: "Error receiving response".to_string(),
         })
     }
 
@@ -291,10 +325,18 @@ impl NodeClient {
 pub enum ClientRequest {
     Publish { topic: String, msg: Message },
     Subscribe { topic: String },
-    ReadMessages,
+    ReadGossipMessages,
+    SendRequest { peer_id: PeerId, payload: Payload },
 }
+
+#[derive(Debug, Encode)]
+pub enum Payload {
+    Job,
+}
+
 pub enum ClientResponse {
-    Messages { msgs: Vec<(PeerId, Message)> },
+    Messages { msgs: Vec<GossipMessage> },
+    RequestId { request_id: OutboundRequestId },
 }
 
 #[derive(Encode, Decode, Debug, Clone)]
@@ -302,17 +344,33 @@ pub enum Message {
     JobAcceptance { job_id: Vec<u8> },
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct FileRequest(String);
+#[derive(Clone)]
+pub struct GossipMessage {
+    peer_id: PeerId,
+    message: Message,
+}
+
+impl GossipMessage {
+    pub fn peer_id(&self) -> PeerId {
+        self.peer_id
+    }
+
+    pub fn message(self) -> Message {
+        self.message
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct FileResponse(Vec<u8>);
+struct Request(Vec<u8>);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub(crate) struct Response(Vec<u8>);
 
 #[derive(NetworkBehaviour)]
 struct Behavior {
     gossipsub: gossipsub::Behaviour,
     mdns: mdns::tokio::Behaviour,
-    request_response: request_response::cbor::Behaviour<FileRequest, FileResponse>,
+    request_response: request_response::cbor::Behaviour<Request, Response>,
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -1,8 +1,6 @@
-- figure out integration test that uses or does not use docker compose
 - cancelation token to kill process in case governance says to do it
 
 - requester
-    - submit code with params
     - payment
         - look into module.resources_required()
     - look for available workers, and send preferred worker in submit job request
