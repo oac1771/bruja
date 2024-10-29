@@ -37,7 +37,7 @@ impl SubmitJobCmd {
 
         select! {
             _ = handle => {},
-            _ = self.submit_job(config, node_client) => {},
+            _ = self.start(config, node_client) => {},
             _ = signal::ctrl_c() => {
                 info!("Shutting down...")
             }
@@ -54,7 +54,20 @@ impl SubmitJobCmd {
         Ok((handle, node_client))
     }
 
-    async fn submit_job(&self, config: Config, node_client: NodeClient) -> Result<(), Error> {
+    async fn start(&self, config: Config, mut node_client: NodeClient) -> Result<(), Error> {
+        self.submit_job(config).await?;
+        info!("Job Request Submitted!");
+
+        let _messages = node_client.wait_for_messages().await?;
+
+        info!("Messages received!");
+
+        tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
+
+        Ok(())
+    }
+
+    async fn submit_job(&self, config: Config) -> Result<(), Error> {
         let contract_address = AccountId32::from_str(&self.address).map_err(|err| {
             Error::Other(format!(
                 "Failed to parse provided contract address: {}",
@@ -74,12 +87,6 @@ impl SubmitJobCmd {
                 job_request,
             )
             .await?;
-
-        info!("Job Request Submitted!");
-
-        self.wait_for_job_acceptance(node_client).await?;
-
-        tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
 
         Ok(())
     }
@@ -141,11 +148,5 @@ impl SubmitJobCmd {
             .collect::<Result<Vec<Vec<u8>>, Error>>()?;
 
         Ok(p)
-    }
-
-    async fn wait_for_job_acceptance(&self, mut node_client: NodeClient) -> Result<(), Error> {
-        let _messages = node_client.wait_for_messages().await?;
-
-        Ok(())
     }
 }

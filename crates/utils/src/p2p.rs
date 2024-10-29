@@ -1,6 +1,10 @@
 use codec::{Decode, Encode};
 use libp2p::{
-    futures::prelude::*, gossipsub::{self, MessageId}, mdns, swarm::{NetworkBehaviour, SwarmEvent}, PeerId, Swarm
+    futures::prelude::*,
+    gossipsub::{self, MessageId},
+    mdns,
+    swarm::{NetworkBehaviour, SwarmEvent},
+    PeerId, Swarm,
 };
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
@@ -231,7 +235,7 @@ impl NodeClient {
         })
     }
 
-    pub async fn wait_for_messages(&mut self) ->  Result<Vec<(PeerId, Message)>, Error> {
+    pub async fn wait_for_messages(&mut self) -> Result<Vec<(PeerId, Message)>, Error> {
         let start = Instant::now();
 
         while start.elapsed() < TokioDuration::from_secs(10) {
@@ -240,13 +244,12 @@ impl NodeClient {
                     if msgs.len() > 0 {
                         return Ok(msgs);
                     }
-                    sleep(TokioDuration::from_secs(1)).await;
-                },
+                }
                 Err(err) => {
                     error!("error reading messages: {}", err);
-                    sleep(TokioDuration::from_secs(1)).await;
                 }
             }
+            sleep(TokioDuration::from_secs(1)).await;
         }
 
         Err(Error::Other {

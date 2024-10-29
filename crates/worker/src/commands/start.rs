@@ -109,7 +109,6 @@ impl StartCmd {
         job_request: JobRequestSubmitted,
         node_client: &NodeClient,
     ) -> Result<(), Error> {
-        // add logic here to decide if worker wants to accept this job
         self.accept_job(job_request, node_client).await?;
 
         Ok(())

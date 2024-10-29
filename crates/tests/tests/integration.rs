@@ -79,6 +79,9 @@ mod tests {
         worker_runner
             .assert_log_entry("Published job acceptance", log_buffer.clone())
             .await;
+        requester_runner
+            .assert_log_entry("Messages received!", log_buffer.clone())
+            .await;
     }
 
     struct BufferWriter {
@@ -216,8 +219,6 @@ mod tests {
                 let buffer = log_buffer.lock().unwrap();
                 let log_output = String::from_utf8(buffer.clone()).unwrap();
                 std::mem::drop(buffer);
-
-                // println!(">>> {}\n", log_output);
 
                 let cursor = Cursor::new(log_output);
 
