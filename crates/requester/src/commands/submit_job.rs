@@ -7,7 +7,7 @@ use std::{fs::File, io::Read, path::Path, str::FromStr};
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
 use tokio::{select, signal, task::JoinHandle};
-use tracing::{info, instrument};
+use tracing::{error, info, instrument};
 use utils::{
     client::Client,
     p2p::{Error as P2pError, GossipMessage, NodeBuilder, NodeClient, Payload},
@@ -37,7 +37,11 @@ impl SubmitJobCmd {
 
         select! {
             _ = handle => {},
-            _ = self.start(config, node_client) => {},
+            result = self.start(config, node_client) => {
+                if let Err(err) = result {
+                    error!("Error submitting job: {}", err);
+                }
+            },
             _ = signal::ctrl_c() => {
                 info!("Shutting down...")
             }

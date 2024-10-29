@@ -63,7 +63,11 @@ mod tests {
 
         worker_runner.start().await;
         requester_runner
-            .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
+            .submit_job(
+                "tests/requester_worker/work_bg.wasm",
+                "foo",
+                Some(String::from("10")),
+            )
             .await;
 
         // Log assertions

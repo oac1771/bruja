@@ -23,6 +23,6 @@ requester = { workspace = true }
 utils = { workspace = true }
 
 [[test]]
-name = "integration-tests"
-path = "tests/integration.rs"
+name = "requester_worker"
+path = "tests/requester_worker/integration.rs"
 test = false
