@@ -77,7 +77,7 @@ impl SubmitJobCmd {
 
         info!("Job Request Submitted!");
 
-        self.wait_for_job_acceptance(node_client).await;
+        self.wait_for_job_acceptance(node_client).await?;
 
         tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
 
@@ -143,7 +143,9 @@ impl SubmitJobCmd {
         Ok(p)
     }
 
-    async fn wait_for_job_acceptance(&self, node_client: NodeClient) {
-        
+    async fn wait_for_job_acceptance(&self, mut node_client: NodeClient) -> Result<(), Error> {
+        let _messages = node_client.wait_for_messages().await?;
+
+        Ok(())
     }
 }

@@ -1,11 +1,5 @@
 use crate::{config::Config, error::Error};
 use catalog::catalog::JobRequestSubmitted;
-use utils::{
-    chain::contracts::events::ContractEmitted,
-    client::Client,
-    p2p::{NodeBuilder, NodeClient},
-};
-
 use clap::Parser;
 use codec::Decode;
 use ink_env::DefaultEnvironment;
@@ -14,6 +8,11 @@ use subxt::{blocks::Block, utils::AccountId32, OnlineClient, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
 use tokio::{select, signal};
 use tracing::{error, info, instrument};
+use utils::{
+    chain::contracts::events::ContractEmitted,
+    client::Client,
+    p2p::{Message, NodeBuilder, NodeClient},
+};
 
 enum WatchedEvents {
     JobRequest(JobRequestSubmitted),
@@ -121,9 +120,10 @@ impl StartCmd {
         job_request: JobRequestSubmitted,
         node_client: &NodeClient,
     ) -> Result<(), Error> {
-        node_client
-            .publish(&self.address, job_request.id.to_vec())
-            .await?;
+        let job_acceptance = Message::JobAcceptance {
+            job_id: job_request.id.to_vec(),
+        };
+        node_client.publish(&self.address, job_acceptance).await?;
         info!("Published job acceptance");
         Ok(())
     }

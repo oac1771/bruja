@@ -62,10 +62,11 @@ mod tests {
         let worker_runner = WorkerRunner::new(address.clone(), "//Bob");
 
         worker_runner.start().await;
-
         requester_runner
             .submit_job("tests/work_bg.wasm", "foo", Some(String::from("10")))
             .await;
+
+        // Log assertions
         worker_runner
             .assert_log_entry("Starting worker", log_buffer.clone())
             .await;
@@ -215,6 +216,8 @@ mod tests {
                 let buffer = log_buffer.lock().unwrap();
                 let log_output = String::from_utf8(buffer.clone()).unwrap();
                 std::mem::drop(buffer);
+
+                // println!(">>> {}\n", log_output);
 
                 let cursor = Cursor::new(log_output);
 

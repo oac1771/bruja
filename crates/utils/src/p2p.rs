@@ -1,11 +1,9 @@
+use codec::{Decode, Encode};
 use libp2p::{
-    futures::prelude::*,
-    gossipsub, mdns,
-    swarm::{NetworkBehaviour, SwarmEvent},
-    PeerId, Swarm,
+    futures::prelude::*, gossipsub::{self, MessageId}, mdns, swarm::{NetworkBehaviour, SwarmEvent}, PeerId, Swarm
 };
 use std::{
-    collections::hash_map::DefaultHasher,
+    collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
     time::Duration,
 };
@@ -21,6 +19,7 @@ pub struct NodeBuilder;
 
 pub struct Node {
     swarm: Swarm<Behavior>,
+    messages: HashMap<MessageId, (PeerId, Message)>,
 }
 
 pub struct NodeClient {
@@ -73,7 +72,9 @@ impl NodeBuilder {
         let addr = "/ip4/0.0.0.0/tcp/0".parse()?;
         swarm.listen_on(addr)?;
 
-        Ok(Node { swarm })
+        let messages: HashMap<MessageId, (PeerId, Message)> = HashMap::new();
+
+        Ok(Node { swarm, messages })
     }
 }
 
@@ -109,9 +110,14 @@ impl Node {
 
     async fn handle_cmd(&mut self, cmd: Command, resp_tx: &Sender<Response>) {
         match cmd {
-            Command::Publish { topic, val } => {
+            Command::Publish { topic, msg } => {
                 let topic = gossipsub::IdentTopic::new(topic);
-                match self.swarm.behaviour_mut().gossipsub.publish(topic, val) {
+                match self
+                    .swarm
+                    .behaviour_mut()
+                    .gossipsub
+                    .publish(topic, msg.encode())
+                {
                     Ok(msg_id) => {
                         info!("Message sent with ID: {}", msg_id);
                     }
@@ -131,19 +137,14 @@ impl Node {
                     }
                 }
             }
-            Command::CheckConnectedPeers => {
-                let peers = self
-                    .swarm
-                    .behaviour()
-                    .gossipsub
-                    .all_peers()
-                    .map(|(peer, _)| peer.clone())
-                    .collect::<Vec<PeerId>>();
-
-                let response = Response::ConnectedPeers { peers };
-
-                if let Err(err) = resp_tx.send(response).await {
-                    error!("Error CheckConnectedPeers response: {}", err);
+            Command::ReadMessages => {
+                let msgs = self
+                    .messages
+                    .values()
+                    .map(|data| data.clone())
+                    .collect::<Vec<(PeerId, Message)>>();
+                if let Err(err) = resp_tx.send(Response::Messages { msgs }).await {
+                    error!("Error Sending Messages: {}", err);
                 }
             }
         };
@@ -155,10 +156,17 @@ impl Node {
                 propagation_source: peer_id,
                 message_id: id,
                 message,
-            })) => info!(
-                "Got message: '{}' with id: {id} from peer: {peer_id}",
-                String::from_utf8_lossy(&message.data),
-            ),
+            })) => {
+                info!("Received message: with id: {id} from peer: {peer_id}");
+                match <Message as Decode>::decode(&mut message.data.as_slice()) {
+                    Ok(msg) => {
+                        self.messages.insert(id, (peer_id, msg));
+                    }
+                    Err(err) => {
+                        error!("Error Decoding Message: {}", err);
+                    }
+                }
+            }
             SwarmEvent::Behaviour(BehaviorEvent::Gossipsub(gossipsub::Event::Subscribed {
                 peer_id: _peer_id,
                 topic,
@@ -190,10 +198,10 @@ impl Node {
 }
 
 impl NodeClient {
-    pub async fn publish(&self, topic: &str, val: Vec<u8>) -> Result<(), Error> {
+    pub async fn publish(&self, topic: &str, msg: Message) -> Result<(), Error> {
         let cmd = Command::Publish {
             topic: topic.to_string(),
-            val,
+            msg,
         };
 
         self.send(cmd).await?;
@@ -210,22 +218,41 @@ impl NodeClient {
         Ok(())
     }
 
-    // pub async fn wait_for_peers(&mut self) -> Result<Vec<PeerId>, Error> {
-    //     let start = Instant::now();
+    pub async fn read_messages(&mut self) -> Result<Vec<(PeerId, Message)>, Error> {
+        let cmd = Command::ReadMessages;
+        self.send(cmd).await?;
 
-    //     while start.elapsed() < TokioDuration::from_secs(10) {
-    //         let peers = self.check_connected_peers().await?;
-    //         if peers.len() > 0 {
-    //             return Ok(peers);
-    //         } else {
-    //             sleep(TokioDuration::from_secs(1)).await;
-    //         }
-    //     }
+        while let Some(Response::Messages { msgs }) = self.resp_rx.recv().await {
+            return Ok(msgs);
+        }
 
-    //     Err(Error::Other {
-    //         err: "Timed out waiting for peers".to_string(),
-    //     })
-    // }
+        Err(Error::Other {
+            err: "Error receiving response".to_string(),
+        })
+    }
+
+    pub async fn wait_for_messages(&mut self) ->  Result<Vec<(PeerId, Message)>, Error> {
+        let start = Instant::now();
+
+        while start.elapsed() < TokioDuration::from_secs(10) {
+            match self.read_messages().await {
+                Ok(msgs) => {
+                    if msgs.len() > 0 {
+                        return Ok(msgs);
+                    }
+                    sleep(TokioDuration::from_secs(1)).await;
+                },
+                Err(err) => {
+                    error!("error reading messages: {}", err);
+                    sleep(TokioDuration::from_secs(1)).await;
+                }
+            }
+        }
+
+        Err(Error::Other {
+            err: "Timed out waiting for messages".to_string(),
+        })
+    }
 
     async fn send(&self, cmd: Command) -> Result<(), Error> {
         self.cmd_tx
@@ -241,13 +268,18 @@ impl NodeClient {
 
 #[derive(Debug)]
 pub enum Command {
-    Publish { topic: String, val: Vec<u8> },
+    Publish { topic: String, msg: Message },
     Subscribe { topic: String },
-    CheckConnectedPeers,
+    ReadMessages,
 }
 
 pub enum Response {
-    ConnectedPeers { peers: Vec<PeerId> },
+    Messages { msgs: Vec<(PeerId, Message)> },
+}
+
+#[derive(Encode, Decode, Debug, Clone)]
+pub enum Message {
+    JobAcceptance { job_id: Vec<u8> },
 }
 
 #[derive(NetworkBehaviour)]

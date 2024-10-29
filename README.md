@@ -8,7 +8,7 @@ The bruja network leverges a [substrate blockchain](crates/node/README.md) and [
 
 
 # Development
-This project levereges [mise](https://mise.jdx.dev/) to manage dev tools. Follow the directions [here](https://mise.jdx.dev/) to install.
+This project levereges [mise](https://mise.jdx.dev/) to manage dev tools. Follow the directions [here](https://mise.jdx.dev/getting-started.html#quickstart) to install.
 
 Install project dependencies
 ```
