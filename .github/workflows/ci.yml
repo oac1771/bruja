@@ -63,3 +63,7 @@ jobs:
       - name: Contract Integration Tests
         shell: bash
         run: cargo make contract-tests
+
+      - name: P2p Tests
+        shell: bash
+        run: cargo make p2p-tests

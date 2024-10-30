@@ -13,7 +13,7 @@ mod tests {
         config::Config as ConfigW,
     };
 
-    use tests::test_utils::{BufferWriter, Runner};
+    use tests::test_utils::{BufferWriter, Log, Runner};
 
     const ARTIFACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
 
@@ -135,8 +135,12 @@ mod tests {
     }
 
     impl Runner for WorkerRunner {
-        fn target() -> String {
-            "worker::".to_string()
+        fn label(&self) -> &str {
+            "worker::"
+        }
+
+        fn log_filter(&self, log: &Log) -> bool {
+            log.target().contains(self.label())
         }
 
         fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>> {
@@ -172,8 +176,12 @@ mod tests {
     }
 
     impl Runner for RequesterRunner {
-        fn target() -> String {
-            "requester::".to_string()
+        fn label(&self) -> &str {
+            "requester::"
+        }
+
+        fn log_filter(&self, log: &Log) -> bool {
+            log.target().contains(self.label())
         }
 
         fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>> {

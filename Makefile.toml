@@ -39,9 +39,14 @@ script='''
 cargo test -p catalog --test contract-e2e
 '''
 
-[tasks.requester_worker]
+[tasks.requester-worker]
 script='''
 cargo test -p tests --test requester_worker
+'''
+
+[tasks.p2p-tests]
+script='''
+cargo test -p tests --test p2p
 '''
 
 [tasks.local-node]

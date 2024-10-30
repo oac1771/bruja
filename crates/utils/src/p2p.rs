@@ -171,9 +171,9 @@ impl Node {
                     .values()
                     .map(|data| data.clone())
                     .collect::<Vec<GossipMessage>>();
-                if let Err(err) = resp_tx.send(ClientResponse::Messages { msgs }).await {
-                    error!("Error Sending Messages: {}", err);
-                }
+
+                let resp = ClientResponse::GossipMessages { msgs };
+                Self::send_client_response(resp, resp_tx).await;
             }
             ClientRequest::SendRequest { payload, peer_id } => {
                 let request_id = self
@@ -181,11 +181,23 @@ impl Node {
                     .behaviour_mut()
                     .request_response
                     .send_request(&peer_id, Request(payload.encode()));
-                if let Err(err) = resp_tx.send(ClientResponse::RequestId { request_id }).await {
-                    error!("Error sending request_id: {}", err);
-                }
+                let resp = ClientResponse::RequestId { request_id };
+                Self::send_client_response(resp, resp_tx).await;
+            }
+            ClientRequest::GetLocalPeerId => {
+                let peer_id = self.swarm.local_peer_id();
+                let resp = ClientResponse::PeerId {
+                    peer_id: peer_id.clone(),
+                };
+                Self::send_client_response(resp, resp_tx).await;
             }
         };
+    }
+
+    async fn send_client_response(resp: ClientResponse, resp_tx: &Sender<ClientResponse>) {
+        if let Err(err) = resp_tx.send(resp).await {
+            error!("Error sending client response: {}", err);
+        }
     }
 
     fn handle_event(&mut self, event: SwarmEvent<BehaviorEvent>) {
@@ -264,12 +276,11 @@ impl NodeClient {
         let req = ClientRequest::ReadGossipMessages;
         self.send(req).await?;
 
-        while let Some(ClientResponse::Messages { msgs }) = self.resp_rx.recv().await {
+        if let ClientResponse::GossipMessages { msgs } = self.recv().await? {
             return Ok(msgs);
         }
-
         Err(Error::Other {
-            err: "Error receiving response".to_string(),
+            err: "Error receiving gossip messages from node".to_string(),
         })
     }
 
@@ -303,12 +314,23 @@ impl NodeClient {
         let req = ClientRequest::SendRequest { peer_id, payload };
         self.send(req).await?;
 
-        while let Some(ClientResponse::RequestId { request_id }) = self.resp_rx.recv().await {
+        if let ClientResponse::RequestId { request_id } = self.recv().await? {
             return Ok(request_id);
         }
-
         Err(Error::Other {
-            err: "Error receiving response".to_string(),
+            err: "Error receiving request_id from node".to_string(),
+        })
+    }
+
+    pub async fn get_local_peer_id(&mut self) -> Result<PeerId, Error> {
+        let req = ClientRequest::GetLocalPeerId;
+        self.send(req).await?;
+
+        if let ClientResponse::PeerId { peer_id } = self.recv().await? {
+            return Ok(peer_id);
+        }
+        Err(Error::Other {
+            err: "Error receiving local peer id from node".to_string(),
         })
     }
 
@@ -322,6 +344,16 @@ impl NodeClient {
 
         Ok(())
     }
+
+    async fn recv(&mut self) -> Result<ClientResponse, Error> {
+        while let Some(resp) = self.resp_rx.recv().await {
+            return Ok(resp);
+        }
+
+        Err(Error::RecvError {
+            err: "Error receiving response from node".to_string(),
+        })
+    }
 }
 
 #[derive(Debug)]
@@ -330,6 +362,7 @@ pub enum ClientRequest {
     Subscribe { topic: String },
     ReadGossipMessages,
     SendRequest { peer_id: PeerId, payload: Payload },
+    GetLocalPeerId,
 }
 
 #[derive(Debug, Encode)]
@@ -338,8 +371,9 @@ pub enum Payload {
 }
 
 pub enum ClientResponse {
-    Messages { msgs: Vec<GossipMessage> },
+    GossipMessages { msgs: Vec<GossipMessage> },
     RequestId { request_id: OutboundRequestId },
+    PeerId { peer_id: PeerId },
 }
 
 #[derive(Encode, Decode, Debug, Clone)]
@@ -410,6 +444,9 @@ pub enum Error {
 
     #[error("Channel Send Error: {err}")]
     SendError { err: String },
+
+    #[error("Channel Receive Error: {err}")]
+    RecvError { err: String },
 
     #[error("Error: {err}")]
     Other { err: String },

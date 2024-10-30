@@ -1,5 +1,6 @@
 use serde::Deserialize;
 use serde_json::Deserializer;
+use serde_json::Value;
 use std::{
     io::{Cursor, Write},
     sync::{Arc, Mutex},
@@ -27,9 +28,11 @@ impl Write for BufferWriter {
 
 #[allow(async_fn_in_trait)]
 pub trait Runner {
-    fn target() -> String;
+    fn label(&self) -> &str;
 
     fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>>;
+
+    fn log_filter(&self, log: &Log) -> bool;
 
     async fn assert_log_entry(&self, entry: &str) {
         select! {
@@ -57,7 +60,7 @@ pub trait Runner {
             logs = Deserializer::from_reader(cursor.clone())
                 .into_iter::<Log>()
                 .map(|log| log.unwrap())
-                .filter(|log| log.target.contains(&Self::target()))
+                .filter(|log| self.log_filter(log))
                 .filter(|log| match &log.fields {
                     Fields::Message { message } => message == entry,
                     _ => false,
@@ -70,9 +73,20 @@ pub trait Runner {
 }
 
 #[derive(Deserialize, Debug)]
-struct Log {
+pub struct Log {
     fields: Fields,
     target: String,
+    spans: Vec<Value>,
+}
+
+impl Log {
+    pub fn target(&self) -> String {
+        self.target.to_string()
+    }
+
+    pub fn spans(&self) -> &Vec<Value> {
+        &self.spans
+    }
 }
 
 #[derive(Deserialize, Debug)]
