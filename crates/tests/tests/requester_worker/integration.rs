@@ -30,10 +30,10 @@ mod tests {
             .set_default();
         let address = instantiate_contract("//Alice").await;
 
-        let worker_runner = WorkerRunner::new(address, "//Alice");
+        let worker_runner = WorkerRunner::new(address, "//Alice", log_buffer.clone());
         worker_runner.register(10).await;
         worker_runner
-            .assert_log_entry("Successfully registered worker!", log_buffer.clone())
+            .assert_log_entry("Successfully registered worker!")
             .await;
     }
 
@@ -51,8 +51,8 @@ mod tests {
 
         let address = instantiate_contract("//Bob").await;
 
-        let requester_runner = RequesterRunner::new(address.clone(), "//Bob");
-        let worker_runner = WorkerRunner::new(address.clone(), "//Bob");
+        let requester_runner = RequesterRunner::new(address.clone(), "//Bob", log_buffer.clone());
+        let worker_runner = WorkerRunner::new(address.clone(), "//Bob", log_buffer.clone());
 
         worker_runner.start().await;
         requester_runner
@@ -64,20 +64,18 @@ mod tests {
             .await;
 
         // Log assertions
+        worker_runner.assert_log_entry("Starting worker").await;
+        requester_runner
+            .assert_log_entry("Job Request Submitted!")
+            .await;
         worker_runner
-            .assert_log_entry("Starting worker", log_buffer.clone())
+            .assert_log_entry("Found JobRequest Event")
+            .await;
+        worker_runner
+            .assert_log_entry("Published job acceptance")
             .await;
         requester_runner
-            .assert_log_entry("Job Request Submitted!", log_buffer.clone())
-            .await;
-        worker_runner
-            .assert_log_entry("Found JobRequest Event", log_buffer.clone())
-            .await;
-        worker_runner
-            .assert_log_entry("Published job acceptance", log_buffer.clone())
-            .await;
-        requester_runner
-            .assert_log_entry("Messages received!", log_buffer.clone())
+            .assert_log_entry("Messages received!")
             .await;
     }
 
@@ -95,17 +93,23 @@ mod tests {
     struct WorkerRunner {
         config: ConfigW,
         address: AccountId32,
+        log_buffer: Arc<Mutex<Vec<u8>>>,
     }
 
     struct RequesterRunner {
         config: ConfigR,
         address: AccountId32,
+        log_buffer: Arc<Mutex<Vec<u8>>>,
     }
 
     impl WorkerRunner {
-        fn new(address: AccountId32, suri: &str) -> Self {
+        fn new(address: AccountId32, suri: &str, log_buffer: Arc<Mutex<Vec<u8>>>) -> Self {
             let config = ConfigW::new(suri, ARTIFACT_FILE_PATH.to_string());
-            Self { config, address }
+            Self {
+                config,
+                address,
+                log_buffer,
+            }
         }
 
         async fn register(&self, val: u32) {
@@ -134,12 +138,20 @@ mod tests {
         fn label() -> String {
             "worker::".to_string()
         }
+
+        fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>> {
+            self.log_buffer.clone()
+        }
     }
 
     impl RequesterRunner {
-        fn new(address: AccountId32, suri: &str) -> Self {
+        fn new(address: AccountId32, suri: &str, log_buffer: Arc<Mutex<Vec<u8>>>) -> Self {
             let config = ConfigR::new(suri, ARTIFACT_FILE_PATH.to_string());
-            Self { config, address }
+            Self {
+                config,
+                address,
+                log_buffer,
+            }
         }
 
         async fn submit_job(&self, path: &str, func_name: &str, params: Option<String>) {
@@ -162,6 +174,10 @@ mod tests {
     impl Runner for RequesterRunner {
         fn label() -> String {
             "requester::".to_string()
+        }
+
+        fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>> {
+            self.log_buffer.clone()
         }
     }
 }

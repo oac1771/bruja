@@ -29,21 +29,25 @@ impl Write for BufferWriter {
 pub trait Runner {
     fn label() -> String;
 
-    async fn assert_log_entry(&self, entry: &str, log_buffer: Arc<Mutex<Vec<u8>>>) {
+    fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>>;
+
+    async fn assert_log_entry(&self, entry: &str) {
         select! {
             _ = sleep(Duration::from_secs(10)) => {
+                let log_buffer = self.log_buffer();
                 let buffer = log_buffer.lock().unwrap();
                 let output = String::from_utf8(buffer.clone()).unwrap();
                 panic!("Failed to find log entry: {}\nLogs: {}", entry.to_string(), output)
             },
-            _ = self.parse_logs(entry, log_buffer.clone()) => {}
+            _ = self.parse_logs(entry) => {}
         }
     }
 
-    async fn parse_logs(&self, entry: &str, log_buffer: Arc<Mutex<Vec<u8>>>) {
+    async fn parse_logs(&self, entry: &str) {
         let mut logs: Vec<Log> = vec![];
 
         while logs.len() == 0 {
+            let log_buffer = self.log_buffer();
             let buffer = log_buffer.lock().unwrap();
             let log_output = String::from_utf8(buffer.clone()).unwrap();
             std::mem::drop(buffer);

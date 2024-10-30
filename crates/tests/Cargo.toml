@@ -26,3 +26,8 @@ utils = { workspace = true }
 name = "requester_worker"
 path = "tests/requester_worker/integration.rs"
 test = false
+
+[[test]]
+name = "p2p"
+path = "tests/p2p/integration.rs"
+test = false
