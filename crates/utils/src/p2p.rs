@@ -19,7 +19,7 @@ use tokio::{
     task::{spawn, JoinHandle},
     time::{sleep, Duration as TokioDuration, Instant},
 };
-use tracing::{error, info};
+use tracing::{error, info, info_span, Instrument};
 
 pub struct NodeBuilder;
 
@@ -104,12 +104,15 @@ impl Node {
         let (req_tx, req_rx) = mpsc::channel::<ClientRequest>(100);
         let (resp_tx, resp_rx) = mpsc::channel::<ClientResponse>(100);
 
-        let handle = spawn(async move {
-            match self.run(req_rx, resp_tx).await {
-                Ok(_) => Ok(()),
-                Err(err) => Err(err),
+        let handle = spawn(
+            async move {
+                match self.run(req_rx, resp_tx).await {
+                    Ok(_) => Ok(()),
+                    Err(err) => Err(err),
+                }
             }
-        });
+            .instrument(info_span!("")),
+        );
 
         let node_client = NodeClient { req_tx, resp_rx };
 

@@ -1,4 +1,3 @@
-
 # Bruja
 
 Bruja network is a decentralized platform which connects users enabling them to share their unused computing power or access resources as needed. Bruja leverages a [substrate](https://substrate.io/) based blockchain as a settlement layer, [ink smart contract](https://use.ink/) to facilitate job requests, and [libp2p](https://docs.rs/libp2p/0.54.1/libp2p/) allow communication between requesters and workers.

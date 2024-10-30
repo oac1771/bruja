@@ -2,11 +2,13 @@
 mod tests {
     use std::sync::{Arc, Mutex};
     use tests::test_utils::{BufferWriter, Runner};
+    use tokio::task::JoinHandle;
+    use tracing::info_span;
     use tracing_subscriber::util::SubscriberInitExt;
-    use utils::p2p::{Node, NodeBuilder};
+    use utils::p2p::{Error, NodeBuilder, NodeClient};
 
     #[tokio::test]
-    async fn foo() {
+    async fn peer_discovery_success() {
         let log_buffer = Arc::new(Mutex::new(Vec::new()));
         let buffer = log_buffer.clone();
 
@@ -17,27 +19,32 @@ mod tests {
             })
             .set_default();
 
-        let node_runner_1 = NodeRunner::new(log_buffer.clone());
-        let ndoe_runner_2 = NodeRunner::new(log_buffer.clone());
+        let node_runner_1 = NodeRunner::new(log_buffer.clone(), "foo".to_string());
+        let node_runner_2 = NodeRunner::new(log_buffer.clone(), "bar".to_string());
 
-        let _ = node_runner_1.start();
+        let (_foo, _node_client_1) = node_runner_1.start();
+        let (_bar, _node_client_2) = node_runner_2.start();
 
         node_runner_1.assert_log_entry("foo").await;
     }
 
     struct NodeRunner {
         log_buffer: Arc<Mutex<Vec<u8>>>,
+        name: String,
     }
 
     impl NodeRunner {
-        fn new(log_buffer: Arc<Mutex<Vec<u8>>>) -> Self {
-            Self { log_buffer }
+        fn new(log_buffer: Arc<Mutex<Vec<u8>>>, name: String) -> Self {
+            Self { log_buffer, name }
         }
 
-        fn start(&self) {
-            let node = NodeBuilder::build().unwrap();
+        fn start(&self) -> (JoinHandle<Result<(), Error>>, NodeClient) {
+            let span = info_span!("{}", self.name).entered();
 
+            let node = NodeBuilder::build().unwrap();
             let (handle, node_client) = node.start().unwrap();
+
+            (handle, node_client)
         }
     }
 

@@ -33,7 +33,7 @@ pub trait Runner {
 
     async fn assert_log_entry(&self, entry: &str) {
         select! {
-            _ = sleep(Duration::from_secs(10)) => {
+            _ = sleep(Duration::from_secs(5)) => {
                 let log_buffer = self.log_buffer();
                 let buffer = log_buffer.lock().unwrap();
                 let output = String::from_utf8(buffer.clone()).unwrap();

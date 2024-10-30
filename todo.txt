@@ -1,3 +1,6 @@
+- testing:
+    - add label to worker/requester that is behind a cfg(test) feature gate
+
 - cancelation token to kill process in case governance says to do it
 
 - requester
