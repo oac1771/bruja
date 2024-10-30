@@ -2,8 +2,8 @@
 mod tests {
     use std::sync::{Arc, Mutex};
     use tests::test_utils::{BufferWriter, Runner};
-    use utils::p2p::{NodeBuilder, Node};
     use tracing_subscriber::util::SubscriberInitExt;
+    use utils::p2p::{Node, NodeBuilder};
 
     #[tokio::test]
     async fn foo() {
@@ -19,23 +19,31 @@ mod tests {
 
         let node_runner_1 = NodeRunner::new(log_buffer.clone());
         let ndoe_runner_2 = NodeRunner::new(log_buffer.clone());
+
+        let _ = node_runner_1.start();
+
+        node_runner_1.assert_log_entry("foo").await;
     }
 
     struct NodeRunner {
         log_buffer: Arc<Mutex<Vec<u8>>>,
-        node: Node
     }
 
     impl NodeRunner {
         fn new(log_buffer: Arc<Mutex<Vec<u8>>>) -> Self {
+            Self { log_buffer }
+        }
+
+        fn start(&self) {
             let node = NodeBuilder::build().unwrap();
-            Self { log_buffer, node }
+
+            let (handle, node_client) = node.start().unwrap();
         }
     }
 
     impl Runner for NodeRunner {
-        fn label() -> String {
-            "foo::".to_string()
+        fn target() -> String {
+            "utils::p2p".to_string()
         }
 
         fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>> {

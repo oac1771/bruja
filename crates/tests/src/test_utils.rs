@@ -27,7 +27,7 @@ impl Write for BufferWriter {
 
 #[allow(async_fn_in_trait)]
 pub trait Runner {
-    fn label() -> String;
+    fn target() -> String;
 
     fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>>;
 
@@ -57,7 +57,7 @@ pub trait Runner {
             logs = Deserializer::from_reader(cursor.clone())
                 .into_iter::<Log>()
                 .map(|log| log.unwrap())
-                .filter(|log| log.target.contains(&Self::label()))
+                .filter(|log| log.target.contains(&Self::target()))
                 .filter(|log| match &log.fields {
                     Fields::Message { message } => message == entry,
                     _ => false,

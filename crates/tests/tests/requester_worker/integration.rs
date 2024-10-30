@@ -135,7 +135,7 @@ mod tests {
     }
 
     impl Runner for WorkerRunner {
-        fn label() -> String {
+        fn target() -> String {
             "worker::".to_string()
         }
 
@@ -172,7 +172,7 @@ mod tests {
     }
 
     impl Runner for RequesterRunner {
-        fn label() -> String {
+        fn target() -> String {
             "requester::".to_string()
         }
 
