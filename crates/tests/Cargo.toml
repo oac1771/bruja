@@ -7,7 +7,7 @@ license.workspace = true
 homepage.workspace = true
 repository.workspace = true
 
-[dev-dependencies]
+[dependencies]
 tracing-subscriber = { workspace = true , features = ["json"] }
 tracing = { workspace = true, features = ["attributes"] }
 tokio = { workspace = true, features = ["rt-multi-thread"] }

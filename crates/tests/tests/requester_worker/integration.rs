@@ -2,18 +2,9 @@
 mod tests {
     use ink_env::DefaultEnvironment;
     use requester::{commands::submit_job::SubmitJobCmd, config::Config as ConfigR};
-    use serde::Deserialize;
-    use serde_json::Deserializer;
-    use std::{
-        io::{Cursor, Write},
-        sync::{Arc, Mutex},
-    };
+    use std::sync::{Arc, Mutex};
     use subxt::{utils::AccountId32, SubstrateConfig};
     use subxt_signer::sr25519::Keypair;
-    use tokio::{
-        select,
-        time::{sleep, Duration},
-    };
     use tracing::{Instrument, Span};
     use tracing_subscriber::util::SubscriberInitExt;
     use utils::client::Client;
@@ -21,6 +12,8 @@ mod tests {
         commands::{register::RegisterCmd, start::StartCmd},
         config::Config as ConfigW,
     };
+
+    use tests::test_utils::{BufferWriter, Runner};
 
     const ARTIFACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
 
@@ -88,22 +81,6 @@ mod tests {
             .await;
     }
 
-    struct BufferWriter {
-        buffer: Arc<Mutex<Vec<u8>>>,
-    }
-
-    impl Write for BufferWriter {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            let mut buffer = self.buffer.lock().unwrap();
-            buffer.extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            Ok(())
-        }
-    }
-
     async fn instantiate_contract(suri: &str) -> AccountId32 {
         let config = ConfigW::new(suri, ARTIFACT_FILE_PATH.to_string());
         let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
@@ -113,24 +90,6 @@ mod tests {
         let address = contract_client.instantiate("new").await.unwrap();
 
         address
-    }
-
-    #[derive(Deserialize, Debug)]
-    struct Log {
-        fields: Fields,
-        target: String,
-    }
-
-    #[derive(Deserialize, Debug)]
-    #[serde(untagged)]
-    enum Fields {
-        #[allow(unused)]
-        LocalPeerId {
-            local_peer_id: String,
-        },
-        Message {
-            message: String,
-        },
     }
 
     struct WorkerRunner {
@@ -203,45 +162,6 @@ mod tests {
     impl Runner for RequesterRunner {
         fn label() -> String {
             "requester::".to_string()
-        }
-    }
-
-    trait Runner {
-        fn label() -> String;
-
-        async fn assert_log_entry(&self, entry: &str, log_buffer: Arc<Mutex<Vec<u8>>>) {
-            select! {
-                _ = sleep(Duration::from_secs(10)) => {
-                    let buffer = log_buffer.lock().unwrap();
-                    let output = String::from_utf8(buffer.clone()).unwrap();
-                    panic!("Failed to find log entry: {}\nLogs: {}", entry.to_string(), output)
-                },
-                _ = self.parse_logs(entry, log_buffer.clone()) => {}
-            }
-        }
-
-        async fn parse_logs(&self, entry: &str, log_buffer: Arc<Mutex<Vec<u8>>>) {
-            let mut logs: Vec<Log> = vec![];
-
-            while logs.len() == 0 {
-                let buffer = log_buffer.lock().unwrap();
-                let log_output = String::from_utf8(buffer.clone()).unwrap();
-                std::mem::drop(buffer);
-
-                let cursor = Cursor::new(log_output);
-
-                logs = Deserializer::from_reader(cursor.clone())
-                    .into_iter::<Log>()
-                    .map(|log| log.unwrap())
-                    .filter(|log| log.target.contains(&Self::label()))
-                    .filter(|log| match &log.fields {
-                        Fields::Message { message } => message == entry,
-                        _ => false,
-                    })
-                    .collect::<Vec<Log>>();
-
-                let _ = sleep(Duration::from_millis(100)).await;
-            }
         }
     }
 }
