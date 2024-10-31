@@ -4,7 +4,12 @@ mod tests {
     use tests::test_utils::{Log, Runner};
     use tokio::task::JoinHandle;
     use tracing::instrument;
-    use utils::p2p::{Error, NodeBuilder, NodeClient};
+    use utils::p2p::{Error, Message, NodeBuilder, NodeClient};
+
+    use rand::{
+        distributions::Alphanumeric,
+        {thread_rng, Rng},
+    };
 
     struct NodeRunner<'a> {
         log_buffer: Arc<Mutex<Vec<u8>>>,
@@ -58,5 +63,43 @@ mod tests {
         node_2
             .assert_log_entry(format!("mDNS discovered a new peer: {}", peer_id_1).as_str())
             .await;
+    }
+
+    #[test_macro::test]
+    async fn publish_gossip_message(log_buffer: Arc<Mutex<Vec<u8>>>) {
+        let topic: String = thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(5)
+            .map(|val| char::from(val))
+            .collect();
+        let expected_job_id = vec![1, 2, 3, 4, 5];
+
+        let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
+        let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
+
+        let (_, client_1) = node_1.start();
+        let (_, mut client_2) = node_2.start();
+
+        client_1.subscribe(&topic).await.unwrap();
+        client_2.subscribe(&topic).await.unwrap();
+
+        node_1
+            .assert_log_entry(format!("A remote subscribed to a topic: {}", topic).as_str())
+            .await;
+        node_2
+            .assert_log_entry(format!("A remote subscribed to a topic: {}", topic).as_str())
+            .await;
+
+        let msg = Message::JobAcceptance {
+            job_id: expected_job_id.clone(),
+        };
+        client_1.publish(&topic, msg).await.unwrap();
+
+        let msgs = client_2.read_gossip_messages().await.unwrap();
+        assert!(msgs.len() > 0);
+        msgs.into_iter().for_each(|msg| {
+            let Message::JobAcceptance { job_id } = msg.message();
+            assert_eq!(job_id, expected_job_id.clone())
+        });
     }
 }

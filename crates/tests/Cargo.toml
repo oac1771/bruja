@@ -17,6 +17,7 @@ ink_env = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 test_macro = { path = "./test_macro" }
+rand = { workspace = true }
 
 worker = { workspace = true }
 requester = { workspace = true }

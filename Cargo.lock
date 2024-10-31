@@ -13002,6 +13002,7 @@ name = "tests"
 version = "0.0.1"
 dependencies = [
  "ink_env",
+ "rand",
  "requester",
  "serde",
  "serde_json",

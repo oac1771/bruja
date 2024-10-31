@@ -35,7 +35,7 @@ pub struct NodeClient {
 
 impl NodeBuilder {
     pub fn build() -> Result<Node, Error> {
-        let mut swarm = libp2p::SwarmBuilder::with_new_identity()
+        let swarm = libp2p::SwarmBuilder::with_new_identity()
             .with_tokio()
             .with_tcp(
                 libp2p::tcp::Config::default(),
@@ -87,9 +87,6 @@ impl NodeBuilder {
             })
             .build();
 
-        let addr = "/ip4/0.0.0.0/tcp/0".parse()?;
-        swarm.listen_on(addr)?;
-
         let gossip_messages: HashMap<MessageId, GossipMessage> = HashMap::new();
 
         Ok(Node {
@@ -103,6 +100,9 @@ impl Node {
     pub fn start(mut self) -> Result<(JoinHandle<Result<(), Error>>, NodeClient), Error> {
         let (req_tx, req_rx) = mpsc::channel::<ClientRequest>(100);
         let (resp_tx, resp_rx) = mpsc::channel::<ClientResponse>(100);
+
+        let addr = "/ip4/0.0.0.0/tcp/0".parse()?;
+        self.swarm.listen_on(addr)?;
 
         let handle = spawn(
             async move {
@@ -272,7 +272,7 @@ impl NodeClient {
         Ok(())
     }
 
-    pub async fn read_gossip_messages(&mut self) -> Result<Vec<GossipMessage>, Error> {
+    pub async fn get_gossip_messages(&mut self) -> Result<Vec<GossipMessage>, Error> {
         let req = ClientRequest::ReadGossipMessages;
         self.send(req).await?;
 
@@ -284,11 +284,11 @@ impl NodeClient {
         })
     }
 
-    pub async fn wait_for_gossip_messages(&mut self) -> Result<Vec<GossipMessage>, Error> {
+    pub async fn read_gossip_messages(&mut self) -> Result<Vec<GossipMessage>, Error> {
         let start = Instant::now();
 
         while start.elapsed() < TokioDuration::from_secs(10) {
-            match self.read_gossip_messages().await {
+            match self.get_gossip_messages().await {
                 Ok(msgs) => {
                     if msgs.len() > 0 {
                         return Ok(msgs);
@@ -298,7 +298,7 @@ impl NodeClient {
                     error!("Error reading messages: {}", err);
                 }
             }
-            sleep(TokioDuration::from_secs(1)).await;
+            sleep(TokioDuration::from_millis(500)).await;
         }
 
         Err(Error::Other {
