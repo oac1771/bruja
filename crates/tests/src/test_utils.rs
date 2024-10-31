@@ -43,22 +43,20 @@ pub trait Runner {
     }
 
     async fn assert_info_log_entry(&self, entry: &str) {
-        select! {
-            _ = sleep(Duration::from_secs(5)) => {
-                let output = self.log_output();
-                panic!("Failed to find info entry: {}\nLogs: {}", entry.to_string(), output)
-            },
-            _ = self.parse_logs(entry, tracing::Level::INFO) => {}
-        }
+        self.assert_log(entry, tracing::Level::INFO).await;
     }
 
     async fn assert_error_log_entry(&self, entry: &str) {
+        self.assert_log(entry, tracing::Level::ERROR).await;
+    }
+
+    async fn assert_log(&self, entry: &str, level: tracing::Level) {
         select! {
             _ = sleep(Duration::from_secs(5)) => {
                 let output = self.log_output();
                 panic!("Failed to find log entry: {}\nLogs: {}", entry.to_string(), output)
             },
-            _ = self.parse_logs(entry, tracing::Level::ERROR) => {}
+            _ = self.parse_logs(entry, level) => {}
         }
     }
 
