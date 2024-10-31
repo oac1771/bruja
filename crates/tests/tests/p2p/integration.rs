@@ -58,10 +58,10 @@ mod tests {
         let peer_id_2 = client_2.get_local_peer_id().await.unwrap();
 
         node_1
-            .assert_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_2))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_2))
             .await;
         node_2
-            .assert_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_1))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_1))
             .await;
     }
 
@@ -84,10 +84,10 @@ mod tests {
         client_2.subscribe(&topic).await.unwrap();
 
         node_1
-            .assert_log_entry(&format!("A remote subscribed to a topic: {}", topic))
+            .assert_info_log_entry(&format!("A remote subscribed to a topic: {}", topic))
             .await;
         node_2
-            .assert_log_entry(&format!("A remote subscribed to a topic: {}", topic))
+            .assert_info_log_entry(&format!("A remote subscribed to a topic: {}", topic))
             .await;
 
         let msg = Message::JobAcceptance {
@@ -95,7 +95,7 @@ mod tests {
         };
         client_1.publish(&topic, msg).await.unwrap();
         node_1
-            .assert_log_entry(&format!(
+            .assert_info_log_entry(&format!(
                 "Successfully published message to {} topic",
                 topic
             ))
@@ -111,6 +111,32 @@ mod tests {
     }
 
     #[test_macro::test]
+    async fn publish_gossip_message_fails_with_insuficient_peers_when_there_are_no_peers(
+        log_buffer: Arc<Mutex<Vec<u8>>>,
+    ) {
+        let topic: String = thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(5)
+            .map(|val| char::from(val))
+            .collect();
+        let msg = Message::JobAcceptance { job_id: vec![] };
+
+        let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
+
+        let (_, client_1) = node_1.start();
+        client_1.subscribe(&topic).await.unwrap();
+        if let Err(Error::PublishError { source }) = client_1.publish(&topic, msg).await {
+            if let libp2p::gossipsub::PublishError::InsufficientPeers = source {
+                node_1
+                    .assert_error_log_entry(&format!("Publishing Error: {}", source))
+                    .await;
+            }
+        } else {
+            panic!("Publish command did not error")
+        }
+    }
+
+    #[test_macro::test]
     async fn send_request_to_node(log_buffer: Arc<Mutex<Vec<u8>>>) {
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
         let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
@@ -122,17 +148,17 @@ mod tests {
         let peer_id2 = client_2.get_local_peer_id().await.unwrap();
 
         node_1
-            .assert_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))
             .await;
         node_2
-            .assert_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
             .await;
 
         let payload = Payload::Job;
         client_1.send_request(peer_id2, payload).await.unwrap();
 
         node_2
-            .assert_log_entry(&format!(
+            .assert_info_log_entry(&format!(
                 "Received request response message from peer: {}",
                 peer_id1
             ))

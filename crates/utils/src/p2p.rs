@@ -1,7 +1,7 @@
 use codec::{Decode, Encode};
 use libp2p::{
     futures::prelude::*,
-    gossipsub::{self, MessageId, SubscriptionError},
+    gossipsub::{self, MessageId, PublishError, SubscriptionError},
     mdns,
     request_response::{self, OutboundRequestId, ProtocolSupport},
     swarm::{NetworkBehaviour, SwarmEvent},
@@ -141,21 +141,21 @@ impl Node {
         resp_tx: &Sender<ClientResponse>,
     ) {
         match request {
-            ClientRequest::Publish { topic, msg } => {
+            ClientRequest::Publish { topic, msg, sender } => {
                 let tpc = gossipsub::IdentTopic::new(&topic);
-                match self
+                let result = if let Err(err) = self
                     .swarm
                     .behaviour_mut()
                     .gossipsub
                     .publish(tpc, msg.encode())
                 {
-                    Ok(_) => {
-                        info!("Successfully published message to {} topic", topic);
-                    }
-                    Err(err) => {
-                        error!("Publish Error: {}", err);
-                    }
-                }
+                    error!("Publishing Error: {}", err);
+                    Err(err)
+                } else {
+                    info!("Successfully published message to {} topic", topic);
+                    Ok(())
+                };
+                let _ = sender.send(result);
             }
             ClientRequest::Subscribe { topic, sender } => {
                 let topic = gossipsub::IdentTopic::new(topic);
@@ -267,12 +267,15 @@ impl Node {
 
 impl NodeClient {
     pub async fn publish(&self, topic: &str, msg: Message) -> Result<(), Error> {
+        let (sender, receiver) = oneshot::channel::<Result<(), PublishError>>();
         let req = ClientRequest::Publish {
             topic: topic.to_string(),
             msg,
+            sender,
         };
 
         self.send(req).await?;
+        receiver.await??;
 
         Ok(())
     }
@@ -378,6 +381,7 @@ pub enum ClientRequest {
     Publish {
         topic: String,
         msg: Message,
+        sender: oneshot::Sender<Result<(), PublishError>>,
     },
     Subscribe {
         topic: String,
@@ -466,6 +470,12 @@ pub enum Error {
     SubscriptionError {
         #[from]
         source: libp2p::gossipsub::SubscriptionError,
+    },
+
+    #[error("{source}")]
+    PublishError {
+        #[from]
+        source: libp2p::gossipsub::PublishError,
     },
 
     #[error("{source}")]

@@ -22,7 +22,7 @@ mod tests {
         let worker_runner = WorkerRunner::new(address, "//Alice", log_buffer.clone());
         worker_runner.register(10).await;
         worker_runner
-            .assert_log_entry("Successfully registered worker!")
+            .assert_info_log_entry("Successfully registered worker!")
             .await;
     }
 
@@ -42,18 +42,18 @@ mod tests {
             )
             .await;
 
-        worker_runner.assert_log_entry("Starting worker").await;
+        worker_runner.assert_info_log_entry("Starting worker").await;
         requester_runner
-            .assert_log_entry("Job Request Submitted!")
+            .assert_info_log_entry("Job Request Submitted!")
             .await;
         worker_runner
-            .assert_log_entry("Found JobRequest Event")
+            .assert_info_log_entry("Found JobRequest Event")
             .await;
         worker_runner
-            .assert_log_entry("Published job acceptance")
+            .assert_info_log_entry("Published job acceptance")
             .await;
         requester_runner
-            .assert_log_entry("Messages received!")
+            .assert_info_log_entry("Messages received!")
             .await;
     }
 

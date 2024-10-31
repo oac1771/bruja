@@ -13002,6 +13002,7 @@ name = "tests"
 version = "0.0.1"
 dependencies = [
  "ink_env",
+ "libp2p 0.54.1",
  "rand",
  "requester",
  "serde",

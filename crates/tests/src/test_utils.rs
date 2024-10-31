@@ -34,19 +34,35 @@ pub trait Runner {
 
     fn log_filter(&self, log: &Log) -> bool;
 
-    async fn assert_log_entry(&self, entry: &str) {
+    fn log_output(&self) -> String {
+        let log_buffer = self.log_buffer();
+        let buffer = log_buffer.lock().unwrap();
+        let output = String::from_utf8(buffer.clone()).unwrap();
+
+        output
+    }
+
+    async fn assert_info_log_entry(&self, entry: &str) {
         select! {
             _ = sleep(Duration::from_secs(5)) => {
-                let log_buffer = self.log_buffer();
-                let buffer = log_buffer.lock().unwrap();
-                let output = String::from_utf8(buffer.clone()).unwrap();
-                panic!("Failed to find log entry: {}\nLogs: {}", entry.to_string(), output)
+                let output = self.log_output();
+                panic!("Failed to find info entry: {}\nLogs: {}", entry.to_string(), output)
             },
-            _ = self.parse_logs(entry) => {}
+            _ = self.parse_logs(entry, tracing::Level::INFO) => {}
         }
     }
 
-    async fn parse_logs(&self, entry: &str) {
+    async fn assert_error_log_entry(&self, entry: &str) {
+        select! {
+            _ = sleep(Duration::from_secs(5)) => {
+                let output = self.log_output();
+                panic!("Failed to find log entry: {}\nLogs: {}", entry.to_string(), output)
+            },
+            _ = self.parse_logs(entry, tracing::Level::ERROR) => {}
+        }
+    }
+
+    async fn parse_logs(&self, entry: &str, level: tracing::Level) {
         let mut logs: Vec<Log> = vec![];
 
         while logs.len() == 0 {
@@ -60,6 +76,7 @@ pub trait Runner {
             logs = Deserializer::from_reader(cursor.clone())
                 .into_iter::<Log>()
                 .map(|log| log.unwrap())
+                .filter(|log| log.level == level.as_str())
                 .filter(|log| self.log_filter(log))
                 .filter(|log| match &log.fields {
                     Fields::Message { message } => message == entry,
@@ -77,6 +94,7 @@ pub struct Log {
     fields: Fields,
     target: String,
     spans: Vec<Value>,
+    level: String,
 }
 
 impl Log {
