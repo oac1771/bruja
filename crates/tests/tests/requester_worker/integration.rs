@@ -5,13 +5,13 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use subxt::{utils::AccountId32, SubstrateConfig};
     use subxt_signer::sr25519::Keypair;
+    use tests::test_utils::{Log, Runner};
     use tracing::{Instrument, Span};
     use utils::client::Client;
     use worker::{
         commands::{register::RegisterCmd, start::StartCmd},
         config::Config as ConfigW,
     };
-    use tests::test_utils::{Log, Runner};
 
     const ARTIFACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
 
@@ -28,7 +28,6 @@ mod tests {
 
     #[test_macro::test]
     async fn submit_job(log_buffer: Arc<Mutex<Vec<u8>>>) {
-
         let address = instantiate_contract("//Bob").await;
 
         let requester_runner = RequesterRunner::new(address.clone(), "//Bob", log_buffer.clone());

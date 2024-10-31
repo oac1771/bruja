@@ -17,7 +17,7 @@ pub fn test(_attr: TokenStream, item: TokenStream) -> TokenStream {
             let log_buffer: Arc<Mutex<Vec<u8>>> = Arc::new(Mutex::new(Vec::new()));
             let buffer = log_buffer.clone();
 
-            let _guard = tracing_subscriber::fmt()
+            let _guard = ::tracing_subscriber::fmt()
                 .json()
                 .with_writer(move || ::tests::test_utils::BufferWriter {
                     buffer: buffer.clone(),

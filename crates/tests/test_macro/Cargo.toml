@@ -6,7 +6,6 @@ edition = "2021"
 [dependencies]
 quote = "1"
 syn = { version = "2", features = ["full"] }
-tracing-subscriber = { workspace = true , features = ["json"] }
 
 [lib]
 proc-macro = true
