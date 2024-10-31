@@ -6,28 +6,17 @@ mod tests {
     use subxt::{utils::AccountId32, SubstrateConfig};
     use subxt_signer::sr25519::Keypair;
     use tracing::{Instrument, Span};
-    use tracing_subscriber::util::SubscriberInitExt;
     use utils::client::Client;
     use worker::{
         commands::{register::RegisterCmd, start::StartCmd},
         config::Config as ConfigW,
     };
-
-    use tests::test_utils::{BufferWriter, Log, Runner};
+    use tests::test_utils::{Log, Runner};
 
     const ARTIFACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
 
-    #[tokio::test]
-    async fn register_worker() {
-        let log_buffer = Arc::new(Mutex::new(Vec::new()));
-        let buffer = log_buffer.clone();
-
-        let _guard = tracing_subscriber::fmt()
-            .json()
-            .with_writer(move || BufferWriter {
-                buffer: buffer.clone(),
-            })
-            .set_default();
+    #[test_macro::test]
+    async fn register_worker(log_buffer: Arc<Mutex<Vec<u8>>>) {
         let address = instantiate_contract("//Alice").await;
 
         let worker_runner = WorkerRunner::new(address, "//Alice", log_buffer.clone());
@@ -37,17 +26,8 @@ mod tests {
             .await;
     }
 
-    #[tokio::test]
-    async fn submit_job() {
-        let log_buffer = Arc::new(Mutex::new(Vec::new()));
-        let buffer = log_buffer.clone();
-
-        let _guard = tracing_subscriber::fmt()
-            .json()
-            .with_writer(move || BufferWriter {
-                buffer: buffer.clone(),
-            })
-            .set_default();
+    #[test_macro::test]
+    async fn submit_job(log_buffer: Arc<Mutex<Vec<u8>>>) {
 
         let address = instantiate_contract("//Bob").await;
 

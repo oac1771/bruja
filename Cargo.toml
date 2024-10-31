@@ -16,7 +16,8 @@ members = [
 	"crates/worker", 
 	"crates/scripts", 
 	"crates/requester", 
-	"crates/tests"
+	"crates/tests",
+	"crates/tests/test_macro"
 ]
 
 [workspace.dependencies]

@@ -1,10 +1,9 @@
 #[cfg(test)]
 mod tests {
     use std::sync::{Arc, Mutex};
-    use tests::test_utils::{BufferWriter, Log, Runner};
+    use tests::test_utils::{Log, Runner};
     use tokio::task::JoinHandle;
     use tracing::instrument;
-    use tracing_subscriber::util::SubscriberInitExt;
     use utils::p2p::{Error, NodeBuilder, NodeClient};
 
     struct NodeRunner<'a> {
@@ -42,18 +41,8 @@ mod tests {
         }
     }
 
-    #[tokio::test]
-    async fn mdns_peer_discovery_success() {
-        let log_buffer = Arc::new(Mutex::new(Vec::new()));
-        let buffer = log_buffer.clone();
-
-        let _guard = tracing_subscriber::fmt()
-            .json()
-            .with_writer(move || BufferWriter {
-                buffer: buffer.clone(),
-            })
-            .set_default();
-
+    #[test_macro::test]
+    async fn mdns_peer_discovery_success(log_buffer: Arc<Mutex<Vec<u8>>>) {
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
         let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
 

@@ -12990,6 +12990,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
 
 [[package]]
+name = "test_macro"
+version = "0.1.0"
+dependencies = [
+ "quote",
+ "syn 2.0.79",
+ "tracing-subscriber 0.3.18",
+]
+
+[[package]]
 name = "tests"
 version = "0.0.1"
 dependencies = [
@@ -12999,6 +13008,7 @@ dependencies = [
  "serde_json",
  "subxt 0.35.3",
  "subxt-signer 0.35.3",
+ "test_macro",
  "tokio",
  "tokio-util",
  "tracing",
