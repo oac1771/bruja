@@ -139,15 +139,15 @@ impl Node {
     ) {
         match request {
             ClientRequest::Publish { topic, msg } => {
-                let topic = gossipsub::IdentTopic::new(topic);
+                let tpc = gossipsub::IdentTopic::new(&topic);
                 match self
                     .swarm
                     .behaviour_mut()
                     .gossipsub
-                    .publish(topic, msg.encode())
+                    .publish(tpc, msg.encode())
                 {
-                    Ok(msg_id) => {
-                        info!("Message sent with ID: {}", msg_id);
+                    Ok(_) => {
+                        info!("Successfully published message to {} topic", topic);
                     }
                     Err(err) => {
                         error!("Publish Error: {}", err);
@@ -207,7 +207,7 @@ impl Node {
                 message_id: id,
                 message,
             })) => {
-                info!("Received message: with id: {id} from peer: {peer_id}");
+                info!("Received gossip message: with id: {id} from peer: {peer_id}");
                 match <Message as Decode>::decode(&mut message.data.as_slice()) {
                     Ok(msg) => {
                         let gsp_msg = GossipMessage {
@@ -220,6 +220,15 @@ impl Node {
                         error!("Error Decoding Message: {}", err);
                     }
                 }
+            }
+            SwarmEvent::Behaviour(BehaviorEvent::RequestResponse(
+                request_response::Event::Message { peer, message: _ },
+            )) => {
+                info!("Received request response message from peer: {}", peer);
+                // match message {
+                //     RequestResponseMessage::Request { request, channel, .. } => todo!(),
+                //     RequestResponseMessage::Response { request_id, response } => todo!(),
+                // }
             }
             SwarmEvent::Behaviour(BehaviorEvent::Gossipsub(gossipsub::Event::Subscribed {
                 peer_id: _peer_id,

@@ -4,7 +4,7 @@ mod tests {
     use tests::test_utils::{Log, Runner};
     use tokio::task::JoinHandle;
     use tracing::instrument;
-    use utils::p2p::{Error, Message, NodeBuilder, NodeClient};
+    use utils::p2p::{Error, Message, NodeBuilder, NodeClient, Payload};
 
     use rand::{
         distributions::Alphanumeric,
@@ -58,10 +58,10 @@ mod tests {
         let peer_id_2 = client_2.get_local_peer_id().await.unwrap();
 
         node_1
-            .assert_log_entry(format!("mDNS discovered a new peer: {}", peer_id_2).as_str())
+            .assert_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_2))
             .await;
         node_2
-            .assert_log_entry(format!("mDNS discovered a new peer: {}", peer_id_1).as_str())
+            .assert_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_1))
             .await;
     }
 
@@ -84,22 +84,58 @@ mod tests {
         client_2.subscribe(&topic).await.unwrap();
 
         node_1
-            .assert_log_entry(format!("A remote subscribed to a topic: {}", topic).as_str())
+            .assert_log_entry(&format!("A remote subscribed to a topic: {}", topic))
             .await;
         node_2
-            .assert_log_entry(format!("A remote subscribed to a topic: {}", topic).as_str())
+            .assert_log_entry(&format!("A remote subscribed to a topic: {}", topic))
             .await;
 
         let msg = Message::JobAcceptance {
             job_id: expected_job_id.clone(),
         };
         client_1.publish(&topic, msg).await.unwrap();
+        node_1
+            .assert_log_entry(&format!(
+                "Successfully published message to {} topic",
+                topic
+            ))
+            .await;
 
         let msgs = client_2.read_gossip_messages().await.unwrap();
+
         assert!(msgs.len() > 0);
         msgs.into_iter().for_each(|msg| {
             let Message::JobAcceptance { job_id } = msg.message();
             assert_eq!(job_id, expected_job_id.clone())
         });
+    }
+
+    #[test_macro::test]
+    async fn send_request_to_node(log_buffer: Arc<Mutex<Vec<u8>>>) {
+        let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
+        let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
+
+        let (_, mut client_1) = node_1.start();
+        let (_, mut client_2) = node_2.start();
+
+        let peer_id1 = client_1.get_local_peer_id().await.unwrap();
+        let peer_id2 = client_2.get_local_peer_id().await.unwrap();
+
+        node_1
+            .assert_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))
+            .await;
+        node_2
+            .assert_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
+            .await;
+
+        let payload = Payload::Job;
+        client_1.send_request(peer_id2, payload).await.unwrap();
+
+        node_2
+            .assert_log_entry(&format!(
+                "Received request response message from peer: {}",
+                peer_id1
+            ))
+            .await;
     }
 }

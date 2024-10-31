@@ -42,7 +42,6 @@ mod tests {
             )
             .await;
 
-        // Log assertions
         worker_runner.assert_log_entry("Starting worker").await;
         requester_runner
             .assert_log_entry("Job Request Submitted!")
