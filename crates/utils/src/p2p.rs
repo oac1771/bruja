@@ -1,7 +1,7 @@
 use codec::{Decode, Encode};
 use libp2p::{
     futures::prelude::*,
-    gossipsub::{self, MessageId},
+    gossipsub::{self, MessageId, SubscriptionError},
     mdns,
     request_response::{self, OutboundRequestId, ProtocolSupport},
     swarm::{NetworkBehaviour, SwarmEvent},
@@ -15,7 +15,10 @@ use std::{
 };
 use tokio::{
     io, select,
-    sync::mpsc::{self, Receiver, Sender},
+    sync::{
+        mpsc::{self, Receiver, Sender},
+        oneshot,
+    },
     task::{spawn, JoinHandle},
     time::{sleep, Duration as TokioDuration, Instant},
 };
@@ -154,16 +157,18 @@ impl Node {
                     }
                 }
             }
-            ClientRequest::Subscribe { topic } => {
+            ClientRequest::Subscribe { topic, sender } => {
                 let topic = gossipsub::IdentTopic::new(topic);
-                match self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
-                    Ok(_) => {
-                        info!("Subscribed to topic: {}", topic);
-                    }
-                    Err(err) => {
+
+                let result =
+                    if let Err(err) = self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
                         error!("Subscription Error: {}", err);
-                    }
-                }
+                        Err(err)
+                    } else {
+                        info!("Subscribed to topic: {}", topic);
+                        Ok(())
+                    };
+                let _ = sender.send(result);
             }
             ClientRequest::ReadGossipMessages => {
                 let msgs = self
@@ -273,10 +278,13 @@ impl NodeClient {
     }
 
     pub async fn subscribe(&self, topic: &str) -> Result<(), Error> {
+        let (sender, receiver) = oneshot::channel::<Result<(), SubscriptionError>>();
         let req = ClientRequest::Subscribe {
             topic: topic.to_string(),
+            sender,
         };
         self.send(req).await?;
+        receiver.await??;
 
         Ok(())
     }
@@ -367,10 +375,19 @@ impl NodeClient {
 
 #[derive(Debug)]
 pub enum ClientRequest {
-    Publish { topic: String, msg: Message },
-    Subscribe { topic: String },
+    Publish {
+        topic: String,
+        msg: Message,
+    },
+    Subscribe {
+        topic: String,
+        sender: oneshot::Sender<Result<(), SubscriptionError>>,
+    },
     ReadGossipMessages,
-    SendRequest { peer_id: PeerId, payload: Payload },
+    SendRequest {
+        peer_id: PeerId,
+        payload: Payload,
+    },
     GetLocalPeerId,
 }
 
@@ -449,6 +466,12 @@ pub enum Error {
     SubscriptionError {
         #[from]
         source: libp2p::gossipsub::SubscriptionError,
+    },
+
+    #[error("{source}")]
+    TokioRecvError {
+        #[from]
+        source: tokio::sync::oneshot::error::RecvError,
     },
 
     #[error("Channel Send Error: {err}")]
