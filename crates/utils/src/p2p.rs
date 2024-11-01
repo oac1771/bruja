@@ -273,7 +273,7 @@ impl NodeClient {
             sender,
         };
         self.send(req).await?;
-        receiver.await??;
+        self.recv(receiver).await?;
 
         Ok(())
     }
@@ -285,7 +285,7 @@ impl NodeClient {
             sender,
         };
         self.send(req).await?;
-        receiver.await??;
+        self.recv(receiver).await?;
 
         Ok(())
     }
@@ -296,22 +296,10 @@ impl NodeClient {
         let req = ClientRequest::ReadGossipMessages { sender };
         self.send(req).await?;
 
-        let result = select! {
-            _ = sleep(TokioDuration::from_secs(10)) => {
-                Err(Error::Other { err: "timed out waiting for receiver".to_string() })
-            },
-            msgs = receiver => {
-                Ok(msgs?)
-            }
-        }??;
-
-        if let ClientResponse::GossipMessages { msgs } = result {
+        if let ClientResponse::GossipMessages { msgs } = self.recv(receiver).await? {
             return Ok(msgs);
-        } else {
-            return Err(Error::Other {
-                err: "foo".to_string(),
-            });
         }
+        return Err(Error::UnexpectedClientResponse);
     }
 
     // pub async fn send_request(
@@ -336,26 +324,37 @@ impl NodeClient {
         let req = ClientRequest::GetLocalPeerId { sender };
         self.send(req).await?;
 
-        let result = receiver.await??;
-
-        if let ClientResponse::PeerId { peer_id } = result {
+        if let ClientResponse::PeerId { peer_id } = self.recv(receiver).await? {
             return Ok(peer_id);
-        } else {
-            return Err(Error::Other {
-                err: "foo".to_string(),
-            });
         }
+        return Err(Error::UnexpectedClientResponse);
     }
 
     async fn send(&self, req: ClientRequest) -> Result<(), Error> {
         self.req_tx
             .send(req)
             .await
-            .map_err(|err| Error::SendError {
+            .map_err(|err| Error::SendRequestError {
                 err: err.to_string(),
             })?;
 
         Ok(())
+    }
+
+    async fn recv(
+        &self,
+        receiver: oneshot::Receiver<Result<ClientResponse, Error>>,
+    ) -> Result<ClientResponse, Error> {
+        let result = select! {
+            _ = sleep(TokioDuration::from_secs(10)) => {
+                Err(Error::OneShotTimeOutError)
+            },
+            msgs = receiver => {
+                Ok(msgs?)
+            }
+        }??;
+
+        Ok(result)
     }
 }
 
@@ -472,9 +471,15 @@ pub enum Error {
         source: tokio::sync::oneshot::error::RecvError,
     },
 
-    #[error("Channel Send Error: {err}")]
-    SendError { err: String },
+    #[error("Timed out waiting for response from node")]
+    OneShotTimeOutError,
 
-    #[error("Error: {err}")]
+    #[error("")]
+    UnexpectedClientResponse,
+
+    #[error("{err}")]
+    SendRequestError { err: String },
+
+    #[error("{err}")]
     Other { err: String },
 }
