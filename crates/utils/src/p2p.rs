@@ -138,7 +138,7 @@ impl Node {
     async fn handle_client_request(
         &mut self,
         request: ClientRequest,
-        resp_tx: &Sender<ClientResponse>,
+        _resp_tx: &Sender<ClientResponse>,
     ) {
         match request {
             ClientRequest::Publish { topic, msg, sender } => {
@@ -155,7 +155,7 @@ impl Node {
                     info!("Successfully published message to {} topic", topic);
                     Ok(ClientResponse::Publish)
                 };
-                let _ = sender.send(result);
+                Self::send_client_response(result, sender);
             }
             ClientRequest::Subscribe { topic, sender } => {
                 let topic = gossipsub::IdentTopic::new(topic);
@@ -168,7 +168,7 @@ impl Node {
                         info!("Subscribed to topic: {}", topic);
                         Ok(ClientResponse::Subscribe)
                     };
-                let _ = sender.send(result);
+                Self::send_client_response(result, sender);
             }
             ClientRequest::ReadGossipMessages { sender } => {
                 let msgs = self
@@ -176,31 +176,38 @@ impl Node {
                     .values()
                     .map(|data| data.clone())
                     .collect::<Vec<GossipMessage>>();
-
-                let _ = sender.send(Ok(ClientResponse::GossipMessages { msgs }));
+                let resp = ClientResponse::GossipMessages { msgs };
+                Self::send_client_response(Ok(resp), sender);
             }
-            ClientRequest::SendRequest { payload, peer_id } => {
+            ClientRequest::SendRequest {
+                payload,
+                peer_id,
+                sender,
+            } => {
                 let request_id = self
                     .swarm
                     .behaviour_mut()
                     .request_response
                     .send_request(&peer_id, Request(payload.encode()));
                 let resp = ClientResponse::RequestId { request_id };
-                Self::send_client_response(resp, resp_tx).await;
+                Self::send_client_response(Ok(resp), sender);
             }
             ClientRequest::GetLocalPeerId { sender } => {
                 let peer_id = self.swarm.local_peer_id();
                 let resp = ClientResponse::PeerId {
                     peer_id: peer_id.clone(),
                 };
-                let _ = sender.send(Ok(resp));
+                Self::send_client_response(Ok(resp), sender);
             }
         };
     }
 
-    async fn send_client_response(resp: ClientResponse, resp_tx: &Sender<ClientResponse>) {
-        if let Err(err) = resp_tx.send(resp).await {
-            error!("Error sending client response: {}", err);
+    fn send_client_response(
+        result: Result<ClientResponse, Error>,
+        sender: oneshot::Sender<Result<ClientResponse, Error>>,
+    ) {
+        if let Err(_) = sender.send(result) {
+            error!("Error sending response to client. The receiver has been dropped");
         }
     }
 
@@ -302,21 +309,25 @@ impl NodeClient {
         return Err(Error::UnexpectedClientResponse);
     }
 
-    // pub async fn send_request(
-    //     &mut self,
-    //     peer_id: PeerId,
-    //     payload: Payload,
-    // ) -> Result<OutboundRequestId, Error> {
-    //     let req = ClientRequest::SendRequest { peer_id, payload };
-    //     self.send(req).await?;
+    pub async fn send_request(
+        &mut self,
+        peer_id: PeerId,
+        payload: Payload,
+    ) -> Result<OutboundRequestId, Error> {
+        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
 
-    //     if let ClientResponse::RequestId { request_id } = self.recv().await? {
-    //         return Ok(request_id);
-    //     }
-    //     Err(Error::Other {
-    //         err: "Error receiving request_id from node".to_string(),
-    //     })
-    // }
+        let req = ClientRequest::SendRequest {
+            peer_id,
+            payload,
+            sender,
+        };
+        self.send(req).await?;
+
+        if let ClientResponse::RequestId { request_id } = self.recv(receiver).await? {
+            return Ok(request_id);
+        }
+        return Err(Error::UnexpectedClientResponse);
+    }
 
     pub async fn get_local_peer_id(&mut self) -> Result<PeerId, Error> {
         let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
@@ -374,6 +385,7 @@ pub enum ClientRequest {
     SendRequest {
         peer_id: PeerId,
         payload: Payload,
+        sender: oneshot::Sender<Result<ClientResponse, Error>>,
     },
     GetLocalPeerId {
         sender: oneshot::Sender<Result<ClientResponse, Error>>,
