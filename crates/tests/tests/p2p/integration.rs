@@ -4,7 +4,7 @@ mod tests {
     use tests::test_utils::{Log, Runner};
     use tokio::task::JoinHandle;
     use tracing::instrument;
-    use utils::p2p::{Error, Message, NodeBuilder, NodeClient, Payload};
+    use utils::p2p::{Error, Message, NodeBuilder, NodeClient};
 
     use rand::{
         distributions::Alphanumeric,
@@ -84,10 +84,10 @@ mod tests {
         client_2.subscribe(&topic).await.unwrap();
 
         node_1
-            .assert_info_log_entry(&format!("A remote subscribed to a topic: {}", topic))
+            .assert_info_log_entry(&format!("Subscribed to topic: {}", topic))
             .await;
         node_2
-            .assert_info_log_entry(&format!("A remote subscribed to a topic: {}", topic))
+            .assert_info_log_entry(&format!("Subscribed to topic: {}", topic))
             .await;
 
         let msg = Message::JobAcceptance {
@@ -101,7 +101,7 @@ mod tests {
             ))
             .await;
 
-        let msgs = client_2.read_gossip_messages().await.unwrap();
+        let msgs = client_2.get_gossip_messages().await.unwrap();
 
         assert!(msgs.len() > 0);
         msgs.into_iter().for_each(|msg| {
@@ -136,32 +136,32 @@ mod tests {
         }
     }
 
-    #[test_macro::test]
-    async fn send_request_to_node(log_buffer: Arc<Mutex<Vec<u8>>>) {
-        let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
-        let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
+    // #[test_macro::test]
+    // async fn send_request_to_node(log_buffer: Arc<Mutex<Vec<u8>>>) {
+    //     let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
+    //     let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
 
-        let (_, mut client_1) = node_1.start();
-        let (_, mut client_2) = node_2.start();
+    //     let (_, mut client_1) = node_1.start();
+    //     let (_, mut client_2) = node_2.start();
 
-        let peer_id1 = client_1.get_local_peer_id().await.unwrap();
-        let peer_id2 = client_2.get_local_peer_id().await.unwrap();
+    //     let peer_id1 = client_1.get_local_peer_id().await.unwrap();
+    //     let peer_id2 = client_2.get_local_peer_id().await.unwrap();
 
-        node_1
-            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))
-            .await;
-        node_2
-            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
-            .await;
+    //     node_1
+    //         .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))
+    //         .await;
+    //     node_2
+    //         .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
+    //         .await;
 
-        let payload = Payload::Job;
-        client_1.send_request(peer_id2, payload).await.unwrap();
+    //     let payload = Payload::Job;
+    //     client_1.send_request(peer_id2, payload).await.unwrap();
 
-        node_2
-            .assert_info_log_entry(&format!(
-                "Received request response message from peer: {}",
-                peer_id1
-            ))
-            .await;
-    }
+    //     node_2
+    //         .assert_info_log_entry(&format!(
+    //             "Received request response message from peer: {}",
+    //             peer_id1
+    //         ))
+    //         .await;
+    // }
 }

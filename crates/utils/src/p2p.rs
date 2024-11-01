@@ -1,7 +1,7 @@
 use codec::{Decode, Encode};
 use libp2p::{
     futures::prelude::*,
-    gossipsub::{self, MessageId, PublishError, SubscriptionError},
+    gossipsub::{self, MessageId},
     mdns,
     request_response::{self, OutboundRequestId, ProtocolSupport},
     swarm::{NetworkBehaviour, SwarmEvent},
@@ -20,7 +20,7 @@ use tokio::{
         oneshot,
     },
     task::{spawn, JoinHandle},
-    time::{sleep, Duration as TokioDuration, Instant},
+    time::{sleep, Duration as TokioDuration},
 };
 use tracing::{error, info, info_span, Instrument};
 
@@ -33,7 +33,7 @@ pub struct Node {
 
 pub struct NodeClient {
     req_tx: Sender<ClientRequest>,
-    resp_rx: Receiver<ClientResponse>,
+    _resp_rx: Receiver<ClientResponse>,
 }
 
 impl NodeBuilder {
@@ -102,7 +102,7 @@ impl NodeBuilder {
 impl Node {
     pub fn start(mut self) -> Result<(JoinHandle<Result<(), Error>>, NodeClient), Error> {
         let (req_tx, req_rx) = mpsc::channel::<ClientRequest>(100);
-        let (resp_tx, resp_rx) = mpsc::channel::<ClientResponse>(100);
+        let (resp_tx, _resp_rx) = mpsc::channel::<ClientResponse>(100);
 
         let addr = "/ip4/0.0.0.0/tcp/0".parse()?;
         self.swarm.listen_on(addr)?;
@@ -117,7 +117,7 @@ impl Node {
             .instrument(info_span!("")),
         );
 
-        let node_client = NodeClient { req_tx, resp_rx };
+        let node_client = NodeClient { req_tx, _resp_rx };
 
         Ok((handle, node_client))
     }
@@ -150,10 +150,10 @@ impl Node {
                     .publish(tpc, msg.encode())
                 {
                     error!("Publishing Error: {}", err);
-                    Err(err)
+                    Err(Error::from(err))
                 } else {
                     info!("Successfully published message to {} topic", topic);
-                    Ok(())
+                    Ok(ClientResponse::Publish)
                 };
                 let _ = sender.send(result);
             }
@@ -163,22 +163,21 @@ impl Node {
                 let result =
                     if let Err(err) = self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
                         error!("Subscription Error: {}", err);
-                        Err(err)
+                        Err(Error::from(err))
                     } else {
                         info!("Subscribed to topic: {}", topic);
-                        Ok(())
+                        Ok(ClientResponse::Subscribe)
                     };
                 let _ = sender.send(result);
             }
-            ClientRequest::ReadGossipMessages => {
+            ClientRequest::ReadGossipMessages { sender } => {
                 let msgs = self
                     .gossip_messages
                     .values()
                     .map(|data| data.clone())
                     .collect::<Vec<GossipMessage>>();
 
-                let resp = ClientResponse::GossipMessages { msgs };
-                Self::send_client_response(resp, resp_tx).await;
+                let _ = sender.send(Ok(ClientResponse::GossipMessages { msgs }));
             }
             ClientRequest::SendRequest { payload, peer_id } => {
                 let request_id = self
@@ -189,12 +188,12 @@ impl Node {
                 let resp = ClientResponse::RequestId { request_id };
                 Self::send_client_response(resp, resp_tx).await;
             }
-            ClientRequest::GetLocalPeerId => {
+            ClientRequest::GetLocalPeerId { sender } => {
                 let peer_id = self.swarm.local_peer_id();
                 let resp = ClientResponse::PeerId {
                     peer_id: peer_id.clone(),
                 };
-                Self::send_client_response(resp, resp_tx).await;
+                let _ = sender.send(Ok(resp));
             }
         };
     }
@@ -267,13 +266,12 @@ impl Node {
 
 impl NodeClient {
     pub async fn publish(&self, topic: &str, msg: Message) -> Result<(), Error> {
-        let (sender, receiver) = oneshot::channel::<Result<(), PublishError>>();
+        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
         let req = ClientRequest::Publish {
             topic: topic.to_string(),
             msg,
             sender,
         };
-
         self.send(req).await?;
         receiver.await??;
 
@@ -281,7 +279,7 @@ impl NodeClient {
     }
 
     pub async fn subscribe(&self, topic: &str) -> Result<(), Error> {
-        let (sender, receiver) = oneshot::channel::<Result<(), SubscriptionError>>();
+        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
         let req = ClientRequest::Subscribe {
             topic: topic.to_string(),
             sender,
@@ -293,65 +291,60 @@ impl NodeClient {
     }
 
     pub async fn get_gossip_messages(&mut self) -> Result<Vec<GossipMessage>, Error> {
-        let req = ClientRequest::ReadGossipMessages;
+        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
+
+        let req = ClientRequest::ReadGossipMessages { sender };
         self.send(req).await?;
 
-        if let ClientResponse::GossipMessages { msgs } = self.recv().await? {
-            return Ok(msgs);
-        }
-        Err(Error::Other {
-            err: "Error receiving gossip messages from node".to_string(),
-        })
-    }
-
-    pub async fn read_gossip_messages(&mut self) -> Result<Vec<GossipMessage>, Error> {
-        let start = Instant::now();
-
-        while start.elapsed() < TokioDuration::from_secs(10) {
-            match self.get_gossip_messages().await {
-                Ok(msgs) => {
-                    if msgs.len() > 0 {
-                        return Ok(msgs);
-                    }
-                }
-                Err(err) => {
-                    error!("Error reading messages: {}", err);
-                }
+        let result = select! {
+            _ = sleep(TokioDuration::from_secs(10)) => {
+                Err(Error::Other { err: "timed out waiting for receiver".to_string() })
+            },
+            msgs = receiver => {
+                Ok(msgs?)
             }
-            sleep(TokioDuration::from_millis(500)).await;
-        }
+        }??;
 
-        Err(Error::Other {
-            err: "Timed out waiting for messages".to_string(),
-        })
+        if let ClientResponse::GossipMessages { msgs } = result {
+            return Ok(msgs);
+        } else {
+            return Err(Error::Other {
+                err: "foo".to_string(),
+            });
+        }
     }
 
-    pub async fn send_request(
-        &mut self,
-        peer_id: PeerId,
-        payload: Payload,
-    ) -> Result<OutboundRequestId, Error> {
-        let req = ClientRequest::SendRequest { peer_id, payload };
-        self.send(req).await?;
+    // pub async fn send_request(
+    //     &mut self,
+    //     peer_id: PeerId,
+    //     payload: Payload,
+    // ) -> Result<OutboundRequestId, Error> {
+    //     let req = ClientRequest::SendRequest { peer_id, payload };
+    //     self.send(req).await?;
 
-        if let ClientResponse::RequestId { request_id } = self.recv().await? {
-            return Ok(request_id);
-        }
-        Err(Error::Other {
-            err: "Error receiving request_id from node".to_string(),
-        })
-    }
+    //     if let ClientResponse::RequestId { request_id } = self.recv().await? {
+    //         return Ok(request_id);
+    //     }
+    //     Err(Error::Other {
+    //         err: "Error receiving request_id from node".to_string(),
+    //     })
+    // }
 
     pub async fn get_local_peer_id(&mut self) -> Result<PeerId, Error> {
-        let req = ClientRequest::GetLocalPeerId;
+        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
+
+        let req = ClientRequest::GetLocalPeerId { sender };
         self.send(req).await?;
 
-        if let ClientResponse::PeerId { peer_id } = self.recv().await? {
+        let result = receiver.await??;
+
+        if let ClientResponse::PeerId { peer_id } = result {
             return Ok(peer_id);
+        } else {
+            return Err(Error::Other {
+                err: "foo".to_string(),
+            });
         }
-        Err(Error::Other {
-            err: "Error receiving local peer id from node".to_string(),
-        })
     }
 
     async fn send(&self, req: ClientRequest) -> Result<(), Error> {
@@ -364,35 +357,28 @@ impl NodeClient {
 
         Ok(())
     }
-
-    async fn recv(&mut self) -> Result<ClientResponse, Error> {
-        while let Some(resp) = self.resp_rx.recv().await {
-            return Ok(resp);
-        }
-
-        Err(Error::RecvError {
-            err: "Error receiving response from node".to_string(),
-        })
-    }
 }
 
-#[derive(Debug)]
 pub enum ClientRequest {
     Publish {
         topic: String,
         msg: Message,
-        sender: oneshot::Sender<Result<(), PublishError>>,
+        sender: oneshot::Sender<Result<ClientResponse, Error>>,
     },
     Subscribe {
         topic: String,
-        sender: oneshot::Sender<Result<(), SubscriptionError>>,
+        sender: oneshot::Sender<Result<ClientResponse, Error>>,
     },
-    ReadGossipMessages,
+    ReadGossipMessages {
+        sender: oneshot::Sender<Result<ClientResponse, Error>>,
+    },
     SendRequest {
         peer_id: PeerId,
         payload: Payload,
     },
-    GetLocalPeerId,
+    GetLocalPeerId {
+        sender: oneshot::Sender<Result<ClientResponse, Error>>,
+    },
 }
 
 #[derive(Debug, Encode)]
@@ -401,6 +387,8 @@ pub enum Payload {
 }
 
 pub enum ClientResponse {
+    Publish,
+    Subscribe,
     GossipMessages { msgs: Vec<GossipMessage> },
     RequestId { request_id: OutboundRequestId },
     PeerId { peer_id: PeerId },
@@ -486,9 +474,6 @@ pub enum Error {
 
     #[error("Channel Send Error: {err}")]
     SendError { err: String },
-
-    #[error("Channel Receive Error: {err}")]
-    RecvError { err: String },
 
     #[error("Error: {err}")]
     Other { err: String },

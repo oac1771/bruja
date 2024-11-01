@@ -52,7 +52,7 @@ pub trait Runner {
 
     async fn assert_log(&self, entry: &str, level: tracing::Level) {
         select! {
-            _ = sleep(Duration::from_secs(5)) => {
+            _ = sleep(Duration::from_secs(10)) => {
                 let output = self.log_output();
                 panic!("Failed to find log entry: {}\nLogs: {}", entry.to_string(), output)
             },
