@@ -5,7 +5,7 @@ use libp2p::{
     mdns,
     request_response::{
         self, InboundRequestId, Message as RequestResponseMessage, OutboundRequestId,
-        ProtocolSupport,
+        ProtocolSupport, ResponseChannel,
     },
     swarm::{NetworkBehaviour, SwarmEvent},
     PeerId, StreamProtocol, Swarm,
@@ -37,6 +37,7 @@ pub struct Node {
 pub struct NodeClient {
     req_tx: Sender<ClientRequest>,
     inbound_req_rx: Receiver<InboundP2pRequest>,
+    pending_inbound_req: HashMap<InboundRequestId, ResponseChannel<P2pResponse>>,
 }
 
 impl NodeBuilder {
@@ -120,10 +121,7 @@ impl Node {
             .instrument(info_span!("")),
         );
 
-        let node_client = NodeClient {
-            req_tx,
-            inbound_req_rx,
-        };
+        let node_client = NodeClient::new(req_tx, inbound_req_rx);
 
         Ok((handle, node_client))
     }
@@ -246,12 +244,11 @@ impl Node {
                     RequestResponseMessage::Request {
                         request,
                         request_id,
-                        // channel
-                        ..
+                        channel,
                     } => {
                         let req = InboundP2pRequest {
                             request,
-                            // channel,
+                            channel,
                             request_id,
                         };
                         inbound_req_tx.send(req).await.unwrap();
@@ -291,6 +288,17 @@ impl Node {
 }
 
 impl NodeClient {
+    fn new(req_tx: Sender<ClientRequest>, inbound_req_rx: Receiver<InboundP2pRequest>) -> Self {
+        let pending_inbound_req: HashMap<InboundRequestId, ResponseChannel<P2pResponse>> =
+            HashMap::new();
+
+        Self {
+            req_tx,
+            inbound_req_rx,
+            pending_inbound_req,
+        }
+    }
+
     pub async fn publish(&self, topic: &str, msg: Message) -> Result<(), Error> {
         let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
         let req = ClientRequest::Publish {
@@ -360,9 +368,10 @@ impl NodeClient {
         return Err(Error::UnexpectedClientResponse);
     }
 
-    pub async fn read_inbound_requests(&mut self) -> Result<InboundP2pRequest, Error> {
+    pub async fn read_inbound_requests(&mut self) -> Result<P2pRequest, Error> {
         while let Some(req) = self.inbound_req_rx.recv().await {
-            return Ok(req);
+            self.pending_inbound_req.insert(req.request_id, req.channel);
+            return Ok(req.request);
         }
         return Err(Error::Other {
             err: "foo".to_string(),
@@ -451,18 +460,8 @@ pub enum Message {
 
 pub struct InboundP2pRequest {
     request: P2pRequest,
-    // channel: ResponseChannel<P2pResponse>,
+    channel: ResponseChannel<P2pResponse>,
     request_id: InboundRequestId,
-}
-
-impl InboundP2pRequest {
-    pub fn request(&self) -> &P2pRequest {
-        &self.request
-    }
-
-    pub fn request_id(&self) -> &InboundRequestId {
-        &self.request_id
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]

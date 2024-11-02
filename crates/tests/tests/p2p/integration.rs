@@ -47,7 +47,7 @@ mod tests {
     }
 
     #[derive(Encode, Decode, PartialEq, Debug, Clone)]
-    struct Payload {
+    struct JobPayload {
         pub job: Vec<u8>,
     }
 
@@ -169,8 +169,8 @@ mod tests {
             .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
             .await;
 
-        let expected_payload = Payload { job: vec![1, 2, 3] };
-        let expected_id = client_1
+        let expected_payload = JobPayload { job: vec![1, 2, 3] };
+        client_1
             .send_request(peer_id2, expected_payload.clone())
             .await
             .unwrap();
@@ -186,9 +186,8 @@ mod tests {
             .await;
 
         let req = client_2.read_inbound_requests().await.unwrap();
-        let payload = <Payload as Decode>::decode(&mut req.request().0.as_slice()).unwrap();
+        let payload = <JobPayload as Decode>::decode(&mut req.0.as_slice()).unwrap();
 
-        assert_eq!(req.request_id().to_string(), expected_id.to_string());
         assert_eq!(payload, expected_payload)
     }
 }
