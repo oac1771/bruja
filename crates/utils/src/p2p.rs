@@ -140,8 +140,9 @@ impl Node {
     }
 
     fn handle_client_request(&mut self, request: ClientRequest) {
-        match request {
-            ClientRequest::Publish { topic, msg, sender } => {
+        let sender = request.sender;
+        match request.payload {
+            ClientRequestPayload::Publish { topic, msg } => {
                 let tpc = gossipsub::IdentTopic::new(&topic);
                 let result = if let Err(err) = self
                     .swarm
@@ -157,7 +158,7 @@ impl Node {
                 };
                 Self::send_client_response(result, sender);
             }
-            ClientRequest::Subscribe { topic, sender } => {
+            ClientRequestPayload::Subscribe { topic } => {
                 let topic = gossipsub::IdentTopic::new(topic);
 
                 let result =
@@ -170,7 +171,7 @@ impl Node {
                     };
                 Self::send_client_response(result, sender);
             }
-            ClientRequest::ReadGossipMessages { sender } => {
+            ClientRequestPayload::ReadGossipMessages => {
                 let msgs = self
                     .gossip_messages
                     .values()
@@ -179,11 +180,7 @@ impl Node {
                 let resp = ClientResponse::GossipMessages { msgs };
                 Self::send_client_response(Ok(resp), sender);
             }
-            ClientRequest::SendRequest {
-                payload,
-                peer_id,
-                sender,
-            } => {
+            ClientRequestPayload::SendRequest { payload, peer_id } => {
                 let request_id = self
                     .swarm
                     .behaviour_mut()
@@ -192,11 +189,7 @@ impl Node {
                 let resp = ClientResponse::RequestId { request_id };
                 Self::send_client_response(Ok(resp), sender);
             }
-            ClientRequest::SendResponse {
-                payload,
-                sender,
-                channel,
-            } => {
+            ClientRequestPayload::SendResponse { payload, channel } => {
                 let result = if let Ok(_) = self
                     .swarm
                     .behaviour_mut()
@@ -211,7 +204,7 @@ impl Node {
                 };
                 Self::send_client_response(result, sender);
             }
-            ClientRequest::GetLocalPeerId { sender } => {
+            ClientRequestPayload::GetLocalPeerId => {
                 let peer_id = self.swarm.local_peer_id();
                 let resp = ClientResponse::PeerId {
                     peer_id: peer_id.clone(),
@@ -319,40 +312,22 @@ impl NodeClient {
     }
 
     pub async fn publish(&self, topic: &str, msg: Message) -> Result<(), Error> {
-        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
-        let req = ClientRequest::Publish {
+        let payload = ClientRequestPayload::Publish {
             topic: topic.to_string(),
             msg,
-            sender,
         };
-        self.send_client_request(req).await?;
-        self.recv_node_response(receiver).await?;
+        self.send_client_request(payload).await?;
 
         Ok(())
     }
 
     pub async fn subscribe(&self, topic: &str) -> Result<(), Error> {
-        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
-        let req = ClientRequest::Subscribe {
+        let payload = ClientRequestPayload::Subscribe {
             topic: topic.to_string(),
-            sender,
         };
-        self.send_client_request(req).await?;
-        self.recv_node_response(receiver).await?;
+        self.send_client_request(payload).await?;
 
         Ok(())
-    }
-
-    pub async fn get_gossip_messages(&mut self) -> Result<Vec<GossipMessage>, Error> {
-        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
-
-        let req = ClientRequest::ReadGossipMessages { sender };
-        self.send_client_request(req).await?;
-
-        if let ClientResponse::GossipMessages { msgs } = self.recv_node_response(receiver).await? {
-            return Ok(msgs);
-        }
-        return Err(Error::UnexpectedClientResponse);
     }
 
     pub async fn send_request<P: Encode>(
@@ -360,16 +335,12 @@ impl NodeClient {
         peer_id: PeerId,
         payload: P,
     ) -> Result<OutboundRequestId, Error> {
-        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
-
-        let req = ClientRequest::SendRequest {
+        let payload = ClientRequestPayload::SendRequest {
             peer_id,
             payload: payload.encode(),
-            sender,
         };
-        self.send_client_request(req).await?;
 
-        if let ClientResponse::RequestId { request_id } = self.recv_node_response(receiver).await? {
+        if let ClientResponse::RequestId { request_id } = self.send_client_request(payload).await? {
             return Ok(request_id);
         }
         return Err(Error::UnexpectedClientResponse);
@@ -381,26 +352,20 @@ impl NodeClient {
         payload: P,
     ) -> Result<(), Error> {
         let channel = self.pending_inbound_req.remove(&id).unwrap();
-        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
-        let req = ClientRequest::SendResponse {
-            sender,
+        let payload = ClientRequestPayload::SendResponse {
             payload: payload.encode(),
             channel,
         };
 
-        self.send_client_request(req).await?;
-        self.recv_node_response(receiver).await?;
+        self.send_client_request(payload).await?;
 
         Ok(())
     }
 
     pub async fn get_local_peer_id(&mut self) -> Result<PeerId, Error> {
-        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
+        let payload = ClientRequestPayload::GetLocalPeerId;
 
-        let req = ClientRequest::GetLocalPeerId { sender };
-        self.send_client_request(req).await?;
-
-        if let ClientResponse::PeerId { peer_id } = self.recv_node_response(receiver).await? {
+        if let ClientResponse::PeerId { peer_id } = self.send_client_request(payload).await? {
             return Ok(peer_id);
         }
         return Err(Error::UnexpectedClientResponse);
@@ -416,7 +381,22 @@ impl NodeClient {
         });
     }
 
-    async fn send_client_request(&self, req: ClientRequest) -> Result<(), Error> {
+    pub async fn get_gossip_messages(&mut self) -> Result<Vec<GossipMessage>, Error> {
+        let payload = ClientRequestPayload::ReadGossipMessages;
+
+        if let ClientResponse::GossipMessages { msgs } = self.send_client_request(payload).await? {
+            return Ok(msgs);
+        }
+        return Err(Error::UnexpectedClientResponse);
+    }
+
+    async fn send_client_request(
+        &self,
+        payload: ClientRequestPayload,
+    ) -> Result<ClientResponse, Error> {
+        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
+        let req = ClientRequest { payload, sender };
+
         self.req_tx
             .send(req)
             .await
@@ -424,7 +404,9 @@ impl NodeClient {
                 err: err.to_string(),
             })?;
 
-        Ok(())
+        let resp = self.recv_node_response(receiver).await?;
+
+        Ok(resp)
     }
 
     async fn recv_node_response(
@@ -443,33 +425,28 @@ impl NodeClient {
         Ok(result)
     }
 }
-
-pub enum ClientRequest {
+struct ClientRequest {
+    payload: ClientRequestPayload,
+    sender: oneshot::Sender<Result<ClientResponse, Error>>,
+}
+pub enum ClientRequestPayload {
     Publish {
         topic: String,
         msg: Message,
-        sender: oneshot::Sender<Result<ClientResponse, Error>>,
     },
     Subscribe {
         topic: String,
-        sender: oneshot::Sender<Result<ClientResponse, Error>>,
     },
-    ReadGossipMessages {
-        sender: oneshot::Sender<Result<ClientResponse, Error>>,
-    },
+    ReadGossipMessages,
     SendRequest {
         peer_id: PeerId,
         payload: Vec<u8>,
-        sender: oneshot::Sender<Result<ClientResponse, Error>>,
     },
     SendResponse {
-        sender: oneshot::Sender<Result<ClientResponse, Error>>,
         payload: Vec<u8>,
         channel: ResponseChannel<P2pResponse>,
     },
-    GetLocalPeerId {
-        sender: oneshot::Sender<Result<ClientResponse, Error>>,
-    },
+    GetLocalPeerId,
 }
 
 pub enum ClientResponse {
