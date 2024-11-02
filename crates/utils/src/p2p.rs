@@ -3,7 +3,10 @@ use libp2p::{
     futures::prelude::*,
     gossipsub::{self, MessageId},
     mdns,
-    request_response::{self, OutboundRequestId, ProtocolSupport},
+    request_response::{
+        self, InboundRequestId, Message as RequestResponseMessage, OutboundRequestId,
+        ProtocolSupport,
+    },
     swarm::{NetworkBehaviour, SwarmEvent},
     PeerId, StreamProtocol, Swarm,
 };
@@ -33,7 +36,7 @@ pub struct Node {
 
 pub struct NodeClient {
     req_tx: Sender<ClientRequest>,
-    _resp_rx: Receiver<ClientResponse>,
+    inbound_req_rx: Receiver<InboundP2pRequest>,
 }
 
 impl NodeBuilder {
@@ -102,14 +105,14 @@ impl NodeBuilder {
 impl Node {
     pub fn start(mut self) -> Result<(JoinHandle<Result<(), Error>>, NodeClient), Error> {
         let (req_tx, req_rx) = mpsc::channel::<ClientRequest>(100);
-        let (resp_tx, _resp_rx) = mpsc::channel::<ClientResponse>(100);
+        let (inbound_req_tx, inbound_req_rx) = mpsc::channel::<InboundP2pRequest>(100);
 
         let addr = "/ip4/0.0.0.0/tcp/0".parse()?;
         self.swarm.listen_on(addr)?;
 
         let handle = spawn(
             async move {
-                match self.run(req_rx, resp_tx).await {
+                match self.run(req_rx, &inbound_req_tx).await {
                     Ok(_) => Ok(()),
                     Err(err) => Err(err),
                 }
@@ -117,7 +120,10 @@ impl Node {
             .instrument(info_span!("")),
         );
 
-        let node_client = NodeClient { req_tx, _resp_rx };
+        let node_client = NodeClient {
+            req_tx,
+            inbound_req_rx,
+        };
 
         Ok((handle, node_client))
     }
@@ -125,21 +131,17 @@ impl Node {
     async fn run(
         &mut self,
         mut req_rx: Receiver<ClientRequest>,
-        resp_tx: Sender<ClientResponse>,
+        inbound_req_tx: &Sender<InboundP2pRequest>,
     ) -> Result<(), Error> {
         loop {
             select! {
-                Some(request) = req_rx.recv() => self.handle_client_request(request, &resp_tx).await,
-                event = self.swarm.select_next_some() => self.handle_event(event)
+                Some(request) = req_rx.recv() => self.handle_client_request(request),
+                event = self.swarm.select_next_some() => self.handle_event(event, inbound_req_tx).await
             }
         }
     }
 
-    async fn handle_client_request(
-        &mut self,
-        request: ClientRequest,
-        _resp_tx: &Sender<ClientResponse>,
-    ) {
+    fn handle_client_request(&mut self, request: ClientRequest) {
         match request {
             ClientRequest::Publish { topic, msg, sender } => {
                 let tpc = gossipsub::IdentTopic::new(&topic);
@@ -188,7 +190,7 @@ impl Node {
                     .swarm
                     .behaviour_mut()
                     .request_response
-                    .send_request(&peer_id, Request(payload.encode()));
+                    .send_request(&peer_id, P2pRequest(payload));
                 let resp = ClientResponse::RequestId { request_id };
                 Self::send_client_response(Ok(resp), sender);
             }
@@ -211,7 +213,11 @@ impl Node {
         }
     }
 
-    fn handle_event(&mut self, event: SwarmEvent<BehaviorEvent>) {
+    async fn handle_event(
+        &mut self,
+        event: SwarmEvent<BehaviorEvent>,
+        inbound_req_tx: &Sender<InboundP2pRequest>,
+    ) {
         match event {
             SwarmEvent::Behaviour(BehaviorEvent::Gossipsub(gossipsub::Event::Message {
                 propagation_source: peer_id,
@@ -233,13 +239,26 @@ impl Node {
                 }
             }
             SwarmEvent::Behaviour(BehaviorEvent::RequestResponse(
-                request_response::Event::Message { peer, message: _ },
+                request_response::Event::Message { peer, message },
             )) => {
                 info!("Received request response message from peer: {}", peer);
-                // match message {
-                //     RequestResponseMessage::Request { request, channel, .. } => todo!(),
-                //     RequestResponseMessage::Response { request_id, response } => todo!(),
-                // }
+                match message {
+                    RequestResponseMessage::Request {
+                        request,
+                        request_id,
+                        // channel
+                        ..
+                    } => {
+                        let req = InboundP2pRequest {
+                            request,
+                            // channel,
+                            request_id,
+                        };
+                        inbound_req_tx.send(req).await.unwrap();
+                        info!("Request relayed to client");
+                    }
+                    _ => {} // RequestResponseMessage::Response { request_id, response } => todo!(),
+                }
             }
             SwarmEvent::Behaviour(BehaviorEvent::Gossipsub(gossipsub::Event::Subscribed {
                 peer_id: _peer_id,
@@ -279,8 +298,8 @@ impl NodeClient {
             msg,
             sender,
         };
-        self.send(req).await?;
-        self.recv(receiver).await?;
+        self.send_client_request(req).await?;
+        self.recv_node_response(receiver).await?;
 
         Ok(())
     }
@@ -291,8 +310,8 @@ impl NodeClient {
             topic: topic.to_string(),
             sender,
         };
-        self.send(req).await?;
-        self.recv(receiver).await?;
+        self.send_client_request(req).await?;
+        self.recv_node_response(receiver).await?;
 
         Ok(())
     }
@@ -301,29 +320,29 @@ impl NodeClient {
         let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
 
         let req = ClientRequest::ReadGossipMessages { sender };
-        self.send(req).await?;
+        self.send_client_request(req).await?;
 
-        if let ClientResponse::GossipMessages { msgs } = self.recv(receiver).await? {
+        if let ClientResponse::GossipMessages { msgs } = self.recv_node_response(receiver).await? {
             return Ok(msgs);
         }
         return Err(Error::UnexpectedClientResponse);
     }
 
-    pub async fn send_request(
+    pub async fn send_request<P: Encode>(
         &mut self,
         peer_id: PeerId,
-        payload: Payload,
+        payload: P,
     ) -> Result<OutboundRequestId, Error> {
         let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
 
         let req = ClientRequest::SendRequest {
             peer_id,
-            payload,
+            payload: payload.encode(),
             sender,
         };
-        self.send(req).await?;
+        self.send_client_request(req).await?;
 
-        if let ClientResponse::RequestId { request_id } = self.recv(receiver).await? {
+        if let ClientResponse::RequestId { request_id } = self.recv_node_response(receiver).await? {
             return Ok(request_id);
         }
         return Err(Error::UnexpectedClientResponse);
@@ -333,15 +352,24 @@ impl NodeClient {
         let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
 
         let req = ClientRequest::GetLocalPeerId { sender };
-        self.send(req).await?;
+        self.send_client_request(req).await?;
 
-        if let ClientResponse::PeerId { peer_id } = self.recv(receiver).await? {
+        if let ClientResponse::PeerId { peer_id } = self.recv_node_response(receiver).await? {
             return Ok(peer_id);
         }
         return Err(Error::UnexpectedClientResponse);
     }
 
-    async fn send(&self, req: ClientRequest) -> Result<(), Error> {
+    pub async fn read_inbound_requests(&mut self) -> Result<InboundP2pRequest, Error> {
+        while let Some(req) = self.inbound_req_rx.recv().await {
+            return Ok(req);
+        }
+        return Err(Error::Other {
+            err: "foo".to_string(),
+        });
+    }
+
+    async fn send_client_request(&self, req: ClientRequest) -> Result<(), Error> {
         self.req_tx
             .send(req)
             .await
@@ -352,7 +380,7 @@ impl NodeClient {
         Ok(())
     }
 
-    async fn recv(
+    async fn recv_node_response(
         &self,
         receiver: oneshot::Receiver<Result<ClientResponse, Error>>,
     ) -> Result<ClientResponse, Error> {
@@ -384,17 +412,12 @@ pub enum ClientRequest {
     },
     SendRequest {
         peer_id: PeerId,
-        payload: Payload,
+        payload: Vec<u8>,
         sender: oneshot::Sender<Result<ClientResponse, Error>>,
     },
     GetLocalPeerId {
         sender: oneshot::Sender<Result<ClientResponse, Error>>,
     },
-}
-
-#[derive(Debug, Encode)]
-pub enum Payload {
-    Job,
 }
 
 pub enum ClientResponse {
@@ -403,11 +426,6 @@ pub enum ClientResponse {
     GossipMessages { msgs: Vec<GossipMessage> },
     RequestId { request_id: OutboundRequestId },
     PeerId { peer_id: PeerId },
-}
-
-#[derive(Encode, Decode, Debug, Clone)]
-pub enum Message {
-    JobAcceptance { job_id: Vec<u8> },
 }
 
 #[derive(Clone)]
@@ -426,17 +444,38 @@ impl GossipMessage {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-struct Request(Vec<u8>);
+#[derive(Encode, Decode, Debug, Clone)]
+pub enum Message {
+    JobAcceptance { job_id: Vec<u8> },
+}
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct Response(Vec<u8>);
+pub struct InboundP2pRequest {
+    request: P2pRequest,
+    // channel: ResponseChannel<P2pResponse>,
+    request_id: InboundRequestId,
+}
+
+impl InboundP2pRequest {
+    pub fn request(&self) -> &P2pRequest {
+        &self.request
+    }
+
+    pub fn request_id(&self) -> &InboundRequestId {
+        &self.request_id
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+pub struct P2pRequest(pub Vec<u8>);
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
+struct P2pResponse(Vec<u8>);
 
 #[derive(NetworkBehaviour)]
 struct Behavior {
     gossipsub: gossipsub::Behaviour,
     mdns: mdns::tokio::Behaviour,
-    request_response: request_response::cbor::Behaviour<Request, Response>,
+    request_response: request_response::cbor::Behaviour<P2pRequest, P2pResponse>,
 }
 
 #[derive(Debug, thiserror::Error)]

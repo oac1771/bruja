@@ -1,7 +1,7 @@
+refactor gossip message to be similar workflow to send_response so hashmap does not fill up 
+
 - testing:
     - add label to worker/requester that is behind a cfg(test) feature gate
-
-- cancelation token to kill process in case governance says to do it
 
 - requester
     - payment

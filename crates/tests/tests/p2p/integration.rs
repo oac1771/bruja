@@ -1,15 +1,15 @@
 #[cfg(test)]
 mod tests {
+    use codec::{Decode, Encode};
+    use rand::{
+        distributions::Alphanumeric,
+        {thread_rng, Rng},
+    };
     use std::sync::{Arc, Mutex};
     use tests::test_utils::{Log, Runner};
     use tokio::task::JoinHandle;
     use tracing::instrument;
     use utils::p2p::{Error, Message, NodeBuilder, NodeClient};
-
-    use rand::{
-        distributions::Alphanumeric,
-        {thread_rng, Rng},
-    };
 
     struct NodeRunner<'a> {
         log_buffer: Arc<Mutex<Vec<u8>>>,
@@ -44,6 +44,11 @@ mod tests {
         fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>> {
             self.log_buffer.clone()
         }
+    }
+
+    #[derive(Encode, Decode, PartialEq, Debug, Clone)]
+    struct Payload {
+        pub job: Vec<u8>,
     }
 
     #[test_macro::test]
@@ -146,32 +151,44 @@ mod tests {
         }
     }
 
-    // #[test_macro::test]
-    // async fn send_request_to_node(log_buffer: Arc<Mutex<Vec<u8>>>) {
-    //     let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
-    //     let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
+    #[test_macro::test]
+    async fn send_request_to_node(log_buffer: Arc<Mutex<Vec<u8>>>) {
+        let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
+        let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
 
-    //     let (_, mut client_1) = node_1.start();
-    //     let (_, mut client_2) = node_2.start();
+        let (_, mut client_1) = node_1.start();
+        let (_, mut client_2) = node_2.start();
 
-    //     let peer_id1 = client_1.get_local_peer_id().await.unwrap();
-    //     let peer_id2 = client_2.get_local_peer_id().await.unwrap();
+        let peer_id1 = client_1.get_local_peer_id().await.unwrap();
+        let peer_id2 = client_2.get_local_peer_id().await.unwrap();
 
-    //     node_1
-    //         .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))
-    //         .await;
-    //     node_2
-    //         .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
-    //         .await;
+        node_1
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))
+            .await;
+        node_2
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
+            .await;
 
-    //     let payload = Payload::Job;
-    //     client_1.send_request(peer_id2, payload).await.unwrap();
+        let expected_payload = Payload { job: vec![1, 2, 3] };
+        let expected_id = client_1
+            .send_request(peer_id2, expected_payload.clone())
+            .await
+            .unwrap();
 
-    //     node_2
-    //         .assert_info_log_entry(&format!(
-    //             "Received request response message from peer: {}",
-    //             peer_id1
-    //         ))
-    //         .await;
-    // }
+        node_2
+            .assert_info_log_entry(&format!(
+                "Received request response message from peer: {}",
+                peer_id1
+            ))
+            .await;
+        node_2
+            .assert_info_log_entry("Request relayed to client")
+            .await;
+
+        let req = client_2.read_inbound_requests().await.unwrap();
+        let payload = <Payload as Decode>::decode(&mut req.request().0.as_slice()).unwrap();
+
+        assert_eq!(req.request_id().to_string(), expected_id.to_string());
+        assert_eq!(payload, expected_payload)
+    }
 }
