@@ -199,7 +199,7 @@ impl Node {
                     info!("Response successfully sent");
                     Ok(ClientResponse::ResponseSent)
                 } else {
-                    error!("Subscribed to topic");
+                    error!("Send Response Error");
                     Err(Error::SendResponseError)
                 };
                 Self::send_client_response(result, sender);
@@ -351,15 +351,18 @@ impl NodeClient {
         id: InboundRequestId,
         payload: P,
     ) -> Result<(), Error> {
-        let channel = self.pending_inbound_req.remove(&id).unwrap();
-        let payload = ClientRequestPayload::SendResponse {
-            payload: payload.encode(),
-            channel,
+        let result = if let Some(channel) = self.pending_inbound_req.remove(&id) {
+            let payload = ClientRequestPayload::SendResponse {
+                payload: payload.encode(),
+                channel,
+            };
+            self.send_client_request(payload).await?;
+            Ok(())
+        } else {
+            Err(Error::InboundRequestIdNotFound)
         };
 
-        self.send_client_request(payload).await?;
-
-        Ok(())
+        return result;
     }
 
     pub async fn get_local_peer_id(&mut self) -> Result<PeerId, Error> {
@@ -548,11 +551,14 @@ pub enum Error {
     #[error("")]
     UnexpectedClientResponse,
 
-    #[error("{err}")]
-    SendRequestError { err: String },
-
     #[error("")]
     SendResponseError,
+
+    #[error("")]
+    InboundRequestIdNotFound,
+
+    #[error("{err}")]
+    SendRequestError { err: String },
 
     #[error("{err}")]
     Other { err: String },
