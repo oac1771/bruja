@@ -170,24 +170,19 @@ mod tests {
             .await;
 
         let expected_payload = JobPayload { job: vec![1, 2, 3] };
-        client_1
+        let expected_id = client_1
             .send_request(peer_id2, expected_payload.clone())
             .await
             .unwrap();
 
         node_2
-            .assert_info_log_entry(&format!(
-                "Received request response message from peer: {}",
-                peer_id1
-            ))
-            .await;
-        node_2
             .assert_info_log_entry("Request relayed to client")
             .await;
 
-        let req = client_2.read_inbound_requests().await.unwrap();
+        let (req, id) = client_2.read_inbound_requests().await.unwrap();
         let payload = <JobPayload as Decode>::decode(&mut req.0.as_slice()).unwrap();
 
-        assert_eq!(payload, expected_payload)
+        assert_eq!(payload, expected_payload);
+        assert_eq!(id.to_string(), expected_id.to_string());
     }
 }

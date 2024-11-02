@@ -368,10 +368,10 @@ impl NodeClient {
         return Err(Error::UnexpectedClientResponse);
     }
 
-    pub async fn read_inbound_requests(&mut self) -> Result<P2pRequest, Error> {
+    pub async fn read_inbound_requests(&mut self) -> Result<(P2pRequest, InboundRequestId), Error> {
         while let Some(req) = self.inbound_req_rx.recv().await {
             self.pending_inbound_req.insert(req.request_id, req.channel);
-            return Ok(req.request);
+            return Ok((req.request, req.request_id));
         }
         return Err(Error::Other {
             err: "foo".to_string(),
