@@ -192,6 +192,25 @@ impl Node {
                 let resp = ClientResponse::RequestId { request_id };
                 Self::send_client_response(Ok(resp), sender);
             }
+            ClientRequest::SendResponse {
+                payload,
+                sender,
+                channel,
+            } => {
+                let result = if let Ok(_) = self
+                    .swarm
+                    .behaviour_mut()
+                    .request_response
+                    .send_response(channel, P2pResponse(payload))
+                {
+                    info!("Response successfully sent");
+                    Ok(ClientResponse::ResponseSent)
+                } else {
+                    error!("Subscribed to topic");
+                    Err(Error::SendResponseError)
+                };
+                Self::send_client_response(result, sender);
+            }
             ClientRequest::GetLocalPeerId { sender } => {
                 let peer_id = self.swarm.local_peer_id();
                 let resp = ClientResponse::PeerId {
@@ -356,6 +375,25 @@ impl NodeClient {
         return Err(Error::UnexpectedClientResponse);
     }
 
+    pub async fn send_response<P: Encode>(
+        &mut self,
+        id: InboundRequestId,
+        payload: P,
+    ) -> Result<(), Error> {
+        let channel = self.pending_inbound_req.remove(&id).unwrap();
+        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
+        let req = ClientRequest::SendResponse {
+            sender,
+            payload: payload.encode(),
+            channel,
+        };
+
+        self.send_client_request(req).await?;
+        self.recv_node_response(receiver).await?;
+
+        Ok(())
+    }
+
     pub async fn get_local_peer_id(&mut self) -> Result<PeerId, Error> {
         let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
 
@@ -424,6 +462,11 @@ pub enum ClientRequest {
         payload: Vec<u8>,
         sender: oneshot::Sender<Result<ClientResponse, Error>>,
     },
+    SendResponse {
+        sender: oneshot::Sender<Result<ClientResponse, Error>>,
+        payload: Vec<u8>,
+        channel: ResponseChannel<P2pResponse>,
+    },
     GetLocalPeerId {
         sender: oneshot::Sender<Result<ClientResponse, Error>>,
     },
@@ -432,6 +475,7 @@ pub enum ClientRequest {
 pub enum ClientResponse {
     Publish,
     Subscribe,
+    ResponseSent,
     GossipMessages { msgs: Vec<GossipMessage> },
     RequestId { request_id: OutboundRequestId },
     PeerId { peer_id: PeerId },
@@ -468,7 +512,7 @@ pub struct InboundP2pRequest {
 pub struct P2pRequest(pub Vec<u8>);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
-struct P2pResponse(Vec<u8>);
+pub struct P2pResponse(pub Vec<u8>);
 
 #[derive(NetworkBehaviour)]
 struct Behavior {
@@ -529,6 +573,9 @@ pub enum Error {
 
     #[error("{err}")]
     SendRequestError { err: String },
+
+    #[error("")]
+    SendResponseError,
 
     #[error("{err}")]
     Other { err: String },
