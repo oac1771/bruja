@@ -185,4 +185,46 @@ mod tests {
         assert_eq!(payload, expected_payload);
         assert_eq!(id.to_string(), expected_id.to_string());
     }
+
+    #[test_macro::test]
+    async fn send_response_to_node(log_buffer: Arc<Mutex<Vec<u8>>>) {
+        let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
+        let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
+        let expected_payload = JobPayload { job: vec![1, 2, 3] };
+
+        let (_, mut client_1) = node_1.start();
+        let (_, mut client_2) = node_2.start();
+
+        let peer_id1 = client_1.get_local_peer_id().await.unwrap();
+        let peer_id2 = client_2.get_local_peer_id().await.unwrap();
+
+        node_1
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))
+            .await;
+        node_2
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
+            .await;
+
+        let expected_id = client_1
+            .send_request(peer_id2, expected_payload.clone())
+            .await
+            .unwrap();
+        node_2
+            .assert_info_log_entry("Request relayed to client")
+            .await;
+
+        let (req, id) = client_2.read_inbound_requests().await.unwrap();
+        let payload = <JobPayload as Decode>::decode(&mut req.0.as_slice()).unwrap();
+
+        client_2.send_response(id, payload).await.unwrap();
+        node_1
+            .assert_info_log_entry("Response relayed to client")
+            .await;
+
+        let (resp, result_id) = client_1.read_inbound_responses().await.unwrap();
+        let result_payload = <JobPayload as Decode>::decode(&mut resp.0.as_slice()).unwrap();
+
+        assert_eq!(result_id.to_string(), expected_id.to_string());
+        assert_eq!(result_payload, expected_payload);
+    }
 }

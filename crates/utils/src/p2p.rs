@@ -37,6 +37,7 @@ pub struct Node {
 pub struct NodeClient {
     req_tx: Sender<ClientRequest>,
     inbound_req_rx: Receiver<InboundP2pRequest>,
+    inbound_resp_rx: Receiver<InboundP2pResponse>,
     pending_inbound_req: HashMap<InboundRequestId, ResponseChannel<P2pResponse>>,
 }
 
@@ -107,13 +108,14 @@ impl Node {
     pub fn start(mut self) -> Result<(JoinHandle<Result<(), Error>>, NodeClient), Error> {
         let (req_tx, req_rx) = mpsc::channel::<ClientRequest>(100);
         let (inbound_req_tx, inbound_req_rx) = mpsc::channel::<InboundP2pRequest>(100);
+        let (inbound_resp_tx, inbound_resp_rx) = mpsc::channel::<InboundP2pResponse>(100);
 
         let addr = "/ip4/0.0.0.0/tcp/0".parse()?;
         self.swarm.listen_on(addr)?;
 
         let handle = spawn(
             async move {
-                match self.run(req_rx, &inbound_req_tx).await {
+                match self.run(req_rx, &inbound_req_tx, &inbound_resp_tx).await {
                     Ok(_) => Ok(()),
                     Err(err) => Err(err),
                 }
@@ -121,7 +123,7 @@ impl Node {
             .instrument(info_span!("")),
         );
 
-        let node_client = NodeClient::new(req_tx, inbound_req_rx);
+        let node_client = NodeClient::new(req_tx, inbound_req_rx, inbound_resp_rx);
 
         Ok((handle, node_client))
     }
@@ -130,11 +132,12 @@ impl Node {
         &mut self,
         mut req_rx: Receiver<ClientRequest>,
         inbound_req_tx: &Sender<InboundP2pRequest>,
+        inbound_resp_tx: &Sender<InboundP2pResponse>,
     ) -> Result<(), Error> {
         loop {
             select! {
                 Some(request) = req_rx.recv() => self.handle_client_request(request),
-                event = self.swarm.select_next_some() => self.handle_event(event, inbound_req_tx).await
+                event = self.swarm.select_next_some() => self.handle_event(event, inbound_req_tx, inbound_resp_tx).await
             }
         }
     }
@@ -227,6 +230,7 @@ impl Node {
         &mut self,
         event: SwarmEvent<BehaviorEvent>,
         inbound_req_tx: &Sender<InboundP2pRequest>,
+        inbound_resp_tx: &Sender<InboundP2pResponse>,
     ) {
         match event {
             SwarmEvent::Behaviour(BehaviorEvent::Gossipsub(gossipsub::Event::Message {
@@ -266,7 +270,17 @@ impl Node {
                         inbound_req_tx.send(req).await.unwrap();
                         info!("Request relayed to client");
                     }
-                    _ => {} // RequestResponseMessage::Response { request_id, response } => todo!(),
+                    RequestResponseMessage::Response {
+                        request_id,
+                        response,
+                    } => {
+                        let resp = InboundP2pResponse {
+                            response,
+                            request_id,
+                        };
+                        inbound_resp_tx.send(resp).await.unwrap();
+                        info!("Response relayed to client");
+                    }
                 }
             }
             SwarmEvent::Behaviour(BehaviorEvent::Gossipsub(gossipsub::Event::Subscribed {
@@ -300,13 +314,18 @@ impl Node {
 }
 
 impl NodeClient {
-    fn new(req_tx: Sender<ClientRequest>, inbound_req_rx: Receiver<InboundP2pRequest>) -> Self {
+    fn new(
+        req_tx: Sender<ClientRequest>,
+        inbound_req_rx: Receiver<InboundP2pRequest>,
+        inbound_resp_rx: Receiver<InboundP2pResponse>,
+    ) -> Self {
         let pending_inbound_req: HashMap<InboundRequestId, ResponseChannel<P2pResponse>> =
             HashMap::new();
 
         Self {
             req_tx,
             inbound_req_rx,
+            inbound_resp_rx,
             pending_inbound_req,
         }
     }
@@ -336,8 +355,8 @@ impl NodeClient {
         payload: P,
     ) -> Result<OutboundRequestId, Error> {
         let payload = ClientRequestPayload::SendRequest {
-            peer_id,
             payload: payload.encode(),
+            peer_id,
         };
 
         if let ClientResponse::RequestId { request_id } = self.send_client_request(payload).await? {
@@ -351,18 +370,15 @@ impl NodeClient {
         id: InboundRequestId,
         payload: P,
     ) -> Result<(), Error> {
-        let result = if let Some(channel) = self.pending_inbound_req.remove(&id) {
+        if let Some(channel) = self.pending_inbound_req.remove(&id) {
             let payload = ClientRequestPayload::SendResponse {
                 payload: payload.encode(),
                 channel,
             };
             self.send_client_request(payload).await?;
-            Ok(())
-        } else {
-            Err(Error::InboundRequestIdNotFound)
-        };
-
-        return result;
+            return Ok(());
+        }
+        return Err(Error::InboundRequestIdNotFound);
     }
 
     pub async fn get_local_peer_id(&mut self) -> Result<PeerId, Error> {
@@ -378,6 +394,17 @@ impl NodeClient {
         while let Some(req) = self.inbound_req_rx.recv().await {
             self.pending_inbound_req.insert(req.request_id, req.channel);
             return Ok((req.request, req.request_id));
+        }
+        return Err(Error::Other {
+            err: "foo".to_string(),
+        });
+    }
+
+    pub async fn read_inbound_responses(
+        &mut self,
+    ) -> Result<(P2pResponse, OutboundRequestId), Error> {
+        while let Some(req) = self.inbound_resp_rx.recv().await {
+            return Ok((req.response, req.request_id));
         }
         return Err(Error::Other {
             err: "foo".to_string(),
@@ -488,6 +515,11 @@ pub struct InboundP2pRequest {
     request_id: InboundRequestId,
 }
 
+pub struct InboundP2pResponse {
+    response: P2pResponse,
+    request_id: OutboundRequestId,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct P2pRequest(pub Vec<u8>);
 
@@ -540,7 +572,7 @@ pub enum Error {
     },
 
     #[error("{source}")]
-    TokioRecvError {
+    RecvError {
         #[from]
         source: tokio::sync::oneshot::error::RecvError,
     },
