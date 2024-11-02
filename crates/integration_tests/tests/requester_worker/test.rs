@@ -1,4 +1,4 @@
-#[cfg(test)]
+#[cfg(feature = "integration_tests")]
 mod tests {
     use ink_env::DefaultEnvironment;
     use requester::{commands::submit_job::SubmitJobCmd, config::Config as ConfigR};

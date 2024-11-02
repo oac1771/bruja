@@ -41,12 +41,12 @@ cargo test -p catalog --test contract-e2e
 
 [tasks.requester-worker]
 script='''
-cargo test -p tests --test requester_worker
+cargo test -p tests --test requester_worker --features integration_tests
 '''
 
 [tasks.p2p-tests]
 script='''
-cargo test -p tests --test p2p
+cargo test -p tests --test p2p --features integration_tests
 '''
 
 [tasks.local-node]

@@ -25,12 +25,15 @@ worker = { workspace = true }
 requester = { workspace = true }
 utils = { workspace = true }
 
+[features]
+integration_tests = []
+
 [[test]]
 name = "requester_worker"
-path = "tests/requester_worker/integration.rs"
+path = "tests/requester_worker/test.rs"
 test = false
 
 [[test]]
 name = "p2p"
-path = "tests/p2p/integration.rs"
+path = "tests/p2p/test.rs"
 test = false

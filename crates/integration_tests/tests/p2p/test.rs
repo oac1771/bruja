@@ -1,4 +1,4 @@
-#[cfg(test)]
+#[cfg(feature = "integration_tests")]
 mod tests {
     use codec::{Decode, Encode};
     use rand::{
