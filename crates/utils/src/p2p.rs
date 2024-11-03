@@ -332,7 +332,7 @@ impl NodeClient {
 
     pub async fn subscribe(&self, topic: &str) -> Result<(), Error> {
         let payload = ClientRequestPayload::Subscribe {
-            topic: topic.to_string(),
+            topic: topic.trim().to_string(),
         };
         self.send_client_request(payload).await?;
 

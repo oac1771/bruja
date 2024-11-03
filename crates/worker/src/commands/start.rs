@@ -37,13 +37,20 @@ struct Worker {
 impl StartCmd {
     #[instrument(skip_all)]
     pub async fn handle(&self, config: Config) -> Result<(), Error> {
-        let node = NodeBuilder::build()?;
-        let (node_handle, node_client) = node.start()?;
+        let (node_handle, node_client) = self.join_network().await?;
 
         let worker = Worker::new(config, &self.address, node_client)?;
         worker.start(node_handle).await?;
 
         Ok(())
+    }
+
+    async fn join_network(&self) -> Result<(JoinHandle<Result<(), P2pError>>, NodeClient), Error> {
+        let node = NodeBuilder::build()?;
+        let (node_handle, node_client) = node.start()?;
+        node_client.subscribe(&self.address).await?;
+
+        Ok((node_handle, node_client))
     }
 }
 
@@ -60,13 +67,15 @@ impl Worker {
     }
 
     async fn start(&self, node_handle: JoinHandle<Result<(), P2pError>>) -> Result<(), Error> {
-        let address = self.contract_address.to_string();
-        self.node_client.subscribe(&address).await?;
-
         info!("Starting Worker");
+
         select! {
             _ = node_handle => {},
-            _ = self.listen_blocks() => {},
+            result = self.listen_blocks() => {
+                if let Err(err) = result {
+                    error!("Encountered Error: {}", err);
+                }
+            },
             _ = signal::ctrl_c() => {
                 info!("Shutting down...")
             }

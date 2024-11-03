@@ -30,16 +30,71 @@ pub struct SubmitJobCmd {
     pub params: Option<String>,
 }
 
+struct Requester {
+    node_client: NodeClient,
+    config: Config,
+    contract_address: AccountId32,
+    path: String,
+    func_name: String,
+    params: Option<String>,
+}
+
 impl SubmitJobCmd {
     #[instrument(skip_all)]
     pub async fn handle(&self, config: Config) -> Result<(), Error> {
-        let (handle, node_client) = self.join_network().await?;
+        let (node_handle, node_client) = self.join_network().await?;
 
+        let mut requester = Requester::new(
+            config,
+            &self.address,
+            node_client,
+            self.path.clone(),
+            self.func_name.clone(),
+            self.params.clone(),
+        )?;
+
+        requester.start(node_handle).await?;
+
+        Ok(())
+    }
+
+    async fn join_network(&self) -> Result<(JoinHandle<Result<(), P2pError>>, NodeClient), Error> {
+        let node = NodeBuilder::build()?;
+        let (node_handle, node_client) = node.start()?;
+        node_client.subscribe(&self.address).await?;
+
+        Ok((node_handle, node_client))
+    }
+}
+
+impl Requester {
+    fn new(
+        config: Config,
+        address: &str,
+        node_client: NodeClient,
+        path: String,
+        func_name: String,
+        params: Option<String>,
+    ) -> Result<Self, Error> {
+        let contract_address =
+            AccountId32::from_str(address).map_err(|err| Error::Other(err.to_string()))?;
+
+        Ok(Self {
+            node_client,
+            config,
+            contract_address,
+            path,
+            func_name,
+            params,
+        })
+    }
+
+    async fn start(&mut self, node_handle: JoinHandle<Result<(), P2pError>>) -> Result<(), Error> {
         select! {
-            _ = handle => {},
-            result = self.start(config, node_client) => {
+            _ = node_handle => {},
+            result = self.submit_job() => {
                 if let Err(err) = result {
-                    error!("Error submitting job: {}", err);
+                    error!("Encountered Error: {}", err);
                 }
             },
             _ = signal::ctrl_c() => {
@@ -50,19 +105,11 @@ impl SubmitJobCmd {
         Ok(())
     }
 
-    async fn join_network(&self) -> Result<(JoinHandle<Result<(), P2pError>>, NodeClient), Error> {
-        let node = NodeBuilder::build()?;
-        let (handle, node_client) = node.start()?;
-        node_client.subscribe(&self.address).await?;
-
-        Ok((handle, node_client))
-    }
-
-    async fn start(&self, config: Config, mut node_client: NodeClient) -> Result<(), Error> {
-        self.submit_job(config).await?;
+    async fn submit_job(&mut self) -> Result<(), Error> {
+        self.send_extrinsic().await?;
         info!("Job Request Submitted!");
 
-        let _gossip_messages = node_client.read_gossip_messages().await;
+        let _gossip_messages = self.node_client.read_gossip_messages().await;
 
         info!("Messages received!");
 
@@ -71,22 +118,15 @@ impl SubmitJobCmd {
         Ok(())
     }
 
-    async fn submit_job(&self, config: Config) -> Result<(), Error> {
-        let contract_address = AccountId32::from_str(&self.address).map_err(|err| {
-            Error::Other(format!(
-                "Failed to parse provided contract address: {}",
-                err.to_string()
-            ))
-        })?;
-
+    async fn send_extrinsic(&self) -> Result<(), Error> {
         let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
-            Client::new(&config.artifact_file_path, &config.signer).await?;
+            Client::new(&self.config.artifact_file_path, &self.config.signer).await?;
 
         let job_request = self.build_job_request()?;
 
         client
             .write::<JobRequestSubmitted, JobRequest>(
-                contract_address,
+                self.contract_address.0,
                 "submit_job_request",
                 job_request,
             )
@@ -99,8 +139,6 @@ impl SubmitJobCmd {
         let code = self.read_file()?;
         let engine = Engine::default();
         let module = Module::from_file(&engine, &self.path)?;
-
-        let _resources = module.resources_required();
 
         let params = if let Some(params) = &self.params {
             let p = params.split(",").collect::<Vec<&str>>();
@@ -116,19 +154,11 @@ impl SubmitJobCmd {
 
     fn read_file(&self) -> Result<Vec<u8>, Error> {
         let path = Path::new(&self.path);
+        let mut file = File::open(path)?;
+        let mut code = Vec::new();
+        file.read_to_end(&mut code)?;
 
-        if path.exists() {
-            let mut file = File::open(path)?;
-            let mut code = Vec::new();
-            file.read_to_end(&mut code)?;
-
-            return Ok(code);
-        } else {
-            return Err(Error::Other(format!(
-                "Path: {:?} does not exist",
-                self.path
-            )));
-        }
+        return Ok(code);
     }
 
     fn build_params(&self, p: &Vec<&str>, module: &Module) -> Result<Vec<Vec<u8>>, Error> {
@@ -153,17 +183,4 @@ impl SubmitJobCmd {
 
         Ok(p)
     }
-
-    // async fn _send_job(
-    //     &self,
-    //     gossip_message: GossipMessage,
-    //     mut node_client: NodeClient,
-    // ) -> Result<(), Error> {
-    //     let payload = Payload::Job;
-    //     let _foo = node_client
-    //         .send_request(gossip_message.peer_id(), payload)
-    //         .await?;
-
-    //     Ok(())
-    // }
 }

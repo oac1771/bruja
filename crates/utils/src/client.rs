@@ -93,10 +93,11 @@ where
 
     pub async fn write<Ev: Decode, Args: Encode + Clone>(
         &self,
-        address: <C as Config>::AccountId,
+        address: impl Into<<C as Config>::AccountId>,
         message: &str,
         args: Args,
     ) -> Result<Ev, ClientError> {
+        let address: <C as Config>::AccountId = address.into();
         let message = self.ink_project.get_message(message)?;
         let mut data = message.get_selector()?;
         args.encode_to(&mut data);
