@@ -52,12 +52,21 @@ mod tests {
     }
 
     #[test_macro::test]
-    async fn mdns_peer_discovery_success(log_buffer: Arc<Mutex<Vec<u8>>>) {
+    async fn mdns_and_gossip_discovery_success(log_buffer: Arc<Mutex<Vec<u8>>>) {
+        let topic: String = thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(5)
+            .map(|val| char::from(val))
+            .collect();
+
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
         let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
 
         let (_, mut client_1) = node_1.start();
         let (_, mut client_2) = node_2.start();
+
+        client_1.subscribe(&topic).await.unwrap();
+        client_2.subscribe(&topic).await.unwrap();
 
         let peer_id_1 = client_1.get_local_peer_id().await.unwrap();
         let peer_id_2 = client_2.get_local_peer_id().await.unwrap();
@@ -68,6 +77,19 @@ mod tests {
         node_2
             .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_1))
             .await;
+
+        node_1
+            .assert_info_log_entry(&format!("A remote subscribed to a topic: {}", topic))
+            .await;
+        node_2
+            .assert_info_log_entry(&format!("A remote subscribed to a topic: {}", topic))
+            .await;
+
+        let gossip_nodes_1 = client_1.get_gossip_nodes(&topic).await.unwrap();
+        let gossip_nodes_2 = client_2.get_gossip_nodes(&topic).await.unwrap();
+
+        assert_eq!(gossip_nodes_1[0], peer_id_2);
+        assert_eq!(gossip_nodes_2[0], peer_id_1);
     }
 
     #[test_macro::test]
@@ -114,8 +136,10 @@ mod tests {
             .await;
 
         let msgs = client_2.read_gossip_messages().await;
+        let result_message =
+            <Vec<u8> as Decode>::decode(&mut msgs[0].clone().message().as_slice()).unwrap();
         assert!(msgs.clone().len() > 0);
-        assert_eq!(msgs[0].clone().message(), msg);
+        assert_eq!(result_message, msg);
     }
 
     #[test_macro::test]

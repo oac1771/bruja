@@ -49,6 +49,7 @@ impl NodeBuilder {
                 libp2p::tls::Config::new,
                 libp2p::yamux::Config::default,
             )?
+            .with_quic()
             .with_behaviour(|key| {
                 let message_id_fn = |message: &gossipsub::Message| {
                     let mut s = DefaultHasher::new();
@@ -105,8 +106,9 @@ impl Node {
         let (inbound_resp_tx, inbound_resp_rx) = mpsc::channel::<InboundP2pResponse>(100);
         let (gossip_msg_tx, gossip_msg_rx) = mpsc::channel::<GossipMessage>(100);
 
-        let addr = "/ip4/0.0.0.0/tcp/0".parse()?;
-        self.swarm.listen_on(addr)?;
+        self.swarm
+            .listen_on("/ip4/0.0.0.0/udp/0/quic-v1".parse()?)?;
+        self.swarm.listen_on("/ip4/0.0.0.0/tcp/0".parse()?)?;
 
         let handle = spawn(
             async move {
@@ -198,6 +200,20 @@ impl Node {
                 let resp = ClientResponse::PeerId {
                     peer_id: peer_id.clone(),
                 };
+                Self::send_client_response(Ok(resp), sender);
+            }
+            ClientRequestPayload::GetGossipNodes { topic } => {
+                let hash = gossipsub::IdentTopic::new(topic).hash();
+                let gossip_nodes = self
+                    .swarm
+                    .behaviour()
+                    .gossipsub
+                    .all_peers()
+                    .filter(|(_, t)| t.contains(&&hash))
+                    .map(|(p, _)| p.clone())
+                    .collect::<Vec<PeerId>>();
+
+                let resp = ClientResponse::GossipNodes { gossip_nodes };
                 Self::send_client_response(Ok(resp), sender);
             }
         };
@@ -320,10 +336,22 @@ impl NodeClient {
         }
     }
 
-    pub async fn publish(&self, topic: &str, msg: Vec<u8>) -> Result<(), Error> {
+    pub async fn get_gossip_nodes(&self, topic: &str) -> Result<Vec<PeerId>, Error> {
+        let payload = ClientRequestPayload::GetGossipNodes {
+            topic: topic.to_string(),
+        };
+        if let ClientResponse::GossipNodes { gossip_nodes } =
+            self.send_client_request(payload).await?
+        {
+            return Ok(gossip_nodes);
+        }
+        return Err(Error::UnexpectedClientResponse);
+    }
+
+    pub async fn publish<M: Encode>(&self, topic: &str, msg: M) -> Result<(), Error> {
         let payload = ClientRequestPayload::Publish {
             topic: topic.to_string(),
-            msg,
+            msg: msg.encode(),
         };
         self.send_client_request(payload).await?;
 
@@ -474,6 +502,9 @@ pub enum ClientRequestPayload {
         payload: Vec<u8>,
     },
     GetLocalPeerId,
+    GetGossipNodes {
+        topic: String,
+    },
 }
 
 pub enum ClientResponse {
@@ -483,6 +514,7 @@ pub enum ClientResponse {
     GossipMessages { msgs: Vec<GossipMessage> },
     RequestId { request_id: OutboundRequestId },
     PeerId { peer_id: PeerId },
+    GossipNodes { gossip_nodes: Vec<PeerId> },
 }
 
 #[derive(Clone)]
