@@ -15,7 +15,7 @@ use tracing::{error, info, instrument};
 use utils::{
     chain::contracts::events::ContractEmitted,
     client::Client,
-    p2p::{Error as P2pError, Message, NodeBuilder, NodeClient},
+    p2p::{Error as P2pError, NodeBuilder, NodeClient},
 };
 #[derive(Debug, Parser)]
 pub struct StartCmd {
@@ -37,7 +37,10 @@ struct Worker {
 impl StartCmd {
     #[instrument(skip_all)]
     pub async fn handle(&self, config: Config) -> Result<(), Error> {
-        let (worker, node_handle) = Worker::new(config, &self.address)?;
+        let node = NodeBuilder::build()?;
+        let (node_handle, node_client) = node.start()?;
+
+        let worker = Worker::new(config, &self.address, node_client)?;
         worker.start(node_handle).await?;
 
         Ok(())
@@ -45,24 +48,15 @@ impl StartCmd {
 }
 
 impl Worker {
-    fn new(
-        config: Config,
-        address: &str,
-    ) -> Result<(Self, JoinHandle<Result<(), P2pError>>), Error> {
+    fn new(config: Config, address: &str, node_client: NodeClient) -> Result<Self, Error> {
         let contract_address =
             AccountId32::from_str(address).map_err(|err| Error::Other(err.to_string()))?;
 
-        let node = NodeBuilder::build()?;
-        let (node_handle, node_client) = node.start()?;
-
-        Ok((
-            Self {
-                node_client,
-                config,
-                contract_address,
-            },
-            node_handle,
-        ))
+        Ok(Self {
+            node_client,
+            config,
+            contract_address,
+        })
     }
 
     async fn start(&self, node_handle: JoinHandle<Result<(), P2pError>>) -> Result<(), Error> {
@@ -152,11 +146,10 @@ impl Worker {
     }
 
     async fn accept_job(&self, job_request: JobRequestSubmitted) -> Result<(), Error> {
-        let job_acceptance = Message::JobAcceptance {
-            job_id: job_request.id.to_vec(),
-        };
         let address = self.contract_address.to_string();
-        self.node_client.publish(&address, job_acceptance).await?;
+        self.node_client
+            .publish(&address, job_request.id.to_vec())
+            .await?;
         info!("Published job acceptance");
         Ok(())
     }

@@ -62,7 +62,7 @@ impl SubmitJobCmd {
         self.submit_job(config).await?;
         info!("Job Request Submitted!");
 
-        let _gossip_messages = node_client.get_gossip_messages().await?;
+        let _gossip_messages = node_client.read_gossip_messages().await;
 
         info!("Messages received!");
 

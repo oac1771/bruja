@@ -1,8 +1,7 @@
-use codec::{Decode, Encode};
+use codec::Encode;
 use libp2p::{
     futures::prelude::*,
-    gossipsub::{self, MessageId},
-    mdns,
+    gossipsub, mdns,
     request_response::{
         self, InboundRequestId, Message as RequestResponseMessage, OutboundRequestId,
         ProtocolSupport, ResponseChannel,
@@ -31,13 +30,13 @@ pub struct NodeBuilder;
 
 pub struct Node {
     swarm: Swarm<Behavior>,
-    gossip_messages: HashMap<MessageId, GossipMessage>,
 }
 
 pub struct NodeClient {
     req_tx: Sender<ClientRequest>,
     inbound_req_rx: Receiver<InboundP2pRequest>,
     inbound_resp_rx: Receiver<InboundP2pResponse>,
+    gossip_msg_rx: Receiver<GossipMessage>,
     pending_inbound_req: HashMap<InboundRequestId, ResponseChannel<P2pResponse>>,
 }
 
@@ -95,12 +94,7 @@ impl NodeBuilder {
             })
             .build();
 
-        let gossip_messages: HashMap<MessageId, GossipMessage> = HashMap::new();
-
-        Ok(Node {
-            swarm,
-            gossip_messages,
-        })
+        Ok(Node { swarm })
     }
 }
 
@@ -109,13 +103,17 @@ impl Node {
         let (req_tx, req_rx) = mpsc::channel::<ClientRequest>(100);
         let (inbound_req_tx, inbound_req_rx) = mpsc::channel::<InboundP2pRequest>(100);
         let (inbound_resp_tx, inbound_resp_rx) = mpsc::channel::<InboundP2pResponse>(100);
+        let (gossip_msg_tx, gossip_msg_rx) = mpsc::channel::<GossipMessage>(100);
 
         let addr = "/ip4/0.0.0.0/tcp/0".parse()?;
         self.swarm.listen_on(addr)?;
 
         let handle = spawn(
             async move {
-                match self.run(req_rx, &inbound_req_tx, &inbound_resp_tx).await {
+                match self
+                    .run(req_rx, &inbound_req_tx, &inbound_resp_tx, &gossip_msg_tx)
+                    .await
+                {
                     Ok(_) => Ok(()),
                     Err(err) => Err(err),
                 }
@@ -123,7 +121,7 @@ impl Node {
             .instrument(info_span!("")),
         );
 
-        let node_client = NodeClient::new(req_tx, inbound_req_rx, inbound_resp_rx);
+        let node_client = NodeClient::new(req_tx, inbound_req_rx, inbound_resp_rx, gossip_msg_rx);
 
         Ok((handle, node_client))
     }
@@ -133,11 +131,12 @@ impl Node {
         mut req_rx: Receiver<ClientRequest>,
         inbound_req_tx: &Sender<InboundP2pRequest>,
         inbound_resp_tx: &Sender<InboundP2pResponse>,
+        gossip_msg_tx: &Sender<GossipMessage>,
     ) -> Result<(), Error> {
         loop {
             select! {
                 Some(request) = req_rx.recv() => self.handle_client_request(request),
-                event = self.swarm.select_next_some() => self.handle_event(event, inbound_req_tx, inbound_resp_tx).await
+                event = self.swarm.select_next_some() => self.handle_event(event, inbound_req_tx, inbound_resp_tx, gossip_msg_tx).await
             }
         }
     }
@@ -147,18 +146,14 @@ impl Node {
         match request.payload {
             ClientRequestPayload::Publish { topic, msg } => {
                 let tpc = gossipsub::IdentTopic::new(&topic);
-                let result = if let Err(err) = self
-                    .swarm
-                    .behaviour_mut()
-                    .gossipsub
-                    .publish(tpc, msg.encode())
-                {
-                    error!("Publishing Error: {}", err);
-                    Err(Error::from(err))
-                } else {
-                    info!("Successfully published message to {} topic", topic);
-                    Ok(ClientResponse::Publish)
-                };
+                let result =
+                    if let Err(err) = self.swarm.behaviour_mut().gossipsub.publish(tpc, msg) {
+                        error!("Publishing Error: {}", err);
+                        Err(Error::from(err))
+                    } else {
+                        info!("Successfully published message to {} topic", topic);
+                        Ok(ClientResponse::Publish)
+                    };
                 Self::send_client_response(result, sender);
             }
             ClientRequestPayload::Subscribe { topic } => {
@@ -173,15 +168,6 @@ impl Node {
                         Ok(ClientResponse::Subscribe)
                     };
                 Self::send_client_response(result, sender);
-            }
-            ClientRequestPayload::ReadGossipMessages => {
-                let msgs = self
-                    .gossip_messages
-                    .values()
-                    .map(|data| data.clone())
-                    .collect::<Vec<GossipMessage>>();
-                let resp = ClientResponse::GossipMessages { msgs };
-                Self::send_client_response(Ok(resp), sender);
             }
             ClientRequestPayload::SendRequest { payload, peer_id } => {
                 let request_id = self
@@ -231,25 +217,21 @@ impl Node {
         event: SwarmEvent<BehaviorEvent>,
         inbound_req_tx: &Sender<InboundP2pRequest>,
         inbound_resp_tx: &Sender<InboundP2pResponse>,
+        gossip_msg_tx: &Sender<GossipMessage>,
     ) {
         match event {
             SwarmEvent::Behaviour(BehaviorEvent::Gossipsub(gossipsub::Event::Message {
                 propagation_source: peer_id,
-                message_id: id,
                 message,
+                ..
             })) => {
-                info!("Received gossip message: with id: {id} from peer: {peer_id}");
-                match <Message as Decode>::decode(&mut message.data.as_slice()) {
-                    Ok(msg) => {
-                        let gsp_msg = GossipMessage {
-                            peer_id,
-                            message: msg,
-                        };
-                        self.gossip_messages.insert(id, gsp_msg);
-                    }
-                    Err(err) => {
-                        error!("Error Decoding Message: {}", err);
-                    }
+                let gsp_msg = GossipMessage {
+                    peer_id,
+                    message: message.data,
+                };
+                match gossip_msg_tx.send(gsp_msg).await {
+                    Ok(_) => info!("Gossip message relayed to client"),
+                    Err(err) => error!("Error relaying gossip message to client: {}", err),
                 }
             }
             SwarmEvent::Behaviour(BehaviorEvent::RequestResponse(
@@ -292,7 +274,7 @@ impl Node {
             SwarmEvent::Behaviour(BehaviorEvent::Gossipsub(gossipsub::Event::Subscribed {
                 peer_id: _peer_id,
                 topic,
-            })) => info!("A remote subscribed to a topic: {topic}",),
+            })) => info!("A remote subscribed to a topic: {topic}"),
             SwarmEvent::Behaviour(BehaviorEvent::Mdns(mdns::Event::Discovered(list))) => {
                 for (peer_id, _) in list {
                     info!("mDNS discovered a new peer: {peer_id}");
@@ -324,6 +306,7 @@ impl NodeClient {
         req_tx: Sender<ClientRequest>,
         inbound_req_rx: Receiver<InboundP2pRequest>,
         inbound_resp_rx: Receiver<InboundP2pResponse>,
+        gossip_msg_rx: Receiver<GossipMessage>,
     ) -> Self {
         let pending_inbound_req: HashMap<InboundRequestId, ResponseChannel<P2pResponse>> =
             HashMap::new();
@@ -332,11 +315,12 @@ impl NodeClient {
             req_tx,
             inbound_req_rx,
             inbound_resp_rx,
+            gossip_msg_rx,
             pending_inbound_req,
         }
     }
 
-    pub async fn publish(&self, topic: &str, msg: Message) -> Result<(), Error> {
+    pub async fn publish(&self, topic: &str, msg: Vec<u8>) -> Result<(), Error> {
         let payload = ClientRequestPayload::Publish {
             topic: topic.to_string(),
             msg,
@@ -396,34 +380,42 @@ impl NodeClient {
         return Err(Error::UnexpectedClientResponse);
     }
 
-    pub async fn read_inbound_requests(&mut self) -> Result<(P2pRequest, InboundRequestId), Error> {
-        while let Some(req) = self.inbound_req_rx.recv().await {
-            self.pending_inbound_req.insert(req.request_id, req.channel);
-            return Ok((req.request, req.request_id));
-        }
-        return Err(Error::Other {
-            err: "foo".to_string(),
-        });
+    pub async fn read_inbound_requests(&mut self) -> Vec<(P2pRequest, InboundRequestId)> {
+        let reqs = self
+            .inbound_req_rx
+            .recv()
+            .await
+            .into_iter()
+            .map(|r| {
+                self.pending_inbound_req.insert(r.request_id, r.channel);
+                (r.request, r.request_id)
+            })
+            .collect::<Vec<(P2pRequest, InboundRequestId)>>();
+
+        return reqs;
     }
 
-    pub async fn read_inbound_responses(
-        &mut self,
-    ) -> Result<(P2pResponse, OutboundRequestId), Error> {
-        while let Some(req) = self.inbound_resp_rx.recv().await {
-            return Ok((req.response, req.request_id));
-        }
-        return Err(Error::Other {
-            err: "foo".to_string(),
-        });
+    pub async fn read_inbound_responses(&mut self) -> Vec<(P2pResponse, OutboundRequestId)> {
+        let resps = self
+            .inbound_resp_rx
+            .recv()
+            .await
+            .into_iter()
+            .map(|r| (r.response, r.request_id))
+            .collect::<Vec<(P2pResponse, OutboundRequestId)>>();
+
+        return resps;
     }
 
-    pub async fn get_gossip_messages(&mut self) -> Result<Vec<GossipMessage>, Error> {
-        let payload = ClientRequestPayload::ReadGossipMessages;
+    pub async fn read_gossip_messages(&mut self) -> Vec<GossipMessage> {
+        let msgs = self
+            .gossip_msg_rx
+            .recv()
+            .await
+            .into_iter()
+            .collect::<Vec<GossipMessage>>();
 
-        if let ClientResponse::GossipMessages { msgs } = self.send_client_request(payload).await? {
-            return Ok(msgs);
-        }
-        return Err(Error::UnexpectedClientResponse);
+        return msgs;
     }
 
     async fn send_client_request(
@@ -451,7 +443,7 @@ impl NodeClient {
     ) -> Result<ClientResponse, Error> {
         let result = select! {
             _ = sleep(TokioDuration::from_secs(10)) => {
-                Err(Error::OneShotTimeOutError)
+                Err(Error::TimeOutError {err: "Timedout waiting for response from node".to_string()})
             },
             msgs = receiver => {
                 Ok(msgs?)
@@ -468,19 +460,18 @@ struct ClientRequest {
 pub enum ClientRequestPayload {
     Publish {
         topic: String,
-        msg: Message,
+        msg: Vec<u8>,
     },
     Subscribe {
         topic: String,
     },
-    ReadGossipMessages,
     SendRequest {
         peer_id: PeerId,
         payload: Vec<u8>,
     },
     SendResponse {
-        payload: Vec<u8>,
         channel: ResponseChannel<P2pResponse>,
+        payload: Vec<u8>,
     },
     GetLocalPeerId,
 }
@@ -497,7 +488,7 @@ pub enum ClientResponse {
 #[derive(Clone)]
 pub struct GossipMessage {
     peer_id: PeerId,
-    message: Message,
+    message: Vec<u8>,
 }
 
 impl GossipMessage {
@@ -505,14 +496,9 @@ impl GossipMessage {
         self.peer_id
     }
 
-    pub fn message(self) -> Message {
+    pub fn message(self) -> Vec<u8> {
         self.message
     }
-}
-
-#[derive(Encode, Decode, Debug, Clone)]
-pub enum Message {
-    JobAcceptance { job_id: Vec<u8> },
 }
 
 pub struct InboundP2pRequest {
@@ -583,8 +569,8 @@ pub enum Error {
         source: tokio::sync::oneshot::error::RecvError,
     },
 
-    #[error("Timed out waiting for response from node")]
-    OneShotTimeOutError,
+    #[error("{err}")]
+    TimeOutError { err: String },
 
     #[error("")]
     UnexpectedClientResponse,

@@ -9,7 +9,7 @@ mod tests {
     use tests::test_utils::{Log, Runner};
     use tokio::task::JoinHandle;
     use tracing::instrument;
-    use utils::p2p::{Error, Message, NodeBuilder, NodeClient};
+    use utils::p2p::{Error, NodeBuilder, NodeClient};
 
     struct NodeRunner<'a> {
         log_buffer: Arc<Mutex<Vec<u8>>>,
@@ -77,7 +77,7 @@ mod tests {
             .take(5)
             .map(|val| char::from(val))
             .collect();
-        let expected_job_id = vec![1, 2, 3, 4, 5];
+        let msg = vec![1, 2, 3, 4, 5];
 
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
         let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
@@ -105,10 +105,7 @@ mod tests {
             .assert_info_log_entry(&format!("Subscribed to topic: {}", topic))
             .await;
 
-        let msg = Message::JobAcceptance {
-            job_id: expected_job_id.clone(),
-        };
-        client_1.publish(&topic, msg).await.unwrap();
+        client_1.publish(&topic, msg.clone()).await.unwrap();
         node_1
             .assert_info_log_entry(&format!(
                 "Successfully published message to {} topic",
@@ -116,13 +113,9 @@ mod tests {
             ))
             .await;
 
-        let msgs = client_2.get_gossip_messages().await.unwrap();
-
-        assert!(msgs.len() > 0);
-        msgs.into_iter().for_each(|msg| {
-            let Message::JobAcceptance { job_id } = msg.message();
-            assert_eq!(job_id, expected_job_id.clone())
-        });
+        let msgs = client_2.read_gossip_messages().await;
+        assert!(msgs.clone().len() > 0);
+        assert_eq!(msgs[0].clone().message(), msg);
     }
 
     #[test_macro::test]
@@ -134,7 +127,7 @@ mod tests {
             .take(5)
             .map(|val| char::from(val))
             .collect();
-        let msg = Message::JobAcceptance { job_id: vec![] };
+        let msg = vec![1, 2, 3, 4];
 
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
 
@@ -179,8 +172,10 @@ mod tests {
             .assert_info_log_entry("Inbound request relayed to client")
             .await;
 
-        let (req, id) = client_2.read_inbound_requests().await.unwrap();
-        let payload = <JobPayload as Decode>::decode(&mut req.0.as_slice()).unwrap();
+        let req = client_2.read_inbound_requests().await;
+        let data = &req[0].0 .0;
+        let id = req[0].1;
+        let payload = <JobPayload as Decode>::decode(&mut data.as_slice()).unwrap();
 
         assert_eq!(payload, expected_payload);
         assert_eq!(id.to_string(), expected_id.to_string());
@@ -213,16 +208,20 @@ mod tests {
             .assert_info_log_entry("Inbound request relayed to client")
             .await;
 
-        let (req, id) = client_2.read_inbound_requests().await.unwrap();
-        let payload = <JobPayload as Decode>::decode(&mut req.0.as_slice()).unwrap();
+        let req = client_2.read_inbound_requests().await;
+        let data = &req[0].0 .0;
+        let id = req[0].1;
+        let payload = <JobPayload as Decode>::decode(&mut data.as_slice()).unwrap();
 
         client_2.send_response(id, payload).await.unwrap();
         node_1
             .assert_info_log_entry("Inbound response relayed to client")
             .await;
 
-        let (resp, result_id) = client_1.read_inbound_responses().await.unwrap();
-        let result_payload = <JobPayload as Decode>::decode(&mut resp.0.as_slice()).unwrap();
+        let resp = client_1.read_inbound_responses().await;
+        let data = &resp[0].0 .0;
+        let result_id = resp[0].1;
+        let result_payload = <JobPayload as Decode>::decode(&mut data.as_slice()).unwrap();
 
         assert_eq!(result_id.to_string(), expected_id.to_string());
         assert_eq!(result_payload, expected_payload);
