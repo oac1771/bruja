@@ -176,7 +176,7 @@ mod tests {
             .unwrap();
 
         node_2
-            .assert_info_log_entry("Request relayed to client")
+            .assert_info_log_entry("Inbound request relayed to client")
             .await;
 
         let (req, id) = client_2.read_inbound_requests().await.unwrap();
@@ -210,7 +210,7 @@ mod tests {
             .await
             .unwrap();
         node_2
-            .assert_info_log_entry("Request relayed to client")
+            .assert_info_log_entry("Inbound request relayed to client")
             .await;
 
         let (req, id) = client_2.read_inbound_requests().await.unwrap();
@@ -218,7 +218,7 @@ mod tests {
 
         client_2.send_response(id, payload).await.unwrap();
         node_1
-            .assert_info_log_entry("Response relayed to client")
+            .assert_info_log_entry("Inbound response relayed to client")
             .await;
 
         let (resp, result_id) = client_1.read_inbound_responses().await.unwrap();

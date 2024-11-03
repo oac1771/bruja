@@ -267,8 +267,10 @@ impl Node {
                             channel,
                             request_id,
                         };
-                        inbound_req_tx.send(req).await.unwrap();
-                        info!("Request relayed to client");
+                        match inbound_req_tx.send(req).await {
+                            Ok(_) => info!("Inbound request relayed to client"),
+                            Err(err) => error!("Error relaying inbound request to client: {}", err),
+                        }
                     }
                     RequestResponseMessage::Response {
                         request_id,
@@ -278,8 +280,12 @@ impl Node {
                             response,
                             request_id,
                         };
-                        inbound_resp_tx.send(resp).await.unwrap();
-                        info!("Response relayed to client");
+                        match inbound_resp_tx.send(resp).await {
+                            Ok(_) => info!("Inbound response relayed to client"),
+                            Err(err) => {
+                                error!("Error relaying inbound response to client: {}", err)
+                            }
+                        }
                     }
                 }
             }

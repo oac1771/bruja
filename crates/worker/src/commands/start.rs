@@ -139,7 +139,7 @@ impl Worker {
                     self.handle_job_request(job_request).await?;
                 }
                 WatchedEvents::DecodeErr => error!("Error decoding event: {:?}", event.data),
-            }
+            };
         }
 
         Ok(())
