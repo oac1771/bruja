@@ -1,7 +1,7 @@
 [workspace.package]
 authors = ["Omar"]
 edition = "2021"
-version = "0.0.2"
+version = "0.0.1"
 license = "Unlicense"
 homepage = "https://github.com/paritytech/substrate-contracts-node"
 repository = "https://github.com/paritytech/substrate-contracts-node"
@@ -13,11 +13,12 @@ members = [
 	"crates/runtime",
 	"crates/catalog",
 	"crates/utils", 
-	"crates/worker", 
 	"crates/scripts", 
-	"crates/requester", 
 	"crates/integration_tests",
-	"crates/integration_tests/test_macro"
+	"crates/integration_tests/test_macro",
+	"crates/clis",
+	"crates/clis/worker",
+	"crates/clis/requester",
 ]
 
 [workspace.dependencies]
@@ -87,5 +88,5 @@ substrate-wasm-builder = { version = "23.0.0", default-features = false }
 runtime = { path = "crates/runtime" }
 catalog = { path = "crates/catalog" }
 utils = { path = "crates/utils" }
-requester = { path = "crates/requester"}
-worker = { path = "crates/worker"}
+requester = { path = "crates/clis/requester"}
+worker = { path = "crates/clis/worker"}
