@@ -69,10 +69,13 @@ impl NodeBuilder {
                     gossipsub_config,
                 )?;
 
-                let mdns = mdns::tokio::Behaviour::new(
-                    mdns::Config::default(),
-                    key.public().to_peer_id(),
-                )?;
+                let mdns_config = mdns::Config {
+                    ttl: Duration::from_secs(6 * 60),
+                    query_interval: Duration::from_secs(1),
+                    enable_ipv6: false,
+                };
+
+                let mdns = mdns::tokio::Behaviour::new(mdns_config, key.public().to_peer_id())?;
                 let request_response = request_response::cbor::Behaviour::new(
                     [(StreamProtocol::new("/exchange/1"), ProtocolSupport::Full)],
                     request_response::Config::default(),

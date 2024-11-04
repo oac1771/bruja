@@ -296,6 +296,10 @@ mod tests {
             .assert_info_log_entry("Response successfully sent")
             .await;
 
+        node_1
+            .assert_info_log_entry("Inbound response relayed to client")
+            .await;
+
         let result_response = loop {
             if let Some(resp) = client_1.recv_inbound_resp().await {
                 if resp.id().to_string() == id.to_string() {
