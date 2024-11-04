@@ -287,11 +287,11 @@ impl Node {
             })) => info!("A remote subscribed to a topic: {topic}"),
             SwarmEvent::Behaviour(BehaviorEvent::Mdns(mdns::Event::Discovered(list))) => {
                 for (peer_id, _) in list {
-                    info!("mDNS discovered a new peer: {peer_id}");
                     self.swarm
                         .behaviour_mut()
                         .gossipsub
                         .add_explicit_peer(&peer_id);
+                    info!("mDNS discovered a new peer: {peer_id}");
                 }
             }
             SwarmEvent::Behaviour(BehaviorEvent::Mdns(mdns::Event::Expired(list))) => {

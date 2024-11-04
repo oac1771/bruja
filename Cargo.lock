@@ -1453,6 +1453,9 @@ checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
 [[package]]
 name = "clis"
 version = "0.0.1"
+dependencies = [
+ "parity-scale-codec",
+]
 
 [[package]]
 name = "cobs"
@@ -14954,6 +14957,7 @@ dependencies = [
  "anyhow",
  "catalog",
  "clap",
+ "clis",
  "ink_env",
  "parity-scale-codec",
  "subxt 0.35.3",

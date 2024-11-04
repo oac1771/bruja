@@ -1,7 +1,8 @@
 use crate::{config::Config, error::Error};
 use catalog::catalog::JobRequestSubmitted;
 use clap::Parser;
-use codec::Decode;
+use clis::Gossip;
+use codec::{Decode, Encode};
 use ink_env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::{
@@ -17,6 +18,7 @@ use utils::{
     client::Client,
     p2p::{Error as P2pError, NodeBuilder, NodeClient},
 };
+
 #[derive(Debug, Parser)]
 pub struct StartCmd {
     #[arg(long)]
@@ -156,9 +158,14 @@ impl Worker {
 
     async fn accept_job(&self, job_request: JobRequestSubmitted) -> Result<(), Error> {
         let address = self.contract_address.to_string();
-        self.node_client
-            .publish(&address, job_request.id.to_vec())
-            .await?;
+        let job_id = job_request.id.to_vec();
+        let msg = Gossip::JobAcceptance { job_id };
+
+        let foo = self.node_client.get_gossip_nodes(&address).await.unwrap();
+        info!(">>>>>> Gossip Nodes: {:?}", foo);
+
+        self.node_client.publish(&address, msg.encode()).await?;
+
         info!("Published job acceptance");
         Ok(())
     }
