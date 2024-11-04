@@ -27,7 +27,7 @@ impl RegisterCmd {
             Client::new(&config.artifact_file_path, &config.signer).await?;
 
         let result = match client
-            .write::<WorkerRegistered, u32>(contract_address, "register_worker", self.val)
+            .write::<WorkerRegistered, u32>(contract_address, "register_worker", &self.val)
             .await
         {
             Ok(event) => {

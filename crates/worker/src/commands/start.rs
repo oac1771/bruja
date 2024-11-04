@@ -69,15 +69,6 @@ impl Worker {
     async fn start(&self, node_handle: JoinHandle<Result<(), P2pError>>) -> Result<(), Error> {
         info!("Starting Worker");
 
-        // loop {
-        //     self.node_client
-        //         .get_gossip_nodes(&self.contract_address.to_string())
-        //         .await
-        //         .unwrap();
-        //     self.node_client.publish(&self.contract_address.to_string(), vec![1,2,3]).await;
-        //     tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-        // }
-
         select! {
             _ = node_handle => {},
             result = self.listen_blocks() => {

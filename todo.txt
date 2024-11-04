@@ -1,7 +1,5 @@
-refactor gossip message to be similar workflow to send_response so hashmap does not fill up 
-
-- testing:
-    - add label to worker/requester that is behind a cfg(test) feature gate
+move requester and worker into same directory so they can use the same message types for gossip and responses
+remove enocode/decode from p2p, have users decide on payload structure
 
 - requester
     - payment
@@ -9,6 +7,7 @@ refactor gossip message to be similar workflow to send_response so hashmap does 
     - look for available workers, and send preferred worker in submit job request
 
 - worker
+    - refactor error handling and logging 
     - figure out wasmtime 
 
 - catalog
@@ -18,20 +17,9 @@ refactor gossip message to be similar workflow to send_response so hashmap does 
     - governance pallet so you can kill process 
 
 larger refactor:
-    - use p2p to send workload to worker 
-        - requester submits job
-            - minimal metadata
-        - worker listens for jobs
-        - when job is found and selected,
-        - p2p communications are sent throughout network
-        - requester gets job acceptance
-        - requester sends payload to worker
-
     - figure out drink so you can have a lighter runtime process and not need one chain
         - also means you wouldnt need to specify dev accounts per test
-    - peer to peer to return response from worker. Still have to figure out payment 
     - use zk snark as proof that worker completed work
     - use smalldot with worker 
     - figure out how to use substrate wasm builder for ink contract to not need to use cargo contract cli
         to build wasm binary
-    - make contract e2e test run against runtime only if possible similar to ink_e2e sandbox feature .

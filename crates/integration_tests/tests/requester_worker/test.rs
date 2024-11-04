@@ -52,9 +52,6 @@ mod tests {
         worker_runner
             .assert_info_log_entry("Published job acceptance")
             .await;
-        requester_runner
-            .assert_info_log_entry("Messages received!")
-            .await;
     }
 
     async fn instantiate_contract(suri: &str) -> AccountId32 {

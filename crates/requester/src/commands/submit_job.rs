@@ -31,7 +31,7 @@ pub struct SubmitJobCmd {
 }
 
 struct Requester {
-    node_client: NodeClient,
+    _node_client: NodeClient,
     config: Config,
     contract_address: AccountId32,
     path: String,
@@ -46,7 +46,7 @@ impl SubmitJobCmd {
 
         let mut requester = Requester::new(
             config,
-            &self.address,
+            self.address.clone(),
             node_client,
             self.path.clone(),
             self.func_name.clone(),
@@ -70,17 +70,17 @@ impl SubmitJobCmd {
 impl Requester {
     fn new(
         config: Config,
-        address: &str,
+        address: String,
         node_client: NodeClient,
         path: String,
         func_name: String,
         params: Option<String>,
     ) -> Result<Self, Error> {
         let contract_address =
-            AccountId32::from_str(address).map_err(|err| Error::Other(err.to_string()))?;
+            AccountId32::from_str(&address).map_err(|err| Error::Other(err.to_string()))?;
 
         Ok(Self {
-            node_client,
+            _node_client: node_client,
             config,
             contract_address,
             path,
@@ -93,9 +93,10 @@ impl Requester {
         select! {
             _ = node_handle => {},
             result = self.submit_job() => {
-                if let Err(err) = result {
-                    error!("Encountered Error: {}", err);
-                }
+                match result {
+                    Err(err) => error!("Encountered Error: {}", err),
+                    Ok(()) => info!("Successfully submitted Job")
+                };
             },
             _ = signal::ctrl_c() => {
                 info!("Shutting down...")
@@ -106,23 +107,20 @@ impl Requester {
     }
 
     async fn submit_job(&mut self) -> Result<(), Error> {
-        self.send_extrinsic().await?;
+        let job_request = self.build_job_request()?;
+        self.submit_job_request_extrinsic(&job_request).await?;
         info!("Job Request Submitted!");
 
-        let _gossip_messages = self.node_client.read_gossip_messages().await;
-
-        info!("Messages received!");
+        // self.wait_for_job_acceptance(&job_request).await;
 
         tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
 
         Ok(())
     }
 
-    async fn send_extrinsic(&self) -> Result<(), Error> {
+    async fn submit_job_request_extrinsic(&self, job_request: &JobRequest) -> Result<(), Error> {
         let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&self.config.artifact_file_path, &self.config.signer).await?;
-
-        let job_request = self.build_job_request()?;
 
         client
             .write::<JobRequestSubmitted, JobRequest>(
@@ -183,4 +181,8 @@ impl Requester {
 
         Ok(p)
     }
+
+    // async fn wait_for_job_acceptance(&mut self, job_request: &JobRequest) {
+    //     let foo = self.node_client.read_gossip_messages().await;
+    // }
 }

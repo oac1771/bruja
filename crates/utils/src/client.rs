@@ -91,11 +91,11 @@ where
         Ok(instantiated.contract)
     }
 
-    pub async fn write<Ev: Decode, Args: Encode + Clone>(
+    pub async fn write<Ev: Decode, Args: Encode>(
         &self,
         address: impl Into<<C as Config>::AccountId>,
         message: &str,
-        args: Args,
+        args: &Args,
     ) -> Result<Ev, ClientError> {
         let address: <C as Config>::AccountId = address.into();
         let message = self.ink_project.get_message(message)?;
@@ -192,7 +192,7 @@ where
         Ok(gas_consumed.into())
     }
 
-    async fn call<Args: Encode + Clone>(
+    async fn call<Args: Encode>(
         &self,
         address: <C as Config>::AccountId,
         message: &str,
@@ -369,7 +369,7 @@ impl From<ContractAccessError> for ClientError {
             ContractAccessError::MigrationInProgress => "Migration in progress".to_string(),
         };
 
-        Self::ContractAccess { error: error }
+        Self::ContractAccess { error }
     }
 }
 
