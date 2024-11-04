@@ -41,12 +41,12 @@ cargo test -p catalog --test contract-e2e
 
 [tasks.requester-worker]
 script='''
-cargo test -p tests --test requester_worker --features integration_tests
+cargo nextest run -p tests --test requester_worker --features integration_tests --retries 3
 '''
 
 [tasks.p2p-tests]
 script='''
-cargo test -p tests --test p2p --features integration_tests
+cargo nextest run -p tests --test p2p --features integration_tests --retries 3
 '''
 
 [tasks.local-node]
@@ -58,6 +58,7 @@ cargo run -p node -- --dev --base-path ./test_dbs/$(uuidgen)_local
 script='''
 cargo install --force --locked cargo-contract
 cargo install subxt-cli
+cargo install cargo-nextest
 rustup target add wasm32-unknown-unknown
 rustup component add rust-src
 '''
