@@ -1,4 +1,3 @@
-use codec::Encode;
 use libp2p::{
     futures::prelude::*,
     gossipsub, mdns,
@@ -12,6 +11,7 @@ use libp2p::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
+    future::Future,
     hash::{Hash, Hasher},
     time::Duration,
 };
@@ -254,13 +254,13 @@ impl Node {
                 match message {
                     RequestResponseMessage::Request {
                         request,
-                        request_id,
+                        request_id: id,
                         channel,
                     } => {
                         let req = InboundP2pRequest {
                             request,
                             channel,
-                            request_id,
+                            id,
                         };
                         match inbound_req_tx.send(req).await {
                             Ok(_) => info!("Inbound request relayed to client"),
@@ -268,13 +268,10 @@ impl Node {
                         }
                     }
                     RequestResponseMessage::Response {
-                        request_id,
+                        request_id: id,
                         response,
                     } => {
-                        let resp = InboundP2pResponse {
-                            response,
-                            request_id,
-                        };
+                        let resp = InboundP2pResponse { response, id };
                         match inbound_resp_tx.send(resp).await {
                             Ok(_) => info!("Inbound response relayed to client"),
                             Err(err) => {
@@ -364,15 +361,12 @@ impl NodeClient {
         Ok(())
     }
 
-    pub async fn send_request<P: Encode>(
+    pub async fn send_request(
         &mut self,
         peer_id: PeerId,
-        payload: P,
+        payload: Vec<u8>,
     ) -> Result<OutboundRequestId, Error> {
-        let payload = ClientRequestPayload::SendRequest {
-            payload: payload.encode(),
-            peer_id,
-        };
+        let payload = ClientRequestPayload::SendRequest { payload, peer_id };
 
         if let ClientResponse::RequestId { request_id } = self.send_client_request(payload).await? {
             return Ok(request_id);
@@ -380,16 +374,13 @@ impl NodeClient {
         return Err(Error::UnexpectedClientResponse);
     }
 
-    pub async fn send_response<P: Encode>(
+    pub async fn send_response(
         &mut self,
         id: InboundRequestId,
-        payload: P,
+        payload: Vec<u8>,
     ) -> Result<(), Error> {
         if let Some(channel) = self.pending_inbound_req.remove(&id) {
-            let payload = ClientRequestPayload::SendResponse {
-                payload: payload.encode(),
-                channel,
-            };
+            let payload = ClientRequestPayload::SendResponse { payload, channel };
             self.send_client_request(payload).await?;
             return Ok(());
         }
@@ -405,35 +396,20 @@ impl NodeClient {
         return Err(Error::UnexpectedClientResponse);
     }
 
-    pub async fn read_inbound_requests(&mut self) -> Vec<(P2pRequest, InboundRequestId)> {
-        let reqs = self
-            .inbound_req_rx
-            .recv()
-            .await
-            .into_iter()
-            .map(|r| {
-                self.pending_inbound_req.insert(r.request_id, r.channel);
-                (r.request, r.request_id)
-            })
-            .collect::<Vec<(P2pRequest, InboundRequestId)>>();
-
-        return reqs;
+    pub async fn recv_inbound_req(&mut self) -> Option<(InboundRequestId, P2pRequest)> {
+        if let Some(req) = self.inbound_req_rx.recv().await {
+            self.pending_inbound_req.insert(req.id, req.channel);
+            return Some((req.id, req.request));
+        }
+        return None;
     }
 
-    pub async fn read_inbound_responses(&mut self) -> Vec<(P2pResponse, OutboundRequestId)> {
-        let resps = self
-            .inbound_resp_rx
-            .recv()
-            .await
-            .into_iter()
-            .map(|r| (r.response, r.request_id))
-            .collect::<Vec<(P2pResponse, OutboundRequestId)>>();
-
-        return resps;
+    pub fn recv_inbound_resp(&mut self) -> impl Future<Output = Option<InboundP2pResponse>> + '_ {
+        self.inbound_resp_rx.recv()
     }
 
-    pub fn gossip_msg_rx(&mut self) -> &mut Receiver<GossipMessage> {
-        &mut self.gossip_msg_rx
+    pub fn recv_gossip_msg(&mut self) -> impl Future<Output = Option<GossipMessage>> + '_ {
+        self.gossip_msg_rx.recv()
     }
 
     async fn send_client_request(
@@ -526,12 +502,23 @@ impl GossipMessage {
 pub struct InboundP2pRequest {
     request: P2pRequest,
     channel: ResponseChannel<P2pResponse>,
-    request_id: InboundRequestId,
+    id: InboundRequestId,
 }
 
+#[derive(Debug)]
 pub struct InboundP2pResponse {
     response: P2pResponse,
-    request_id: OutboundRequestId,
+    id: OutboundRequestId,
+}
+
+impl InboundP2pResponse {
+    pub fn response(&self) -> &P2pResponse {
+        &self.response
+    }
+
+    pub fn id(&self) -> &OutboundRequestId {
+        &self.id
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]

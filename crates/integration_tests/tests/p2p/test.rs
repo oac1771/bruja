@@ -1,6 +1,5 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
-    use codec::{Decode, Encode};
     use rand::{
         distributions::Alphanumeric,
         {thread_rng, Rng},
@@ -44,11 +43,6 @@ mod tests {
         fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>> {
             self.log_buffer.clone()
         }
-    }
-
-    #[derive(Encode, Decode, PartialEq, Debug, Clone)]
-    struct JobPayload {
-        pub job: Vec<u8>,
     }
 
     #[test_macro::test]
@@ -178,13 +172,15 @@ mod tests {
             .assert_info_log_entry("Gossip message relayed to client")
             .await;
 
-        let mut result = false;
-        while let Some(msg) = client_2.gossip_msg_rx().recv().await {
-            if msg.message() == expected_msg {
-                result = true;
-                break;
+        let result = loop {
+            if let Some(msg) = client_2.recv_gossip_msg().await {
+                if msg.message() == expected_msg {
+                    break true;
+                }
+            } else {
+                panic!("No gossip messages received")
             }
-        }
+        };
 
         assert!(result);
     }
@@ -234,30 +230,22 @@ mod tests {
             .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
             .await;
 
-        let expected_payload = JobPayload { job: vec![1, 2, 3] };
-        let expected_id = client_1
-            .send_request(peer_id2, expected_payload.clone())
+        client_1
+            .send_request(peer_id2, vec![1, 2, 3])
             .await
             .unwrap();
 
         node_2
             .assert_info_log_entry("Inbound request relayed to client")
             .await;
-
-        let req = client_2.read_inbound_requests().await;
-        let data = &req[0].0 .0;
-        let id = req[0].1;
-        let payload = <JobPayload as Decode>::decode(&mut data.as_slice()).unwrap();
-
-        assert_eq!(payload, expected_payload);
-        assert_eq!(id.to_string(), expected_id.to_string());
     }
 
     #[test_macro::test]
     async fn send_response_to_node(log_buffer: Arc<Mutex<Vec<u8>>>) {
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
         let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
-        let expected_payload = JobPayload { job: vec![1, 2, 3] };
+        let expected_payload = vec![1, 2, 3, 4];
+        let noise_payload = vec![4, 3, 2, 1];
 
         let (_, mut client_1) = node_1.start();
         let (_, mut client_2) = node_2.start();
@@ -273,29 +261,47 @@ mod tests {
             .await;
 
         let expected_id = client_1
-            .send_request(peer_id2, expected_payload.clone())
+            .send_request(peer_id2, expected_payload)
+            .await
+            .unwrap();
+        client_1
+            .send_request(peer_id2, noise_payload)
             .await
             .unwrap();
         node_2
             .assert_info_log_entry("Inbound request relayed to client")
             .await;
 
-        let req = client_2.read_inbound_requests().await;
-        let data = &req[0].0 .0;
-        let id = req[0].1;
-        let payload = <JobPayload as Decode>::decode(&mut data.as_slice()).unwrap();
+        let id = loop {
+            if let Some((req_id, _)) = client_2.recv_inbound_req().await {
+                if req_id.to_string() == expected_id.to_string() {
+                    break req_id;
+                }
+            } else {
+                panic!("No requests received")
+            }
+        };
 
-        client_2.send_response(id, payload).await.unwrap();
-        node_1
-            .assert_info_log_entry("Inbound response relayed to client")
+        let expected_response = vec![0, 0, 0];
+
+        client_2
+            .send_response(id.clone(), expected_response.clone())
+            .await
+            .unwrap();
+
+        node_2
+            .assert_info_log_entry("Response successfully sent")
             .await;
 
-        let resp = client_1.read_inbound_responses().await;
-        let data = &resp[0].0 .0;
-        let result_id = resp[0].1;
-        let result_payload = <JobPayload as Decode>::decode(&mut data.as_slice()).unwrap();
-
-        assert_eq!(result_id.to_string(), expected_id.to_string());
-        assert_eq!(result_payload, expected_payload);
+        let result_response = loop {
+            if let Some(resp) = client_1.recv_inbound_resp().await {
+                if resp.id().to_string() == id.to_string() {
+                    break resp.response().clone();
+                }
+            } else {
+                panic!("No responses received");
+            }
+        };
+        assert_eq!(result_response.0, expected_response);
     }
 }

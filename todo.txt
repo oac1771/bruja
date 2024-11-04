@@ -1,5 +1,4 @@
 move requester and worker into same directory so they can use the same message types for gossip and responses
-remove enocode/decode from p2p, have users decide on payload structure
 
 - requester
     - payment
