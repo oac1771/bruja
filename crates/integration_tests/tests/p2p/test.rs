@@ -272,6 +272,9 @@ mod tests {
             .await
             .unwrap();
         node_2
+            .assert_info_log_entry(&format!("Received request from peer: {}", peer_id1))
+            .await;
+        node_2
             .assert_info_log_entry("Inbound request relayed to client")
             .await;
 
@@ -297,17 +300,28 @@ mod tests {
             .await;
 
         node_1
+            .assert_info_log_entry(&format!("Received response from peer: {}", peer_id2))
+            .await;
+        node_1
             .assert_info_log_entry("Inbound response relayed to client")
             .await;
 
         let result_response = loop {
-            if let Some(resp) = client_1.recv_inbound_resp().await {
-                if resp.id().to_string() == id.to_string() {
-                    break resp.response().clone();
+            match client_1.foo_recv() {
+                Ok(resp) => {
+                    if resp.id().to_string() == id.to_string() {
+                        break resp.response().clone();
+                    }
                 }
-            } else {
-                panic!("No responses received");
-            }
+                Err(err) => panic!("Error: {}", err),
+            };
+            // if let Some(resp) = client_1.recv_inbound_resp().await {
+            //     if resp.id().to_string() == id.to_string() {
+            //         break resp.response().clone();
+            //     }
+            // } else {
+            //     panic!("No responses received");
+            // }
         };
         assert_eq!(result_response.0, expected_response);
     }

@@ -21,7 +21,7 @@ use tokio::{
         mpsc::{self, Receiver, Sender},
         oneshot,
     },
-    task::{spawn, JoinHandle},
+    task::{spawn, yield_now, JoinHandle},
     time::{sleep, Duration as TokioDuration},
 };
 use tracing::{error, info, info_span, Instrument};
@@ -246,44 +246,49 @@ impl Node {
                     message: message.data,
                 };
                 match gossip_msg_tx.send(gsp_msg).await {
-                    Ok(_) => info!("Gossip message relayed to client"),
+                    Ok(_) => {
+                        info!("Gossip message relayed to client");
+                    }
                     Err(err) => error!("Error relaying gossip message to client: {}", err),
                 }
             }
             SwarmEvent::Behaviour(BehaviorEvent::RequestResponse(
                 request_response::Event::Message { peer, message },
-            )) => {
-                info!("Received request response message from peer: {}", peer);
-                match message {
-                    RequestResponseMessage::Request {
+            )) => match message {
+                RequestResponseMessage::Request {
+                    request,
+                    request_id: id,
+                    channel,
+                } => {
+                    info!("Received request from peer: {}", peer);
+                    let req = InboundP2pRequest {
                         request,
-                        request_id: id,
                         channel,
-                    } => {
-                        let req = InboundP2pRequest {
-                            request,
-                            channel,
-                            id,
-                        };
-                        match inbound_req_tx.send(req).await {
-                            Ok(_) => info!("Inbound request relayed to client"),
-                            Err(err) => error!("Error relaying inbound request to client: {}", err),
+                        id,
+                    };
+                    match inbound_req_tx.send(req).await {
+                        Ok(_) => {
+                            info!("Inbound request relayed to client");
                         }
+                        Err(err) => error!("Error relaying inbound request to client: {}", err),
                     }
-                    RequestResponseMessage::Response {
-                        request_id: id,
-                        response,
-                    } => {
-                        let resp = InboundP2pResponse { response, id };
-                        match inbound_resp_tx.send(resp).await {
-                            Ok(_) => info!("Inbound response relayed to client"),
-                            Err(err) => {
-                                error!("Error relaying inbound response to client: {}", err)
-                            }
+                }
+                RequestResponseMessage::Response {
+                    request_id: id,
+                    response,
+                } => {
+                    info!("Received response from peer: {}", peer);
+                    let resp = InboundP2pResponse { response, id };
+                    match inbound_resp_tx.send(resp).await {
+                        Ok(_) => {
+                            info!("Inbound response relayed to client");
+                        }
+                        Err(err) => {
+                            error!("Error relaying inbound response to client: {}", err)
                         }
                     }
                 }
-            }
+            },
             SwarmEvent::Behaviour(BehaviorEvent::Gossipsub(gossipsub::Event::Subscribed {
                 peer_id: _peer_id,
                 topic,
@@ -311,6 +316,7 @@ impl Node {
             }
             _ => {}
         }
+        yield_now().await;
     }
 }
 
@@ -409,6 +415,12 @@ impl NodeClient {
 
     pub fn recv_inbound_resp(&mut self) -> impl Future<Output = Option<InboundP2pResponse>> + '_ {
         self.inbound_resp_rx.recv()
+    }
+
+    pub fn foo_recv(
+        &mut self,
+    ) -> Result<InboundP2pResponse, tokio::sync::mpsc::error::TryRecvError> {
+        self.inbound_resp_rx.try_recv()
     }
 
     pub fn recv_gossip_msg(&mut self) -> impl Future<Output = Option<GossipMessage>> + '_ {

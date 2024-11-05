@@ -11,7 +11,11 @@ use subxt::{
     OnlineClient, SubstrateConfig,
 };
 use subxt_signer::sr25519::Keypair;
-use tokio::{select, signal, task::JoinHandle};
+use tokio::{
+    select, signal,
+    task::JoinHandle,
+    time::{sleep, Duration},
+};
 use tracing::{error, info, instrument};
 use utils::{
     chain::contracts::events::ContractEmitted,
@@ -157,16 +161,10 @@ impl Worker {
     }
 
     async fn accept_job(&self, job_request: JobRequestSubmitted) -> Result<(), Error> {
-        let address = self.contract_address.to_string();
         let job_id = job_request.id.to_vec();
         let msg = Gossip::JobAcceptance { job_id };
 
-        let foo = self.node_client.get_gossip_nodes(&address).await.unwrap();
-        info!(">>>>>> Gossip Nodes: {:?}", foo);
-
-        self.node_client.publish(&address, msg.encode()).await?;
-
-        info!("Published job acceptance");
+        self.publish_message(msg.encode()).await?;
         Ok(())
     }
 
@@ -176,5 +174,28 @@ impl Worker {
         } else {
             WatchedEvents::DecodeErr
         }
+    }
+
+    async fn publish_message(&self, msg: Vec<u8>) -> Result<(), Error> {
+        let address = self.contract_address.to_string();
+
+        self.wait_for_gossip_peers(&address).await?;
+        self.node_client.publish(&address, msg).await?;
+
+        info!("Published job acceptance");
+
+        Ok(())
+    }
+
+    async fn wait_for_gossip_peers(&self, address: &str) -> Result<(), Error> {
+        let mut gossip_nodes = Vec::new();
+
+        while gossip_nodes.len() == 0 {
+            info!("Waiting for gossip peers");
+            gossip_nodes = self.node_client.get_gossip_nodes(&address).await?;
+            sleep(Duration::from_millis(500)).await;
+        }
+        info!("Connected to gossip peers");
+        Ok(())
     }
 }
