@@ -46,7 +46,7 @@ cargo nextest run -p tests --test requester_worker --features integration_tests 
 
 [tasks.p2p-tests]
 script='''
-cargo nextest run -p tests --test p2p --features integration_tests --retries 3
+cargo nextest run -p tests --test p2p --features integration_tests --retries 5
 '''
 
 [tasks.local-node]
