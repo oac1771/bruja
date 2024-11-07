@@ -1,5 +1,6 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
+    use libp2p::PeerId;
     use rand::{
         distributions::Alphanumeric,
         {thread_rng, Rng},
@@ -49,6 +50,15 @@ mod tests {
         }
     }
 
+    async fn wait_for_gossip_nodes(client: &NodeClient, topic: &str) -> bool {
+        let mut gsp_nodes: Vec<PeerId> = Vec::new();
+
+        while gsp_nodes.is_empty() {
+            gsp_nodes = client.get_gossip_nodes(topic).await.unwrap()
+        }
+        true
+    }
+
     #[test_macro::test]
     async fn mdns_and_gossip_discovery_success(log_buffer: Arc<Mutex<Vec<u8>>>) {
         let topic: String = thread_rng()
@@ -90,7 +100,6 @@ mod tests {
         assert_eq!(gossip_nodes_2[0], peer_id_1);
     }
 
-    // add check for peers before publishing to reduce flakyness
     #[test_macro::test]
     async fn publish_gossip_message(log_buffer: Arc<Mutex<Vec<u8>>>) {
         let topic: String = thread_rng()
@@ -109,6 +118,9 @@ mod tests {
         let peer_id_1 = client_1.get_local_peer_id().await.unwrap();
         let peer_id_2 = client_2.get_local_peer_id().await.unwrap();
 
+        client_1.subscribe(&topic).await.unwrap();
+        client_2.subscribe(&topic).await.unwrap();
+
         node_1
             .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_2))
             .await;
@@ -116,15 +128,17 @@ mod tests {
             .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_1))
             .await;
 
-        client_1.subscribe(&topic).await.unwrap();
-        client_2.subscribe(&topic).await.unwrap();
-
         node_1
             .assert_info_log_entry(&format!("Subscribed to topic: {}", topic))
             .await;
         node_2
             .assert_info_log_entry(&format!("Subscribed to topic: {}", topic))
             .await;
+
+        select! {
+            _ = wait_for_gossip_nodes(&client_1, &topic) => {},
+            _ = sleep(Duration::from_secs(2)) => {panic!("Timedout waiting for gossip nodes")}
+        }
 
         client_1.publish(&topic, msg.clone()).await.unwrap();
         node_1

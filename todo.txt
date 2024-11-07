@@ -1,4 +1,6 @@
 create script to run requester-worker tests so they can be run in a pipeline
+    - create users part of test
+    - have //alice fund users as part of test setup
 
 - requester
     - payment
