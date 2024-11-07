@@ -3,10 +3,11 @@ mod tests {
     use ink_env::DefaultEnvironment;
     use requester::{commands::submit_job::SubmitJobCmd, config::Config as ConfigR};
     use std::sync::{Arc, Mutex};
-    use subxt::{utils::AccountId32, SubstrateConfig};
+    use subxt::{error::RpcError, utils::AccountId32, SubstrateConfig};
     use subxt_signer::sr25519::Keypair;
+    use tokio::time::{sleep, Duration};
     use tests::test_utils::{Log, Runner};
-    use utils::client::Client;
+    use utils::client::{Client, ClientError};
     use worker::{
         commands::{register::RegisterCmd, start::StartCmd},
         config::Config as ConfigW,
@@ -55,6 +56,16 @@ mod tests {
 
     async fn instantiate_contract(suri: &str) -> AccountId32 {
         let config = ConfigW::new(suri, ARTIFACT_FILE_PATH.to_string());
+
+        while let Err(ClientError::Subxt { source }) =
+            Client::<SubstrateConfig, DefaultEnvironment, Keypair>::new(&config.artifact_file_path, &config.signer).await
+        {
+            if let subxt::Error::Rpc(RpcError::ClientError(_)) = source {
+                println!("Waiting for rpc node...");
+                sleep(Duration::from_secs(1)).await;
+            }
+        }
+
         let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer)
                 .await
@@ -63,6 +74,8 @@ mod tests {
 
         address
     }
+
+    // add method here to fund accounts from sudo account
 
     struct WorkerRunner {
         config: ConfigW,
