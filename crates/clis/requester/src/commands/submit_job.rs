@@ -31,7 +31,7 @@ pub struct SubmitJobCmd {
 }
 
 struct Requester {
-    _node_client: NodeClient,
+    node_client: NodeClient,
     config: Config,
     contract_address: AccountId32,
     path: String,
@@ -80,7 +80,7 @@ impl Requester {
             AccountId32::from_str(&address).map_err(|err| Error::Other(err.to_string()))?;
 
         Ok(Self {
-            _node_client: node_client,
+            node_client: node_client,
             config,
             contract_address,
             path,
@@ -111,7 +111,7 @@ impl Requester {
         self.submit_job_request_extrinsic(&job_request).await?;
         info!("Job Request Submitted!");
 
-        // self.wait_for_job_acceptance(&job_request).await;
+        self.wait_for_job_acceptance(&job_request).await?;
 
         tokio::time::sleep(tokio::time::Duration::from_secs(10000)).await;
 
@@ -182,7 +182,15 @@ impl Requester {
         Ok(p)
     }
 
-    // async fn wait_for_job_acceptance(&mut self, job_request: &JobRequest) {
-    //     let foo = self.node_client.read_gossip_messages().await;
-    // }
+    async fn wait_for_job_acceptance(&mut self, _job_request: &JobRequest) -> Result<(), Error> {
+        while let Some(msg) = self.node_client.recv_gossip_msg().await {
+            info!("Gossip Message received");
+            self.node_client
+                .send_request(msg.peer_id(), msg.message())
+                .await?;
+            info!("Job sent");
+        }
+
+        Ok(())
+    }
 }

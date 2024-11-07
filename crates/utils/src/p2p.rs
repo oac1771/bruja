@@ -5,7 +5,7 @@ use libp2p::{
         self, InboundRequestId, Message as RequestResponseMessage, OutboundRequestId,
         ProtocolSupport, ResponseChannel,
     },
-    swarm::{NetworkBehaviour, SwarmEvent},
+    swarm::{dial_opts::DialOpts, DialError, NetworkBehaviour, SwarmEvent},
     PeerId, StreamProtocol, Swarm,
 };
 use serde::{Deserialize, Serialize};
@@ -69,13 +69,10 @@ impl NodeBuilder {
                     gossipsub_config,
                 )?;
 
-                let mdns_config = mdns::Config {
-                    ttl: Duration::from_secs(6 * 60),
-                    query_interval: Duration::from_secs(1),
-                    enable_ipv6: false,
-                };
-
-                let mdns = mdns::tokio::Behaviour::new(mdns_config, key.public().to_peer_id())?;
+                let mdns = mdns::tokio::Behaviour::new(
+                    mdns::Config::default(),
+                    key.public().to_peer_id(),
+                )?;
                 let request_response = request_response::cbor::Behaviour::new(
                     [(StreamProtocol::new("/exchange/1"), ProtocolSupport::Full)],
                     request_response::Config::default(),
@@ -202,6 +199,23 @@ impl Node {
                 };
                 Self::send_client_response(Ok(resp), sender);
             }
+            ClientRequestPayload::DialPeer { peer_id } => {
+                let opts = DialOpts::peer_id(peer_id)
+                    .condition(libp2p::swarm::dial_opts::PeerCondition::Always)
+                    .build();
+                let result = match self.swarm.dial(opts) {
+                    Ok(_) => {
+                        info!("Successfully dialed peer");
+                        Ok(ClientResponse::PeerDialed)
+                    }
+                    Err(err) => {
+                        error!("Dial peer error");
+                        Err(Error::DialPeerError { err })
+                    }
+                };
+
+                Self::send_client_response(result, sender);
+            }
             ClientRequestPayload::GetGossipNodes { topic } => {
                 let hash = gossipsub::IdentTopic::new(topic).hash();
                 let gossip_nodes = self
@@ -235,6 +249,7 @@ impl Node {
         inbound_resp_tx: &Sender<InboundP2pResponse>,
         gossip_msg_tx: &Sender<GossipMessage>,
     ) {
+        // println!("event: {:?}", event);
         match event {
             SwarmEvent::Behaviour(BehaviorEvent::Gossipsub(gossipsub::Event::Message {
                 propagation_source: peer_id,
@@ -295,11 +310,11 @@ impl Node {
             })) => info!("A remote subscribed to a topic: {topic}"),
             SwarmEvent::Behaviour(BehaviorEvent::Mdns(mdns::Event::Discovered(list))) => {
                 for (peer_id, _) in list {
+                    info!("mDNS discovered a new peer: {peer_id}");
                     self.swarm
                         .behaviour_mut()
                         .gossipsub
                         .add_explicit_peer(&peer_id);
-                    info!("mDNS discovered a new peer: {peer_id}");
                 }
             }
             SwarmEvent::Behaviour(BehaviorEvent::Mdns(mdns::Event::Expired(list))) => {
@@ -313,6 +328,16 @@ impl Node {
             }
             SwarmEvent::NewListenAddr { address, .. } => {
                 info!("Local node is listening on {address}");
+            }
+            SwarmEvent::Behaviour(BehaviorEvent::RequestResponse(
+                request_response::Event::OutboundFailure { peer, error, .. },
+            )) => {
+                error!("Outbound request to peer {} failed: {}", peer, error);
+            }
+            SwarmEvent::Behaviour(BehaviorEvent::RequestResponse(
+                request_response::Event::InboundFailure { peer, error, .. },
+            )) => {
+                error!("Inbound request from peer {} failed: {}", peer, error);
             }
             _ => {}
         }
@@ -405,7 +430,17 @@ impl NodeClient {
         return Err(Error::UnexpectedClientResponse);
     }
 
+    pub async fn dial_peer(&mut self, peer_id: PeerId) -> Result<(), Error> {
+        let payload = ClientRequestPayload::DialPeer { peer_id };
+
+        self.send_client_request(payload).await?;
+
+        Ok(())
+    }
+
     pub async fn recv_inbound_req(&mut self) -> Option<(InboundRequestId, P2pRequest)> {
+        // refactor this so that you can get a stream of data back rather than just the
+        //  first message so usage can be similar to other two
         if let Some(req) = self.inbound_req_rx.recv().await {
             self.pending_inbound_req.insert(req.id, req.channel);
             return Some((req.id, req.request));
@@ -415,12 +450,6 @@ impl NodeClient {
 
     pub fn recv_inbound_resp(&mut self) -> impl Future<Output = Option<InboundP2pResponse>> + '_ {
         self.inbound_resp_rx.recv()
-    }
-
-    pub fn foo_recv(
-        &mut self,
-    ) -> Result<InboundP2pResponse, tokio::sync::mpsc::error::TryRecvError> {
-        self.inbound_resp_rx.try_recv()
     }
 
     pub fn recv_gossip_msg(&mut self) -> impl Future<Output = Option<GossipMessage>> + '_ {
@@ -483,6 +512,9 @@ pub enum ClientRequestPayload {
         payload: Vec<u8>,
     },
     GetLocalPeerId,
+    DialPeer {
+        peer_id: PeerId,
+    },
     GetGossipNodes {
         topic: String,
     },
@@ -492,6 +524,7 @@ pub enum ClientResponse {
     Publish,
     Subscribe,
     ResponseSent,
+    PeerDialed,
     GossipMessages { msgs: Vec<GossipMessage> },
     RequestId { request_id: OutboundRequestId },
     PeerId { peer_id: PeerId },
@@ -601,6 +634,9 @@ pub enum Error {
 
     #[error("")]
     SendResponseError,
+
+    #[error("")]
+    DialPeerError { err: DialError },
 
     #[error("")]
     InboundRequestIdNotFound,

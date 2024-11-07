@@ -6,7 +6,6 @@ mod tests {
     use subxt::{utils::AccountId32, SubstrateConfig};
     use subxt_signer::sr25519::Keypair;
     use tests::test_utils::{Log, Runner};
-    use tracing::{Instrument, Span};
     use utils::client::Client;
     use worker::{
         commands::{register::RegisterCmd, start::StartCmd},
@@ -102,10 +101,7 @@ mod tests {
             };
             let config = self.config.clone();
 
-            let span = Span::current();
-
-            let _join_handle = tokio::spawn(async move { start_cmd.handle(config).await.unwrap() })
-                .instrument(span);
+            let _join_handle = tokio::spawn(async move { start_cmd.handle(config).await.unwrap() });
         }
     }
 
@@ -142,11 +138,8 @@ mod tests {
             };
             let config = self.config.clone();
 
-            let span = Span::current();
-
             let _join_handle =
-                tokio::spawn(async move { submit_job_cmd.handle(config).await.unwrap() })
-                    .instrument(span);
+                tokio::spawn(async move { submit_job_cmd.handle(config).await.unwrap() });
         }
     }
 

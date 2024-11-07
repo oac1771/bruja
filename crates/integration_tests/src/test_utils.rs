@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Deserializer;
 use serde_json::Value;
 use std::{
@@ -34,10 +34,22 @@ pub trait Runner {
 
     fn log_filter(&self, log: &Log) -> bool;
 
-    fn log_output(&self) -> String {
+    fn get_logs(&self) -> Vec<Log> {
         let log_buffer = self.log_buffer();
         let buffer = log_buffer.lock().unwrap();
-        let output = String::from_utf8(buffer.clone()).unwrap();
+        let log_output = String::from_utf8(buffer.clone()).unwrap();
+        let cursor = Cursor::new(log_output);
+        let logs = Deserializer::from_reader(cursor.clone())
+            .into_iter::<Log>()
+            .map(|log| log.unwrap())
+            .collect::<Vec<Log>>();
+
+        logs
+    }
+
+    fn log_output(&self) -> String {
+        let logs = self.get_logs();
+        let output = serde_json::to_string_pretty(&logs).unwrap();
 
         output
     }
@@ -54,7 +66,7 @@ pub trait Runner {
         select! {
             _ = sleep(Duration::from_secs(10)) => {
                 let output = self.log_output();
-                panic!("Failed to find log entry: {}\nLogs: {}", entry.to_string(), output)
+                panic!("Logs: {}\nFailed to find log entry: {}", output, entry.to_string())
             },
             _ = self.parse_logs(entry, level) => {}
         }
@@ -64,16 +76,9 @@ pub trait Runner {
         let mut logs: Vec<Log> = vec![];
 
         while logs.len() == 0 {
-            let log_buffer = self.log_buffer();
-            let buffer = log_buffer.lock().unwrap();
-            let log_output = String::from_utf8(buffer.clone()).unwrap();
-            std::mem::drop(buffer);
-
-            let cursor = Cursor::new(log_output);
-
-            logs = Deserializer::from_reader(cursor.clone())
-                .into_iter::<Log>()
-                .map(|log| log.unwrap())
+            logs = self
+                .get_logs()
+                .into_iter()
                 .filter(|log| log.level == level.as_str())
                 .filter(|log| self.log_filter(log))
                 .filter(|log| match &log.fields {
@@ -87,12 +92,12 @@ pub trait Runner {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 pub struct Log {
     fields: Fields,
     target: String,
     spans: Vec<Value>,
-    level: String,
+    pub level: String,
 }
 
 impl Log {
@@ -105,7 +110,7 @@ impl Log {
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Serialize, Debug)]
 #[serde(untagged)]
 enum Fields {
     #[allow(unused)]
