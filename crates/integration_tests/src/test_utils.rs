@@ -87,7 +87,7 @@ pub trait Runner {
                 })
                 .collect::<Vec<Log>>();
 
-            let _ = sleep(Duration::from_millis(500)).await;
+            let _ = sleep(Duration::from_millis(100)).await;
         }
     }
 }

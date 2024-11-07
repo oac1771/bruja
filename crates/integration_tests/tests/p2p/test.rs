@@ -243,6 +243,7 @@ mod tests {
             .await;
     }
 
+    // timeouts
     #[test_macro::test]
     async fn send_response_to_node(log_buffer: Arc<Mutex<Vec<u8>>>) {
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
@@ -274,10 +275,24 @@ mod tests {
             .await
             .unwrap();
 
+        node_2
+            .assert_info_log_entry(&format!("Received request from peer: {}", peer_id1))
+            .await;
+        node_2
+            .assert_info_log_entry("Inbound request relayed to client")
+            .await;
+
         while let Some((id, req)) = client_2.recv_inbound_req().await {
             client_2.send_response(id, req.0).await.unwrap();
             break;
         }
+
+        node_1
+            .assert_info_log_entry(&format!("Received response from peer: {}", peer_id2))
+            .await;
+        node_1
+            .assert_info_log_entry("Inbound response relayed to client")
+            .await;
 
         let mut result_payload: Vec<u8> = Vec::new();
 

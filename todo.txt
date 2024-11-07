@@ -1,4 +1,4 @@
-move requester and worker into same directory so they can use the same message types for gossip and responses
+create script to run requester-worker tests so they can be run in a pipeline
 
 - requester
     - payment
