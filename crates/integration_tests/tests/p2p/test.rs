@@ -6,7 +6,12 @@ mod tests {
     };
     use std::sync::{Arc, Mutex};
     use tests::test_utils::{Log, Runner};
-    use tokio::task::JoinHandle;
+    use tokio::{
+        select,
+        task::spawn,
+        task::JoinHandle,
+        time::{sleep, Duration},
+    };
     use tracing::instrument;
     use utils::p2p::{Error, NodeBuilder, NodeClient};
 
@@ -243,7 +248,6 @@ mod tests {
             .await;
     }
 
-    // timeouts
     #[test_macro::test]
     async fn send_response_to_node(log_buffer: Arc<Mutex<Vec<u8>>>) {
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
@@ -256,10 +260,10 @@ mod tests {
         let peer_id1 = client_1.get_local_peer_id().await.unwrap();
         let peer_id2 = client_2.get_local_peer_id().await.unwrap();
 
-        tokio::task::spawn(async move {
+        spawn(async move {
             let _ = handle_1.await.unwrap();
         });
-        tokio::task::spawn(async move {
+        spawn(async move {
             let _ = handle_2.await.unwrap();
         });
 
@@ -282,9 +286,9 @@ mod tests {
             .assert_info_log_entry("Inbound request relayed to client")
             .await;
 
-        while let Some((id, req)) = client_2.recv_inbound_req().await {
-            client_2.send_response(id, req.0).await.unwrap();
-            break;
+        select! {
+            Some((id, req)) = client_2.recv_inbound_req() => client_2.send_response(id, req.0).await.unwrap(),
+            _ = sleep(Duration::from_millis(500)) => {panic!("Timedout waiting for request")}
         }
 
         node_1
@@ -294,11 +298,11 @@ mod tests {
             .assert_info_log_entry("Inbound response relayed to client")
             .await;
 
-        let mut result_payload: Vec<u8> = Vec::new();
+        let result_payload: Vec<u8>;
 
-        while let Some(foo) = client_1.recv_inbound_resp().await {
-            result_payload = foo.response().0.clone();
-            break;
+        select! {
+            Some(resp) = client_1.recv_inbound_resp() => {result_payload = resp.response().0.clone();},
+            _ = sleep(Duration::from_millis(500)) => {panic!("Timedout waiting for response")}
         }
 
         assert_eq!(result_payload.clone(), expected_payload.clone())
