@@ -252,7 +252,7 @@ mod tests {
         let (handle_1, mut client_1) = node_1.start();
         let (handle_2, mut client_2) = node_2.start();
 
-        let _peer_id1 = client_1.get_local_peer_id().await.unwrap();
+        let peer_id1 = client_1.get_local_peer_id().await.unwrap();
         let peer_id2 = client_2.get_local_peer_id().await.unwrap();
 
         tokio::task::spawn(async move {
@@ -262,82 +262,30 @@ mod tests {
             let _ = handle_2.await.unwrap();
         });
 
+        node_1
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))
+            .await;
+        node_2
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
+            .await;
+
         client_1
-            .send_request(peer_id2, expected_payload)
+            .send_request(peer_id2, expected_payload.clone())
             .await
             .unwrap();
 
-        // tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-        // let buffer = log_buffer.lock().unwrap();
-        // let log_output = String::from_utf8(buffer.clone()).unwrap();
-        // let cursor = std::io::Cursor::new(log_output);
-        // let logs = serde_json::Deserializer::from_reader(cursor.clone())
-        //     .into_iter::<Log>()
-        //     .map(|l| l.unwrap())
-        //     .collect::<Vec<Log>>();
-        // let output = serde_json::to_string_pretty(&logs).unwrap();
-        // println!("Logs:\n{}", output);
+        while let Some((id, req)) = client_2.recv_inbound_req().await {
+            client_2.send_response(id, req.0).await.unwrap();
+            break;
+        }
 
-        // node_1
-        //     .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))
-        //     .await;
-        // node_2
-        //     .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
-        //     .await;
+        let mut result_payload: Vec<u8> = Vec::new();
 
-        // let expected_id = client_1
-        //     .send_request(peer_id2, expected_payload)
-        //     .await
-        //     .unwrap();
-        // client_1
-        //     .send_request(peer_id2, noise_payload)
-        //     .await
-        //     .unwrap();
-        // node_2
-        //     .assert_info_log_entry(&format!("Received request from peer: {}", peer_id1))
-        //     .await;
-        // node_2
-        //     .assert_info_log_entry("Inbound request relayed to client")
-        //     .await;
+        while let Some(foo) = client_1.recv_inbound_resp().await {
+            result_payload = foo.response().0.clone();
+            break;
+        }
 
-        // let id = loop {
-        //     if let Some((req_id, _)) = client_2.recv_inbound_req().await {
-        //         if req_id.to_string() == expected_id.to_string() {
-        //             break req_id;
-        //         }
-        //     } else {
-        //         panic!("No requests received")
-        //     }
-        // };
-
-        // let expected_response = vec![0, 0, 0];
-
-        // client_2
-        //     .send_response(id.clone(), expected_response.clone())
-        //     .await
-        //     .unwrap();
-
-        // node_2
-        //     .assert_info_log_entry("Response successfully sent")
-        //     .await;
-
-        // node_1
-        //     .assert_info_log_entry(&format!("Received response from peer: {}", peer_id2))
-        //     .await;
-        // node_1
-        //     .assert_info_log_entry("Inbound response relayed to client")
-        //     .await;
-
-        // let result_response = loop {
-        //     match client_1.foo_recv() {
-        //         Ok(resp) => {
-        //             if resp.id().to_string() == id.to_string() {
-        //                 break resp.response().clone();
-        //             }
-        //         }
-        //         Err(err) => panic!("Error: {}", err),
-        //     };
-        // };
-        // assert_eq!(result_response.0, expected_response);
+        assert_eq!(result_payload.clone(), expected_payload.clone())
     }
 }

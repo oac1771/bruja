@@ -249,7 +249,6 @@ impl Node {
         inbound_resp_tx: &Sender<InboundP2pResponse>,
         gossip_msg_tx: &Sender<GossipMessage>,
     ) {
-        // println!("event: {:?}", event);
         match event {
             SwarmEvent::Behaviour(BehaviorEvent::Gossipsub(gossipsub::Event::Message {
                 propagation_source: peer_id,
