@@ -8,7 +8,6 @@ mod tests {
     use tests::test_utils::{Log, Runner};
     use tokio::{
         select,
-        task::spawn,
         task::JoinHandle,
         time::{sleep, Duration},
     };
@@ -91,6 +90,7 @@ mod tests {
         assert_eq!(gossip_nodes_2[0], peer_id_1);
     }
 
+    // add check for peers before publishing to reduce flakyness
     #[test_macro::test]
     async fn publish_gossip_message(log_buffer: Arc<Mutex<Vec<u8>>>) {
         let topic: String = thread_rng()
@@ -254,18 +254,11 @@ mod tests {
         let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
         let expected_payload = vec![1, 2, 3, 4];
 
-        let (handle_1, mut client_1) = node_1.start();
-        let (handle_2, mut client_2) = node_2.start();
+        let (_, mut client_1) = node_1.start();
+        let (_, mut client_2) = node_2.start();
 
         let peer_id1 = client_1.get_local_peer_id().await.unwrap();
         let peer_id2 = client_2.get_local_peer_id().await.unwrap();
-
-        spawn(async move {
-            let _ = handle_1.await.unwrap();
-        });
-        spawn(async move {
-            let _ = handle_2.await.unwrap();
-        });
 
         node_1
             .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))

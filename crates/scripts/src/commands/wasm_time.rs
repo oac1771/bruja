@@ -13,22 +13,21 @@ impl WasmTime {
 
         let module = Module::from_file(&engine, "../work/pkg/work_bg.wasm").unwrap();
 
-        module.imports().for_each(|i| match i.ty() {
-            ExternType::Func(func) => {
+        module.imports().for_each(|i| {
+            if let ExternType::Func(func) = i.ty() {
                 println!("{}, {}", i.module(), i.name());
                 linker
                     .func_new(i.module(), i.name(), func, |_, _, _| Ok(()))
                     .unwrap();
             }
-            _ => {}
         });
 
         let instance = linker.instantiate(&mut store, &module).unwrap();
 
-        module.exports().for_each(|e| match e.ty() {
-            ExternType::Func(func) => {
-                let foo = 10_u32.encode();
-                let (params, mut results) = build_input_output(func, vec![foo]);
+        module.exports().for_each(|e| {
+            if let ExternType::Func(func) = e.ty() {
+                let param = 10_u32.encode();
+                let (params, mut results) = build_input_output(func, vec![param]);
 
                 instance
                     .get_func(&mut store, e.name())
@@ -38,7 +37,6 @@ impl WasmTime {
 
                 println!("results {:?}", results);
             }
-            _ => {}
         });
     }
 }

@@ -190,9 +190,9 @@ impl Worker {
     async fn wait_for_gossip_peers(&self, address: &str) -> Result<(), Error> {
         let mut gossip_nodes = Vec::new();
 
-        while gossip_nodes.len() == 0 {
+        while gossip_nodes.is_empty() {
             info!("Waiting for gossip peers");
-            gossip_nodes = self.node_client.get_gossip_nodes(&address).await?;
+            gossip_nodes = self.node_client.get_gossip_nodes(address).await?;
             sleep(Duration::from_millis(500)).await;
         }
         info!("Connected to gossip peers");

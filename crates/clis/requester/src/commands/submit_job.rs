@@ -80,7 +80,7 @@ impl Requester {
             AccountId32::from_str(&address).map_err(|err| Error::Other(err.to_string()))?;
 
         Ok(Self {
-            node_client: node_client,
+            node_client,
             config,
             contract_address,
             path,
@@ -139,7 +139,7 @@ impl Requester {
         let module = Module::from_file(&engine, &self.path)?;
 
         let params = if let Some(params) = &self.params {
-            let p = params.split(",").collect::<Vec<&str>>();
+            let p = params.split(',').collect::<Vec<&str>>();
             self.build_params(&p, &module)?
         } else {
             vec![]
@@ -156,7 +156,7 @@ impl Requester {
         let mut code = Vec::new();
         file.read_to_end(&mut code)?;
 
-        return Ok(code);
+        Ok(code)
     }
 
     fn build_params(&self, p: &Vec<&str>, module: &Module) -> Result<Vec<Vec<u8>>, Error> {
@@ -173,7 +173,7 @@ impl Requester {
             .map(|(ty, param)| match ty {
                 ValType::I32 => match param.parse::<i32>() {
                     Ok(val) => Ok(val.encode()),
-                    Err(err) => Err(Error::ParseIntError { source: err }),
+                    Err(err) => Err(Error::ParseInt { source: err }),
                 },
                 _ => Ok(vec![]),
             })

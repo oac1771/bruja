@@ -1,36 +1,31 @@
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
     #[error("{source}")]
-    ContractClientError {
+    ContractClient {
         #[from]
         source: utils::client::ClientError,
     },
 
     #[error("{source}")]
-    SubxtError {
+    Subxt {
         #[from]
         source: subxt::Error,
     },
 
     #[error("{source}")]
-    DecodeError {
+    Decode {
         #[from]
         source: codec::Error,
     },
 
-    // #[error("{source}")]
-    // SendError {
-    //     #[from]
-    //     source: tokio::sync::mpsc::error::SendError<T>,
-    // },
     #[error("{source}")]
-    WasmTimeError {
+    WasmTime {
         #[from]
         source: anyhow::Error,
     },
 
     #[error("{source}")]
-    P2pError {
+    P2p {
         #[from]
         source: utils::p2p::Error,
     },

@@ -178,11 +178,12 @@ impl Node {
                 Self::send_client_response(Ok(resp), sender);
             }
             ClientRequestPayload::SendResponse { payload, channel } => {
-                let result = if let Ok(_) = self
+                let result = if self
                     .swarm
                     .behaviour_mut()
                     .request_response
                     .send_response(channel, P2pResponse(payload))
+                    .is_ok()
                 {
                     info!("Response successfully sent");
                     Ok(ClientResponse::ResponseSent)
@@ -194,9 +195,7 @@ impl Node {
             }
             ClientRequestPayload::GetLocalPeerId => {
                 let peer_id = self.swarm.local_peer_id();
-                let resp = ClientResponse::PeerId {
-                    peer_id: peer_id.clone(),
-                };
+                let resp = ClientResponse::PeerId { peer_id: *peer_id };
                 Self::send_client_response(Ok(resp), sender);
             }
             ClientRequestPayload::DialPeer { peer_id } => {
@@ -224,7 +223,7 @@ impl Node {
                     .gossipsub
                     .all_peers()
                     .filter(|(_, t)| t.contains(&&hash))
-                    .map(|(p, _)| p.clone())
+                    .map(|(p, _)| *p)
                     .collect::<Vec<PeerId>>();
 
                 let resp = ClientResponse::GossipNodes { gossip_nodes };
@@ -237,7 +236,7 @@ impl Node {
         result: Result<ClientResponse, Error>,
         sender: oneshot::Sender<Result<ClientResponse, Error>>,
     ) {
-        if let Err(_) = sender.send(result) {
+        if sender.send(result).is_err() {
             error!("Error sending response to client. The receiver has been dropped");
         }
     }
@@ -372,7 +371,7 @@ impl NodeClient {
         {
             return Ok(gossip_nodes);
         }
-        return Err(Error::UnexpectedClientResponse);
+        Err(Error::UnexpectedClientResponse)
     }
 
     pub async fn publish(&self, topic: &str, msg: Vec<u8>) -> Result<(), Error> {
@@ -404,7 +403,7 @@ impl NodeClient {
         if let ClientResponse::RequestId { request_id } = self.send_client_request(payload).await? {
             return Ok(request_id);
         }
-        return Err(Error::UnexpectedClientResponse);
+        Err(Error::UnexpectedClientResponse)
     }
 
     pub async fn send_response(
@@ -417,7 +416,7 @@ impl NodeClient {
             self.send_client_request(payload).await?;
             return Ok(());
         }
-        return Err(Error::InboundRequestIdNotFound);
+        Err(Error::InboundRequestIdNotFound)
     }
 
     pub async fn get_local_peer_id(&mut self) -> Result<PeerId, Error> {
@@ -426,7 +425,7 @@ impl NodeClient {
         if let ClientResponse::PeerId { peer_id } = self.send_client_request(payload).await? {
             return Ok(peer_id);
         }
-        return Err(Error::UnexpectedClientResponse);
+        Err(Error::UnexpectedClientResponse)
     }
 
     pub async fn dial_peer(&mut self, peer_id: PeerId) -> Result<(), Error> {
@@ -444,7 +443,7 @@ impl NodeClient {
             self.pending_inbound_req.insert(req.id, req.channel);
             return Some((req.id, req.request));
         }
-        return None;
+        None
     }
 
     pub fn recv_inbound_resp(&mut self) -> impl Future<Output = Option<InboundP2pResponse>> + '_ {

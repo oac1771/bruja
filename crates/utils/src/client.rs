@@ -54,8 +54,8 @@ where
             ink_project,
             signer,
             rpc_client,
-            _config: PhantomData::default(),
-            _env: PhantomData::default(),
+            _config: PhantomData,
+            _env: PhantomData,
         })
     }
 

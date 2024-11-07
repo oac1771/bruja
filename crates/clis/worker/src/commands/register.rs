@@ -26,7 +26,7 @@ impl RegisterCmd {
         let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
             Client::new(&config.artifact_file_path, &config.signer).await?;
 
-        let result = match client
+        match client
             .write::<WorkerRegistered, u32>(contract_address, "register_worker", &self.val)
             .await
         {
@@ -46,6 +46,6 @@ impl RegisterCmd {
             ))),
         }?;
 
-        return Ok(result);
+        Ok(())
     }
 }
