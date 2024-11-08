@@ -26,7 +26,7 @@ use subxt::{
     OnlineClient,
 };
 
-pub struct Client<'a, C, E, S> {
+pub struct ContractClient<'a, C, E, S> {
     ink_project: InkProject,
     signer: &'a S,
     rpc_client: RpcClient,
@@ -34,7 +34,7 @@ pub struct Client<'a, C, E, S> {
     _env: PhantomData<E>,
 }
 
-impl<'a, C: Config, E: Environment, S: Signer<C> + Clone> Client<'a, C, E, S>
+impl<'a, C: Config, E: Environment, S: Signer<C> + Clone> ContractClient<'a, C, E, S>
 where
     C::Hash: From<[u8; 32]> + EncodeAsType + IntoVisitor,
     C::AccountId:

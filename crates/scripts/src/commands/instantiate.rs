@@ -3,7 +3,7 @@ use ink::env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::SubstrateConfig;
 use subxt_signer::{sr25519::Keypair, SecretUri};
-use utils::client::Client;
+use utils::contract_client::ContractClient;
 
 #[derive(Debug, Parser)]
 pub struct InstantiateCmd {
@@ -18,8 +18,8 @@ impl InstantiateCmd {
     pub async fn handle(&self) {
         let signer = Keypair::from_uri(&SecretUri::from_str(&self.suri).unwrap()).unwrap();
 
-        let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
-            Client::new(&self.file, &signer).await.unwrap();
+        let client: ContractClient<SubstrateConfig, DefaultEnvironment, Keypair> =
+            ContractClient::new(&self.file, &signer).await.unwrap();
 
         let contract_address = client.instantiate("new").await.unwrap();
 

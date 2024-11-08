@@ -19,7 +19,7 @@ use tokio::{
 use tracing::{error, info, instrument};
 use utils::{
     chain::contracts::events::ContractEmitted,
-    client::Client,
+    contract_client::ContractClient,
     p2p::{Error as P2pError, NodeBuilder, NodeClient},
 };
 
@@ -91,8 +91,8 @@ impl Worker {
     }
 
     async fn listen_blocks(&self) -> Result<(), Error> {
-        let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
-            Client::new(&self.config.artifact_file_path, &self.config.signer).await?;
+        let contract_client: ContractClient<SubstrateConfig, DefaultEnvironment, Keypair> =
+            ContractClient::new(&self.config.artifact_file_path, &self.config.signer).await?;
         let client = contract_client.online_client().await?;
 
         let mut blocks_sub = client.blocks().subscribe_finalized().await?;

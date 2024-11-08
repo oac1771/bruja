@@ -6,7 +6,7 @@ use std::str::FromStr;
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
 use tracing::{info, instrument};
-use utils::client::Client;
+use utils::contract_client::ContractClient;
 
 #[derive(Debug, Parser)]
 pub struct RegisterCmd {
@@ -23,8 +23,8 @@ impl RegisterCmd {
         let contract_address =
             AccountId32::from_str(&self.address).map_err(|err| Error::Other(err.to_string()))?;
 
-        let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
-            Client::new(&config.artifact_file_path, &config.signer).await?;
+        let client: ContractClient<SubstrateConfig, DefaultEnvironment, Keypair> =
+            ContractClient::new(&config.artifact_file_path, &config.signer).await?;
 
         match client
             .write::<WorkerRegistered, u32>(contract_address, "register_worker", &self.val)

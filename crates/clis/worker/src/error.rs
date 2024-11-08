@@ -3,7 +3,7 @@ pub enum Error {
     #[error("{source}")]
     ContractClient {
         #[from]
-        source: utils::client::ClientError,
+        source: utils::contract_client::ClientError,
     },
 
     #[error("{source}")]

@@ -1,4 +1,4 @@
-pub mod client;
+pub mod contract_client;
 mod ink_project;
 pub mod p2p;
 
