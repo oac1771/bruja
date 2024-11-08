@@ -9,7 +9,7 @@ mod tests {
     use subxt::{error::Error, utils::AccountId32, SubstrateConfig};
     use subxt_signer::{sr25519::Keypair, SecretUri};
     use tests::test_utils::{Log, Runner};
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{sleep, Duration, Instant};
     use utils::client::{Client, ClientError};
     use worker::{
         commands::{register::RegisterCmd, start::StartCmd},
@@ -17,6 +17,7 @@ mod tests {
     };
 
     const CONTRACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
+    const CLIENT_WAIT_TIMEOUT: u64 = 10;
 
     #[test_macro::test]
     async fn register_worker(log_buffer: Arc<Mutex<Vec<u8>>>) {
@@ -74,25 +75,34 @@ mod tests {
         {
             Ok(client) => client,
             Err(mut client_err) => {
-                let client = loop {
-                    if let ClientError::Subxt {
-                        source: Error::Rpc(_),
-                    } = client_err
-                    {
-                        println!("Waiting for rpc node to be ready...");
-                        sleep(Duration::from_secs(1)).await;
-
-                        match Client::<SubstrateConfig, DefaultEnvironment, Keypair>::new(
-                            CONTRACT_FILE_PATH,
-                            signer,
-                        )
-                        .await
+                let client = {
+                    let start = Instant::now();
+                    loop {
+                        if Instant::now().checked_duration_since(start).unwrap()
+                            < Duration::from_secs(CLIENT_WAIT_TIMEOUT)
                         {
-                            Ok(c) => {
-                                println!("Instantiating client");
-                                break c;
-                            },
-                            Err(err) => client_err = err,
+                            if let ClientError::Subxt {
+                                source: Error::Rpc(_),
+                            } = client_err
+                            {
+                                println!("Waiting for rpc node to be ready...");
+                                sleep(Duration::from_secs(1)).await;
+
+                                match Client::<SubstrateConfig, DefaultEnvironment, Keypair>::new(
+                                    CONTRACT_FILE_PATH,
+                                    signer,
+                                )
+                                .await
+                                {
+                                    Ok(c) => {
+                                        println!("Instantiating client");
+                                        break c;
+                                    }
+                                    Err(err) => client_err = err,
+                                }
+                            }
+                        } else {
+                            panic!("Timedout waiting for client instantiation")
                         }
                     }
                 };
