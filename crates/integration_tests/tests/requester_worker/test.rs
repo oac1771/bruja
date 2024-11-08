@@ -2,18 +2,21 @@
 mod tests {
     use ink_env::DefaultEnvironment;
     use requester::{commands::submit_job::SubmitJobCmd, config::Config as ConfigR};
-    use std::sync::{Arc, Mutex};
-    use subxt::{error::RpcError, utils::AccountId32, SubstrateConfig};
-    use subxt_signer::sr25519::Keypair;
-    use tokio::time::{sleep, Duration};
+    use std::{
+        str::FromStr,
+        sync::{Arc, Mutex},
+    };
+    use subxt::{error::Error, utils::AccountId32, SubstrateConfig};
+    use subxt_signer::{sr25519::Keypair, SecretUri};
     use tests::test_utils::{Log, Runner};
+    use tokio::time::{sleep, Duration};
     use utils::client::{Client, ClientError};
     use worker::{
         commands::{register::RegisterCmd, start::StartCmd},
         config::Config as ConfigW,
     };
 
-    const ARTIFACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
+    const CONTRACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
 
     #[test_macro::test]
     async fn register_worker(log_buffer: Arc<Mutex<Vec<u8>>>) {
@@ -55,24 +58,49 @@ mod tests {
     }
 
     async fn instantiate_contract(suri: &str) -> AccountId32 {
-        let config = ConfigW::new(suri, ARTIFACT_FILE_PATH.to_string());
-
-        while let Err(ClientError::Subxt { source }) =
-            Client::<SubstrateConfig, DefaultEnvironment, Keypair>::new(&config.artifact_file_path, &config.signer).await
-        {
-            if let subxt::Error::Rpc(RpcError::ClientError(_)) = source {
-                println!("Waiting for rpc node...");
-                sleep(Duration::from_secs(1)).await;
-            }
-        }
-
-        let contract_client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
-            Client::new(&config.artifact_file_path, &config.signer)
-                .await
-                .unwrap();
+        let signer = Keypair::from_uri(&SecretUri::from_str(suri).unwrap()).unwrap();
+        let contract_client = get_client(&signer).await;
         let address = contract_client.instantiate("new").await.unwrap();
 
         address
+    }
+
+    async fn get_client(signer: &Keypair) -> Client<SubstrateConfig, DefaultEnvironment, Keypair> {
+        let contract_client = match Client::<SubstrateConfig, DefaultEnvironment, Keypair>::new(
+            CONTRACT_FILE_PATH,
+            signer,
+        )
+        .await
+        {
+            Ok(client) => client,
+            Err(mut client_err) => {
+                let client = loop {
+                    if let ClientError::Subxt {
+                        source: Error::Rpc(_),
+                    } = client_err
+                    {
+                        println!("Waiting for rpc node to be ready...");
+                        sleep(Duration::from_secs(1)).await;
+
+                        match Client::<SubstrateConfig, DefaultEnvironment, Keypair>::new(
+                            CONTRACT_FILE_PATH,
+                            signer,
+                        )
+                        .await
+                        {
+                            Ok(c) => {
+                                println!("Instantiating client");
+                                break c;
+                            },
+                            Err(err) => client_err = err,
+                        }
+                    }
+                };
+                client
+            }
+        };
+
+        contract_client
     }
 
     // add method here to fund accounts from sudo account
@@ -91,7 +119,7 @@ mod tests {
 
     impl WorkerRunner {
         fn new(address: AccountId32, suri: &str, log_buffer: Arc<Mutex<Vec<u8>>>) -> Self {
-            let config = ConfigW::new(suri, ARTIFACT_FILE_PATH.to_string());
+            let config = ConfigW::new(suri, CONTRACT_FILE_PATH.to_string());
             Self {
                 config,
                 address,
@@ -134,7 +162,7 @@ mod tests {
 
     impl RequesterRunner {
         fn new(address: AccountId32, suri: &str, log_buffer: Arc<Mutex<Vec<u8>>>) -> Self {
-            let config = ConfigR::new(suri, ARTIFACT_FILE_PATH.to_string());
+            let config = ConfigR::new(suri, CONTRACT_FILE_PATH.to_string());
             Self {
                 config,
                 address,
