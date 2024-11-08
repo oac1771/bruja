@@ -29,10 +29,9 @@ mod tests {
     #[test_macro::test]
     async fn register_worker(log_buffer: Arc<Mutex<Vec<u8>>>) {
         let contract_address = instantiate_contract("//Alice").await;
-        let worker_address = AccountId32::from(rand::random::<[u8; 32]>());
-        println!("worker address: {}", worker_address);
-
-        fund_account("//Alice", worker_address, 1_000_000).await;
+        let worker_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
+        let worker_account_id = worker_key_pair.public_key().to_account_id();
+        fund_account("//Alice", worker_account_id, 1_000_000).await;
 
         let worker_runner = WorkerRunner::new(contract_address, "//Alice", log_buffer.clone());
         worker_runner.register(10).await;
