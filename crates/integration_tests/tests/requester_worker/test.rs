@@ -106,52 +106,33 @@ mod tests {
         address
     }
 
-    // refactor this gross loop {} to use while let and try using .transpose() result <-> option
     async fn get_contract_client(
         signer: &Keypair,
     ) -> ContractClient<SubstrateConfig, DefaultEnvironment, Keypair> {
-        let contract_client =
-            match ContractClient::<SubstrateConfig, DefaultEnvironment, Keypair>::new(
-                CONTRACT_FILE_PATH,
-                signer,
-            )
-            .await
-            {
-                Ok(client) => client,
-                Err(mut client_err) => {
-                    let start = Instant::now();
-                    loop {
-                        if let Some(_) =
-                            Instant::now()
-                                .checked_duration_since(start)
-                                .and_then(|elapsed| {
-                                    Duration::from_secs(CLIENT_WAIT_TIMEOUT).checked_sub(elapsed)
-                                })
-                        {
-                            if let ClientError::Subxt {
-                                source: Error::Rpc(_),
-                            } = client_err
-                            {
-                                println!("Waiting for rpc node to be ready...");
-                                sleep(Duration::from_secs(1)).await;
+        let start_time = Instant::now();
 
-                                match ContractClient::<SubstrateConfig, DefaultEnvironment, Keypair>::new(
-                                    CONTRACT_FILE_PATH,
-                                    signer,
-                                )
-                                .await
-                                {
-                                    Ok(c) => {
-                                        println!("Instantiating client");
-                                        break c;
-                                    }
-                                    Err(err) => client_err = err,
-                                }
-                            }
-                        } else {
-                            panic!("Timedout waiting for client instantiation")
+        let contract_client =
+            loop {
+                match ContractClient::<SubstrateConfig, DefaultEnvironment, Keypair>::new(
+                    CONTRACT_FILE_PATH,
+                    signer,
+                )
+                .await
+                {
+                    Ok(client) => break client,
+                    Err(ClientError::Subxt {
+                        source: Error::Rpc(RpcError::ClientError(_)),
+                    }) => {
+                        if let None = Instant::now().checked_duration_since(start_time).and_then(
+                            |elapsed_time| {
+                                Duration::from_secs(CLIENT_WAIT_TIMEOUT).checked_sub(elapsed_time)
+                            },
+                        ) {
+                            panic!("Timedout waiting for client to be ready");
                         }
+                        sleep(Duration::from_secs(1)).await;
                     }
+                    Err(err) => panic!("Error while instantiating client: {}", err),
                 }
             };
 
