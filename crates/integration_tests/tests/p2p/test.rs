@@ -1,12 +1,12 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
+    use integration_tests::utils::{Log, Runner};
     use libp2p::PeerId;
     use rand::{
         distributions::Alphanumeric,
         {thread_rng, Rng},
     };
     use std::sync::{Arc, Mutex};
-    use tests::test_utils::{Log, Runner};
     use tokio::{
         select,
         task::JoinHandle,

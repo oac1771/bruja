@@ -19,7 +19,7 @@ pub fn test(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
             let _guard = ::tracing_subscriber::fmt()
                 .json()
-                .with_writer(move || ::tests::test_utils::BufferWriter {
+                .with_writer(move || ::integration_tests::utils::BufferWriter {
                     buffer: buffer.clone(),
                 })
                 .set_default();
