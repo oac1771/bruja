@@ -2,7 +2,6 @@
 mod tests {
     use ink_env::{DefaultEnvironment, Environment};
     use integration_tests::utils::{Log, Runner};
-    use jsonrpsee::core::client::Error as JsonRpseeError;
     use requester::{commands::submit_job::SubmitJobCmd, config::Config as ConfigR};
     use std::{
         str::FromStr,
@@ -11,7 +10,7 @@ mod tests {
     use subxt::{
         config::Config,
         error::{Error, RpcError},
-        tx::{SubmittableExtrinsic, TxClient},
+        tx::TxClient,
         utils::{AccountId32, MultiAddress},
         OnlineClient, SubstrateConfig,
     };
@@ -29,58 +28,80 @@ mod tests {
     const CONTRACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
     const CLIENT_WAIT_TIMEOUT: u64 = 30;
     const ACCOUNT_FUNDER: &'static str = "//Charlie";
+    const CONTRACT_INSTANTIATOR: &'static str = "//Bob";
 
     #[test_macro::test]
     async fn register_worker(log_buffer: Arc<Mutex<Vec<u8>>>) {
-        let contract_address = instantiate_contract("//Alice").await;
+        let contract_address = instantiate_contract().await;
         let worker_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
         let worker_account_id = worker_key_pair.public_key().to_account_id();
         fund_account(worker_account_id, 1_000_000).await;
 
-        // let worker_runner = WorkerRunner::new(contract_address, "//Alice", log_buffer.clone());
-        // worker_runner.register(10).await;
-        // worker_runner
-        //     .assert_info_log_entry("Successfully registered worker!")
-        //     .await;
+        let worker_runner = WorkerRunner::new(contract_address, "//Alice", log_buffer.clone());
+        worker_runner.register(10).await;
+        worker_runner
+            .assert_info_log_entry("Successfully registered worker!")
+            .await;
     }
 
     #[test_macro::test]
     async fn submit_job(log_buffer: Arc<Mutex<Vec<u8>>>) {
-        let contract_address = instantiate_contract("//Bob").await;
+        let contract_address = instantiate_contract().await;
         let worker_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
         let worker_account_id = worker_key_pair.public_key().to_account_id();
         fund_account(worker_account_id, 1_000_000).await;
 
-        // let requester_runner =
-        //     RequesterRunner::new(contract_address.clone(), "//Bob", log_buffer.clone());
-        // let worker_runner =
-        //     WorkerRunner::new(contract_address.clone(), "//Bob", log_buffer.clone());
+        let requester_runner =
+            RequesterRunner::new(contract_address.clone(), "//Bob", log_buffer.clone());
+        let worker_runner =
+            WorkerRunner::new(contract_address.clone(), "//Bob", log_buffer.clone());
 
-        // worker_runner.start().await;
-        // requester_runner
-        //     .submit_job(
-        //         "tests/requester_worker/work_bg.wasm",
-        //         "foo",
-        //         Some(String::from("10")),
-        //     )
-        //     .await;
+        worker_runner.start().await;
+        requester_runner
+            .submit_job(
+                "tests/requester_worker/work_bg.wasm",
+                "foo",
+                Some(String::from("10")),
+            )
+            .await;
 
-        // worker_runner.assert_info_log_entry("Starting Worker").await;
-        // requester_runner
-        //     .assert_info_log_entry("Job Request Submitted!")
-        //     .await;
-        // worker_runner
-        //     .assert_info_log_entry("Found JobRequest Event")
-        //     .await;
-        // worker_runner
-        //     .assert_info_log_entry("Published job acceptance")
-        //     .await;
+        worker_runner.assert_info_log_entry("Starting Worker").await;
+        requester_runner
+            .assert_info_log_entry("Job Request Submitted!")
+            .await;
+        worker_runner
+            .assert_info_log_entry("Found JobRequest Event")
+            .await;
+        worker_runner
+            .assert_info_log_entry("Published job acceptance")
+            .await;
     }
 
-    async fn instantiate_contract(suri: &str) -> AccountId32 {
-        let signer = Keypair::from_uri(&SecretUri::from_str(suri).unwrap()).unwrap();
+    async fn instantiate_contract() -> AccountId32 {
+        let signer =
+            Keypair::from_uri(&SecretUri::from_str(CONTRACT_INSTANTIATOR).unwrap()).unwrap();
         let contract_client = get_contract_client(&signer).await;
-        let address = contract_client.instantiate("new").await.unwrap();
+        let tx_client = contract_client.online_client().await.unwrap().tx();
+
+        let address = loop {
+            match contract_client.instantiate("new").await {
+                Ok(addr) => {
+                    break addr;
+                }
+                Err(ClientError::Subxt {
+                    source: Error::Rpc(RpcError::ClientError(client_err)),
+                }) => {
+                    if client_err.to_string().contains("Priority is too low:") {
+                        wait_for_account_nonce(&tx_client, &signer.public_key().to_account_id())
+                            .await
+                            .unwrap();
+                    }
+                }
+                Err(err) => {
+                    panic!("Error while submitting extrinsic: {:?}", err)
+                }
+            }
+        };
 
         address
     }
@@ -153,6 +174,7 @@ mod tests {
                 .create_signed(&transfer_tx, &signer, Default::default())
                 .await
                 .unwrap();
+
             match signed_extrinsic.submit_and_watch().await {
                 Ok(tx_progress) => {
                     tx_progress.wait_for_finalized_success().await.unwrap();
@@ -166,7 +188,6 @@ mod tests {
                         )
                         .await
                         .unwrap();
-                        continue;
                     }
                 }
                 Err(err) => {
@@ -190,7 +211,7 @@ mod tests {
             }
         };
 
-        let result = timeout(Duration::from_secs(10), nonce_check).await?;
+        timeout(Duration::from_secs(10), nonce_check).await?;
         Ok(())
     }
 

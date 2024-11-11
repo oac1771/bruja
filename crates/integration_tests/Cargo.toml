@@ -19,7 +19,6 @@ serde_json = { workspace = true }
 rand = { workspace = true }
 libp2p = { workspace = true }
 codec = { workspace = true }
-jsonrpsee = { workspace = true, features = ["client"] }
 test_macro = { path = "./test_macro" }
 
 worker = { workspace = true }
