@@ -35,9 +35,10 @@ mod tests {
         let contract_address = instantiate_contract().await;
         let worker_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
         let worker_account_id = worker_key_pair.public_key().to_account_id();
-        fund_account(worker_account_id, 1_000_000).await;
+        fund_account(worker_account_id, 1_000_000_000_000).await;
 
-        let worker_runner = WorkerRunner::new(contract_address, "//Alice", log_buffer.clone());
+        let worker_runner =
+            WorkerRunner::new(contract_address, worker_key_pair, log_buffer.clone());
         worker_runner.register(10).await;
         worker_runner
             .assert_info_log_entry("Successfully registered worker!")
@@ -49,12 +50,22 @@ mod tests {
         let contract_address = instantiate_contract().await;
         let worker_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
         let worker_account_id = worker_key_pair.public_key().to_account_id();
-        fund_account(worker_account_id, 1_000_000).await;
+        let requester_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
+        let requester_account_id = requester_key_pair.public_key().to_account_id();
 
-        let requester_runner =
-            RequesterRunner::new(contract_address.clone(), "//Bob", log_buffer.clone());
-        let worker_runner =
-            WorkerRunner::new(contract_address.clone(), "//Bob", log_buffer.clone());
+        fund_account(worker_account_id, 1_000_000_000_000).await;
+        fund_account(requester_account_id, 1_000_000_000_000).await;
+
+        let requester_runner = RequesterRunner::new(
+            contract_address.clone(),
+            requester_key_pair,
+            log_buffer.clone(),
+        );
+        let worker_runner = WorkerRunner::new(
+            contract_address.clone(),
+            worker_key_pair,
+            log_buffer.clone(),
+        );
 
         worker_runner.start().await;
         requester_runner
@@ -130,6 +141,7 @@ mod tests {
                         ) {
                             panic!("Timedout waiting for client to be ready");
                         }
+                        println!("waiting for rpc node...");
                         sleep(Duration::from_secs(1)).await;
                     }
                     Err(err) => panic!("Error while instantiating client: {}", err),
@@ -209,8 +221,16 @@ mod tests {
     }
 
     impl WorkerRunner {
-        fn new(contract_address: AccountId32, suri: &str, log_buffer: Arc<Mutex<Vec<u8>>>) -> Self {
-            let config = ConfigW::new(suri, CONTRACT_FILE_PATH.to_string());
+        fn new(
+            contract_address: AccountId32,
+            signer: Keypair,
+            log_buffer: Arc<Mutex<Vec<u8>>>,
+        ) -> Self {
+            let config = ConfigW {
+                signer,
+                artifact_file_path: CONTRACT_FILE_PATH.to_string(),
+            };
+
             Self {
                 config,
                 contract_address,
@@ -252,8 +272,15 @@ mod tests {
     }
 
     impl RequesterRunner {
-        fn new(contract_address: AccountId32, suri: &str, log_buffer: Arc<Mutex<Vec<u8>>>) -> Self {
-            let config = ConfigR::new(suri, CONTRACT_FILE_PATH.to_string());
+        fn new(
+            contract_address: AccountId32,
+            signer: Keypair,
+            log_buffer: Arc<Mutex<Vec<u8>>>,
+        ) -> Self {
+            let config = ConfigR {
+                signer,
+                artifact_file_path: CONTRACT_FILE_PATH.to_string(),
+            };
             Self {
                 config,
                 contract_address,
