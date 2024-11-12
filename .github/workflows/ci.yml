@@ -68,3 +68,7 @@ jobs:
       - name: P2p Tests
         shell: bash
         run: cargo make p2p-tests
+
+      - name: Requester Worker Tests
+        shell: bash
+        run: ./crates/integration_tests/tests/requester_worker/start_tests.sh
