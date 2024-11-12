@@ -142,7 +142,7 @@ mod tests {
                             panic!("Timedout waiting for client to be ready");
                         }
                         println!("waiting for rpc node...");
-                        sleep(Duration::from_secs(1)).await;
+                        sleep(Duration::from_secs(3)).await;
                     }
                     Err(err) => panic!("Error while instantiating client: {}", err),
                 }
