@@ -71,4 +71,4 @@ jobs:
 
       - name: Requester Worker Tests
         shell: bash
-        run: ./crates/integration_tests/tests/requester_worker/start_tests.sh
+        run: cargo make requester-worker

@@ -49,8 +49,9 @@ mod tests {
     async fn submit_job(log_buffer: Arc<Mutex<Vec<u8>>>) {
         let contract_address = instantiate_contract().await;
         let worker_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
-        let worker_account_id = worker_key_pair.public_key().to_account_id();
         let requester_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
+
+        let worker_account_id = worker_key_pair.public_key().to_account_id();
         let requester_account_id = requester_key_pair.public_key().to_account_id();
 
         fund_account(worker_account_id, 1_000_000_000_000).await;

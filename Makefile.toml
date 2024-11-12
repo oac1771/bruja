@@ -41,7 +41,7 @@ cargo test -p catalog --test contract-e2e
 
 [tasks.requester-worker]
 script='''
-cargo test -p integration_tests --test requester_worker --features integration_tests  -- --nocapture
+./crates/integration_tests/tests/requester_worker/start_tests.sh
 '''
 
 [tasks.p2p-tests]
