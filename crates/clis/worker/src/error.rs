@@ -13,12 +13,6 @@ pub enum Error {
     },
 
     #[error("{source}")]
-    Decode {
-        #[from]
-        source: codec::Error,
-    },
-
-    #[error("{source}")]
     WasmTime {
         #[from]
         source: anyhow::Error,
@@ -29,6 +23,9 @@ pub enum Error {
         #[from]
         source: utils::p2p::Error,
     },
+
+    #[error("")]
+    Decode { data: Vec<u8> },
 
     #[error("Error: {0}")]
     Other(String),

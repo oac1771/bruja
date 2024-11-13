@@ -31,7 +31,6 @@ pub struct StartCmd {
 
 enum WatchedEvents {
     JobRequest(JobRequestSubmitted),
-    DecodeErr,
 }
 
 struct Worker {
@@ -142,12 +141,11 @@ impl Worker {
         events: impl Iterator<Item = ContractEmitted>,
     ) -> Result<(), Error> {
         for event in events {
-            match self.determine_event(&event) {
+            match self.determine_event(&event)? {
                 WatchedEvents::JobRequest(job_request) => {
                     info!("Found JobRequest Event");
                     self.handle_job_request(job_request).await?;
                 }
-                WatchedEvents::DecodeErr => error!("Error decoding event: {:?}", event.data),
             };
         }
 
@@ -168,11 +166,13 @@ impl Worker {
         Ok(())
     }
 
-    fn determine_event(&self, event: &ContractEmitted) -> WatchedEvents {
+    fn determine_event(&self, event: &ContractEmitted) -> Result<WatchedEvents, Error> {
         if let Ok(event) = <JobRequestSubmitted as Decode>::decode(&mut event.data.as_slice()) {
-            WatchedEvents::JobRequest(event)
+            Ok(WatchedEvents::JobRequest(event))
         } else {
-            WatchedEvents::DecodeErr
+            Err(Error::Decode {
+                data: event.data.to_vec(),
+            })
         }
     }
 
