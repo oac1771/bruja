@@ -1,9 +1,4 @@
-use subxt::{
-    blocks::{Block, ExtrinsicDetails},
-    error::Error as SubxtError,
-    ext::futures::StreamExt,
-    Config, OnlineClient,
-};
+use subxt::{error::Error as SubxtError, ext::futures::StreamExt, Config};
 use tokio::{select, signal::ctrl_c};
 use tracing::{error, info};
 use utils::contract_client::{ContractClient, ContractClientError};
@@ -40,7 +35,7 @@ where
     }
 
     async fn listen(&self) {
-        let ev_stream = self.contract_client.foo().await.unwrap();
+        let ev_stream = self.contract_client.contract_event_sub().await.unwrap();
         tokio::pin!(ev_stream);
         while let Some(ev) = ev_stream.next().await {
             info!("event: {:?}", ev);

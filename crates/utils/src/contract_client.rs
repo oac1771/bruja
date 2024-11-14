@@ -7,13 +7,12 @@ use crate::{
     ink_project::{InkProject, InkProjectError},
 };
 use codec::{Decode, Encode};
-use futures::{stream::iter, Stream, StreamExt};
+use futures::{stream::iter, Stream, StreamExt, TryStreamExt};
 use std::{fmt::Display, fs::File, io::BufReader, marker::PhantomData};
 use std::{future::Future, marker::Sync};
 
 use pallet_contracts::{Code, ContractAccessError, ContractExecResult, ContractInstantiateResult};
 
-use async_stream::try_stream;
 use ink::{
     env::Environment,
     primitives::{LangError, MessageResult},
@@ -21,7 +20,7 @@ use ink::{
 use serde::Serialize;
 use subxt::{
     backend::{legacy::LegacyRpcMethods, rpc::RpcClient, StreamOf},
-    blocks::{Block, ExtrinsicEvents},
+    blocks::{Block, ExtrinsicDetails, ExtrinsicEvents},
     config::{Config, DefaultExtrinsicParams, ExtrinsicParams},
     error::Error,
     ext::{scale_decode::IntoVisitor, scale_encode::EncodeAsType},
@@ -43,7 +42,7 @@ pub trait ContractClient {
         >,
     > + Send;
 
-    fn foo(
+    fn contract_event_sub(
         &self,
     ) -> impl Future<Output = Result<impl Stream<Item = ContractEmitted>, ContractClientError>> + Send;
 }
@@ -79,23 +78,46 @@ where
         Ok(block_sub)
     }
 
-    async fn foo(&self) -> Result<impl Stream<Item = ContractEmitted>, ContractClientError> {
-        let client = self.online_client().await.unwrap();
+    // try try_filter_map instead see what happens
+    async fn contract_event_sub(&self) -> Result<impl Stream<Item = ContractEmitted>, ContractClientError> {
+        let client = self.online_client().await?;
 
         let contract_event_stream = client
             .blocks()
             .subscribe_finalized()
-            .await
-            .unwrap()
-            .filter_map(|b| async move { b.ok() })
-            .then(|b: Block<C, OnlineClient<C>>| async move {
-                let ext = b.extrinsics().await.unwrap().iter();
-                let ext_stream = iter(ext);
-                ext_stream
+            .await?
+            .filter_map(|b: Result<Block<C, OnlineClient<C>>, Error>| async move {
+                if let Err(e) = b {
+                    tracing::error!("Error processing block: {}", e);
+                    None
+                } else {
+                    b.ok() 
+                }
             })
-            .flat_map(|ext| ext)
-            .filter_map(|ext| async move { ext.ok() })
-            .then(|ext| async move { ext.events().await.unwrap() })
+            .filter_map(|b: Block<C, OnlineClient<C>>| async move {
+                match b.extrinsics().await {
+                    Ok(exts) => {
+                        Some(iter(exts.iter()))
+                    },
+                    Err(err) => {
+                        tracing::error!("Error collecting extrinsic from block body: {}", err);
+                        None
+                    }
+                }
+            })
+            .flat_map(|exts| exts)
+            .filter_map(|ext: Result<ExtrinsicDetails<C, OnlineClient<C>>, Error>| async move {
+                match ext {
+                    Ok(ext) => {
+                        Some(ext.events().await)
+                    },
+                    Err(e) => {
+                        tracing::error!("foo");
+                        None
+                    }
+                }
+            })
+            .filter_map(|ext: Result<ExtrinsicEvents<C>, Error>| async move { ext.ok() })
             .flat_map(|ev| {
                 iter(
                     ev.find::<ContractEmitted>()
@@ -103,23 +125,6 @@ where
                         .collect::<Vec<ContractEmitted>>(),
                 )
             });
-
-        // let contract_event_stream = try_stream! {
-        //     let block_sub = client.blocks().subscribe_finalized().await?;
-
-        //     for await block in block_sub {
-        //         let block = block?;
-        //         let extrinsics = block.extrinsics().await?;
-
-        //         for ext in extrinsics.iter() {
-        //             let ext = ext?;
-        //             let ext_events = ext.events().await?;
-
-        //             let events = ext_events.find::<ContractEmitted>().filter_map(|ev| ev.ok());
-        //             yield events
-        //         }
-        //     }
-        // };
 
         Ok(contract_event_stream)
     }
