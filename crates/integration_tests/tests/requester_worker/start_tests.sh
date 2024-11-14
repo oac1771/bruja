@@ -6,6 +6,6 @@ PID=$(pgrep -f target/debug/node)
 cargo test -p integration_tests --test requester_worker --features integration_tests  -- --nocapture
 ERROR_CODE=$(echo $?)
 
-kill -2 $PID
+kill -9 $PID
 
 exit $ERROR_CODE

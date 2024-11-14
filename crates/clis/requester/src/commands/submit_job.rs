@@ -9,7 +9,7 @@ use subxt_signer::sr25519::Keypair;
 use tokio::{select, signal, task::JoinHandle};
 use tracing::{error, info, instrument};
 use utils::{
-    contract_client::ContractClient,
+    contract_client::Client,
     p2p::{Error as P2pError, NodeBuilder, NodeClient},
 };
 use wasmtime::{Engine, Module, ValType};
@@ -119,8 +119,8 @@ impl Requester {
     }
 
     async fn submit_job_request_extrinsic(&self, job_request: &JobRequest) -> Result<(), Error> {
-        let client: ContractClient<SubstrateConfig, DefaultEnvironment, Keypair> =
-            ContractClient::new(&self.config.artifact_file_path, &self.config.signer).await?;
+        let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
+            Client::new(&self.config.artifact_file_path, &self.config.signer).await?;
 
         client
             .write::<JobRequestSubmitted, JobRequest>(

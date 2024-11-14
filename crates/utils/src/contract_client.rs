@@ -7,26 +7,48 @@ use crate::{
     ink_project::{InkProject, InkProjectError},
 };
 use codec::{Decode, Encode};
+use futures::{stream::iter, Stream, StreamExt};
 use std::{fmt::Display, fs::File, io::BufReader, marker::PhantomData};
+use std::{future::Future, marker::Sync};
 
 use pallet_contracts::{Code, ContractAccessError, ContractExecResult, ContractInstantiateResult};
 
+use async_stream::try_stream;
 use ink::{
     env::Environment,
     primitives::{LangError, MessageResult},
 };
 use serde::Serialize;
 use subxt::{
-    backend::{legacy::LegacyRpcMethods, rpc::RpcClient},
-    blocks::ExtrinsicEvents,
+    backend::{legacy::LegacyRpcMethods, rpc::RpcClient, StreamOf},
+    blocks::{Block, ExtrinsicEvents},
     config::{Config, DefaultExtrinsicParams, ExtrinsicParams},
+    error::Error,
     ext::{scale_decode::IntoVisitor, scale_encode::EncodeAsType},
     tx::{Payload, Signer, TxPayload},
     utils::{AccountId32, MultiAddress},
     OnlineClient,
 };
 
-pub struct ContractClient<'a, C, E, S> {
+// This should return a stream of contract events...
+pub trait ContractClient {
+    type C: Config;
+
+    fn block_sub(
+        &self,
+    ) -> impl Future<
+        Output = Result<
+            StreamOf<Result<Block<Self::C, OnlineClient<Self::C>>, Error>>,
+            ContractClientError,
+        >,
+    > + Send;
+
+    fn foo(
+        &self,
+    ) -> impl Future<Output = Result<impl Stream<Item = ContractEmitted>, ContractClientError>> + Send;
+}
+
+pub struct Client<'a, C, E, S> {
     ink_project: InkProject,
     signer: &'a S,
     rpc_client: RpcClient,
@@ -34,7 +56,8 @@ pub struct ContractClient<'a, C, E, S> {
     _env: PhantomData<E>,
 }
 
-impl<'a, C: Config, E: Environment, S: Signer<C> + Clone> ContractClient<'a, C, E, S>
+impl<'a, C: Config + Sync, E: Environment + Sync, S: Signer<C> + Clone + Sync> ContractClient
+    for Client<'a, C, E, S>
 where
     C::Hash: From<[u8; 32]> + EncodeAsType + IntoVisitor,
     C::AccountId:
@@ -43,7 +66,75 @@ where
         From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default,
     E::Balance: Default + EncodeAsType + Serialize + From<u128>,
 {
-    pub async fn new(artifact_file: &'a str, signer: &'a S) -> Result<Self, ClientError> {
+    type C = C;
+
+    async fn block_sub(
+        &self,
+    ) -> Result<StreamOf<Result<Block<Self::C, OnlineClient<Self::C>>, Error>>, ContractClientError>
+    {
+        let client = self.online_client().await?;
+
+        let block_sub = client.blocks().subscribe_finalized().await?;
+
+        Ok(block_sub)
+    }
+
+    async fn foo(&self) -> Result<impl Stream<Item = ContractEmitted>, ContractClientError> {
+        let client = self.online_client().await.unwrap();
+
+        let contract_event_stream = client
+            .blocks()
+            .subscribe_finalized()
+            .await
+            .unwrap()
+            .filter_map(|b| async move { b.ok() })
+            .then(|b: Block<C, OnlineClient<C>>| async move {
+                let ext = b.extrinsics().await.unwrap().iter();
+                let ext_stream = iter(ext);
+                ext_stream
+            })
+            .flat_map(|ext| ext)
+            .filter_map(|ext| async move { ext.ok() })
+            .then(|ext| async move { ext.events().await.unwrap() })
+            .flat_map(|ev| {
+                iter(
+                    ev.find::<ContractEmitted>()
+                        .filter_map(|ev| ev.ok())
+                        .collect::<Vec<ContractEmitted>>(),
+                )
+            });
+
+        // let contract_event_stream = try_stream! {
+        //     let block_sub = client.blocks().subscribe_finalized().await?;
+
+        //     for await block in block_sub {
+        //         let block = block?;
+        //         let extrinsics = block.extrinsics().await?;
+
+        //         for ext in extrinsics.iter() {
+        //             let ext = ext?;
+        //             let ext_events = ext.events().await?;
+
+        //             let events = ext_events.find::<ContractEmitted>().filter_map(|ev| ev.ok());
+        //             yield events
+        //         }
+        //     }
+        // };
+
+        Ok(contract_event_stream)
+    }
+}
+
+impl<'a, C: Config, E: Environment, S: Signer<C> + Clone> Client<'a, C, E, S>
+where
+    C::Hash: From<[u8; 32]> + EncodeAsType + IntoVisitor,
+    C::AccountId:
+        Display + IntoVisitor + Decode + EncodeAsType + Into<MultiAddress<AccountId32, ()>>,
+    <<C as Config>::ExtrinsicParams as ExtrinsicParams<C>>::Params:
+        From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default,
+    E::Balance: Default + EncodeAsType + Serialize + From<u128>,
+{
+    pub async fn new(artifact_file: &'a str, signer: &'a S) -> Result<Self, ContractClientError> {
         let file = File::open(artifact_file)?;
         let reader = BufReader::new(file);
         let ink_project: InkProject = serde_json::from_reader(reader)?;
@@ -59,7 +150,52 @@ where
         })
     }
 
-    pub async fn instantiate(&self, constructor: &str) -> Result<AccountId32, ClientError> {
+    pub async fn foo(&self) -> Result<impl Stream<Item = ContractEmitted>, ContractClientError> {
+        let client = self.online_client().await.unwrap();
+
+        let contract_event_stream = client
+            .blocks()
+            .subscribe_finalized()
+            .await
+            .unwrap()
+            .filter_map(|b| async move { b.ok() })
+            .then(|b: Block<C, OnlineClient<C>>| async move {
+                let ext = b.extrinsics().await.unwrap().iter();
+                let ext_stream = iter(ext);
+                ext_stream
+            })
+            .flat_map(|ext| ext)
+            .filter_map(|ext| async move { ext.ok() })
+            .then(|ext| async move { ext.events().await.unwrap() })
+            .flat_map(|ev| {
+                iter(
+                    ev.find::<ContractEmitted>()
+                        .filter_map(|ev| ev.ok())
+                        .collect::<Vec<ContractEmitted>>(),
+                )
+            });
+
+        // let contract_event_stream = try_stream! {
+        //     let block_sub = client.blocks().subscribe_finalized().await?;
+
+        //     for await block in block_sub {
+        //         let block = block?;
+        //         let extrinsics = block.extrinsics().await?;
+
+        //         for ext in extrinsics.iter() {
+        //             let ext = ext?;
+        //             let ext_events = ext.events().await?;
+
+        //             let events = ext_events.find::<ContractEmitted>().filter_map(|ev| ev.ok()).filter(|ev| ev.contract == contract_address );
+        //             yield events
+        //         }
+        //     }
+        // };
+
+        Ok(contract_event_stream)
+    }
+
+    pub async fn instantiate(&self, constructor: &str) -> Result<AccountId32, ContractClientError> {
         let salt = rand::random::<[u8; 8]>().to_vec();
         let code = self.ink_project.code()?;
 
@@ -86,7 +222,7 @@ where
 
         let instantiated = events
             .find_first::<Instantiated>()?
-            .ok_or_else(|| ClientError::EventNotFound)?;
+            .ok_or_else(|| ContractClientError::EventNotFound)?;
 
         Ok(instantiated.contract)
     }
@@ -96,7 +232,7 @@ where
         address: impl Into<<C as Config>::AccountId>,
         message: &str,
         args: &Args,
-    ) -> Result<Ev, ClientError> {
+    ) -> Result<Ev, ContractClientError> {
         let address: <C as Config>::AccountId = address.into();
         let message = self.ink_project.get_message(message)?;
         let mut data = message.get_selector()?;
@@ -115,7 +251,7 @@ where
 
         let contract_emitted = events
             .find_first::<ContractEmitted>()?
-            .ok_or_else(|| ClientError::EventNotFound)?;
+            .ok_or_else(|| ContractClientError::EventNotFound)?;
 
         let result = <Ev as Decode>::decode(&mut contract_emitted.data.as_slice())?;
 
@@ -127,7 +263,7 @@ where
         address: <C as Config>::AccountId,
         message: &str,
         args: Args,
-    ) -> Result<D, ClientError> {
+    ) -> Result<D, ContractClientError> {
         let exec_return = self.call(address, message, &args).await?.result?;
 
         let result = <MessageResult<D>>::decode(&mut exec_return.data.as_slice())??;
@@ -140,7 +276,7 @@ where
         contract_address: C::AccountId,
         field_name: &str,
         key: &[u8],
-    ) -> Result<D, ClientError> {
+    ) -> Result<D, ContractClientError> {
         let field = self.ink_project.get_storage_field(field_name)?;
         let mut field_key = field.get_storage_key()?;
 
@@ -155,14 +291,14 @@ where
                 None,
             )
             .await??
-            .ok_or_else(|| ClientError::StorageEntryIsEmpty)?;
+            .ok_or_else(|| ContractClientError::StorageEntryIsEmpty)?;
 
         let data = D::decode(&mut raw_bytes.as_slice())?;
 
         Ok(data)
     }
 
-    pub async fn online_client(&self) -> Result<OnlineClient<C>, ClientError> {
+    pub async fn online_client(&self) -> Result<OnlineClient<C>, ContractClientError> {
         let client = OnlineClient::<C>::from_rpc_client(self.rpc_client.clone()).await?;
 
         Ok(client)
@@ -175,7 +311,7 @@ where
         code: Vec<u8>,
         data: Vec<u8>,
         salt: Vec<u8>,
-    ) -> Result<Weight, ClientError> {
+    ) -> Result<Weight, ContractClientError> {
         let instantiate_call_data: Instantiate<C::AccountId, E::Balance, C::Hash> =
             Instantiate::new(origin, value, code, data.clone(), salt);
 
@@ -197,7 +333,7 @@ where
         address: <C as Config>::AccountId,
         message: &str,
         args: &Args,
-    ) -> Result<ContractExecResult<E::Balance, ()>, ClientError> {
+    ) -> Result<ContractExecResult<E::Balance, ()>, ContractClientError> {
         let message = self.ink_project.get_message(message)?;
 
         let mut input_data = message.get_selector()?;
@@ -230,7 +366,7 @@ where
         function: &str,
         call_parameters: Option<&[u8]>,
         at: Option<C::Hash>,
-    ) -> Result<R, ClientError> {
+    ) -> Result<R, ContractClientError> {
         let rpc_client: LegacyRpcMethods<C> = LegacyRpcMethods::new(self.rpc_client.clone());
         let response = rpc_client.state_call(function, call_parameters, at).await?;
 
@@ -242,7 +378,7 @@ where
     async fn submit_extrinsic<Tx>(
         &self,
         tx_payload: Payload<Tx>,
-    ) -> Result<ExtrinsicEvents<C>, ClientError>
+    ) -> Result<ExtrinsicEvents<C>, ContractClientError>
     where
         Payload<Tx>: TxPayload,
     {
@@ -264,7 +400,7 @@ where
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum ClientError {
+pub enum ContractClientError {
     #[error("Codec Decode Error: {source}")]
     Decode {
         #[from]
@@ -326,7 +462,7 @@ pub enum ClientError {
     StorageEntryIsEmpty,
 }
 
-impl From<LangError> for ClientError {
+impl From<LangError> for ContractClientError {
     fn from(_value: LangError) -> Self {
         Self::InkMessage {
             message: "Failed to read execution input for the dispatchable.".to_string(),
@@ -334,7 +470,7 @@ impl From<LangError> for ClientError {
     }
 }
 
-impl From<sp_runtime::DispatchError> for ClientError {
+impl From<sp_runtime::DispatchError> for ContractClientError {
     fn from(value: sp_runtime::DispatchError) -> Self {
         let error = match value {
             sp_runtime::DispatchError::Other(err) => err.to_string(),
@@ -357,7 +493,7 @@ impl From<sp_runtime::DispatchError> for ClientError {
     }
 }
 
-impl From<ContractAccessError> for ClientError {
+impl From<ContractAccessError> for ContractClientError {
     fn from(value: ContractAccessError) -> Self {
         let error = match value {
             ContractAccessError::DoesntExist => {

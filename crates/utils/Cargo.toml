@@ -27,6 +27,7 @@ tracing = { workspace = true, features = ["attributes"] }
 pallet-contracts = { workspace = true, default-features = false }
 sp-runtime = { workspace = true, default-features = false }
 sp-weights = { workspace = true, default-features = false }
+async-stream = "0.3.6"
 
 [features]
 default = ["std"]

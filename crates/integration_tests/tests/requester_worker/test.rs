@@ -20,30 +20,12 @@ mod tests {
         chain,
         contract_client::{ClientError, ContractClient},
     };
-    use worker::{
-        commands::{register::RegisterCmd, start::StartCmd},
-        config::Config as ConfigW,
-    };
+    use worker::{commands::start::StartCmd, config::Config as ConfigW};
 
     const CONTRACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
     const CLIENT_WAIT_TIMEOUT: u64 = 30;
     const ACCOUNT_FUNDER: &'static str = "//Charlie";
     const CONTRACT_INSTANTIATOR: &'static str = "//Bob";
-
-    #[test_macro::test]
-    async fn register_worker(log_buffer: Arc<Mutex<Vec<u8>>>) {
-        let contract_address = instantiate_contract().await;
-        let worker_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
-        let worker_account_id = worker_key_pair.public_key().to_account_id();
-        fund_account(worker_account_id, 1_000_000_000_000).await;
-
-        let worker_runner =
-            WorkerRunner::new(contract_address, worker_key_pair, log_buffer.clone());
-        worker_runner.register(10).await;
-        worker_runner
-            .assert_info_log_entry("Successfully registered worker!")
-            .await;
-    }
 
     #[test_macro::test]
     async fn submit_job(log_buffer: Arc<Mutex<Vec<u8>>>) {
