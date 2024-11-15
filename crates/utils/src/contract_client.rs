@@ -8,10 +8,10 @@ use crate::{
 };
 use codec::{Decode, Encode};
 use futures::{stream::iter, Stream, StreamExt, TryStreamExt};
-use std::{fmt::Display, fs::File, io::BufReader, marker::PhantomData};
-use std::{future::Future, marker::Sync};
-
 use pallet_contracts::{Code, ContractAccessError, ContractExecResult, ContractInstantiateResult};
+use std::{fmt::Display, fs::File, io::BufReader, marker::PhantomData};
+use std::{future::Future, marker::Sync, sync::Arc};
+use tokio::sync::Mutex;
 
 use ink::{
     env::Environment,
@@ -19,7 +19,7 @@ use ink::{
 };
 use serde::Serialize;
 use subxt::{
-    backend::{legacy::LegacyRpcMethods, rpc::RpcClient, StreamOf},
+    backend::{legacy::LegacyRpcMethods, rpc::RpcClient},
     blocks::{Block, ExtrinsicDetails, ExtrinsicEvents},
     config::{Config, DefaultExtrinsicParams, ExtrinsicParams},
     error::Error,
@@ -29,21 +29,12 @@ use subxt::{
     OnlineClient,
 };
 
-// This should return a stream of contract events...
 pub trait ContractClient {
     type C: Config;
 
-    fn block_sub(
-        &self,
-    ) -> impl Future<
-        Output = Result<
-            StreamOf<Result<Block<Self::C, OnlineClient<Self::C>>, Error>>,
-            ContractClientError,
-        >,
-    > + Send;
-
     fn contract_event_sub(
         &self,
+        contract_address: &<Self::C as Config>::AccountId,
     ) -> impl Future<
         Output = Result<impl Stream<Item = Result<ContractEmitted, Error>>, ContractClientError>,
     > + Send;
@@ -61,29 +52,25 @@ impl<'a, C: Config + Sync, E: Environment + Sync, S: Signer<C> + Clone + Sync> C
     for Client<'a, C, E, S>
 where
     C::Hash: From<[u8; 32]> + EncodeAsType + IntoVisitor,
-    C::AccountId:
-        Display + IntoVisitor + Decode + EncodeAsType + Into<MultiAddress<AccountId32, ()>>,
+    C::AccountId: Display
+        + IntoVisitor
+        + Decode
+        + EncodeAsType
+        + Into<MultiAddress<AccountId32, ()>>
+        + Send
+        + Sync,
     <<C as Config>::ExtrinsicParams as ExtrinsicParams<C>>::Params:
         From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default,
     E::Balance: Default + EncodeAsType + Serialize + From<u128>,
 {
     type C = C;
 
-    async fn block_sub(
-        &self,
-    ) -> Result<StreamOf<Result<Block<Self::C, OnlineClient<Self::C>>, Error>>, ContractClientError>
-    {
-        let client = self.online_client().await?;
-
-        let block_sub = client.blocks().subscribe_finalized().await?;
-
-        Ok(block_sub)
-    }
-
     async fn contract_event_sub(
         &self,
+        contract_address: &<Self::C as Config>::AccountId,
     ) -> Result<impl Stream<Item = Result<ContractEmitted, Error>>, ContractClientError> {
         let client = self.online_client().await?;
+        let addr = Arc::new(Mutex::new(contract_address.encode()));
 
         let contract_event_stream = client
             .blocks()
@@ -109,7 +96,21 @@ where
                 );
                 Ok(Some(event_stream))
             })
-            .try_flatten();
+            .try_flatten()
+            .try_filter_map({
+                move |ev: ContractEmitted| {
+                    let addr = Arc::clone(&addr);
+                    async move {
+                        let foo = addr.lock().await;
+                        let res = if ev.contract.encode() == *foo {
+                            Some(ev)
+                        } else {
+                            None
+                        };
+                        Ok(res)
+                    }
+                }
+            });
 
         Ok(contract_event_stream)
     }
