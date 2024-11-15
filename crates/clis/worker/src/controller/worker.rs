@@ -37,8 +37,11 @@ where
     async fn listen(&self) {
         let ev_stream = self.contract_client.contract_event_sub().await.unwrap();
         tokio::pin!(ev_stream);
-        while let Some(ev) = ev_stream.next().await {
-            info!("event: {:?}", ev);
+        while let Some(stream_result) = ev_stream.next().await {
+            match stream_result {
+                Ok(ev) => info!("event: {:?}", ev),
+                Err(err) => error!("Error getting event: {}", err),
+            }
         }
     }
 }

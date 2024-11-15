@@ -44,7 +44,9 @@ pub trait ContractClient {
 
     fn contract_event_sub(
         &self,
-    ) -> impl Future<Output = Result<impl Stream<Item = ContractEmitted>, ContractClientError>> + Send;
+    ) -> impl Future<
+        Output = Result<impl Stream<Item = Result<ContractEmitted, Error>>, ContractClientError>,
+    > + Send;
 }
 
 pub struct Client<'a, C, E, S> {
@@ -78,53 +80,36 @@ where
         Ok(block_sub)
     }
 
-    // try try_filter_map instead see what happens
-    async fn contract_event_sub(&self) -> Result<impl Stream<Item = ContractEmitted>, ContractClientError> {
+    async fn contract_event_sub(
+        &self,
+    ) -> Result<impl Stream<Item = Result<ContractEmitted, Error>>, ContractClientError> {
         let client = self.online_client().await?;
 
         let contract_event_stream = client
             .blocks()
             .subscribe_finalized()
             .await?
-            .filter_map(|b: Result<Block<C, OnlineClient<C>>, Error>| async move {
-                if let Err(e) = b {
-                    tracing::error!("Error processing block: {}", e);
-                    None
-                } else {
-                    b.ok() 
-                }
-            })
-            .filter_map(|b: Block<C, OnlineClient<C>>| async move {
+            .try_filter_map(|b: Block<C, OnlineClient<C>>| async move {
                 match b.extrinsics().await {
-                    Ok(exts) => {
-                        Some(iter(exts.iter()))
-                    },
-                    Err(err) => {
-                        tracing::error!("Error collecting extrinsic from block body: {}", err);
-                        None
-                    }
+                    Ok(exts) => Ok(Some(iter(exts.iter()))),
+                    Err(err) => Err(err),
                 }
             })
-            .flat_map(|exts| exts)
-            .filter_map(|ext: Result<ExtrinsicDetails<C, OnlineClient<C>>, Error>| async move {
-                match ext {
-                    Ok(ext) => {
-                        Some(ext.events().await)
-                    },
-                    Err(e) => {
-                        tracing::error!("foo");
-                        None
-                    }
+            .try_flatten()
+            .try_filter_map(|ext: ExtrinsicDetails<C, OnlineClient<C>>| async move {
+                match ext.events().await {
+                    Ok(ev) => Ok(Some(ev)),
+                    Err(err) => Err(err),
                 }
             })
-            .filter_map(|ext: Result<ExtrinsicEvents<C>, Error>| async move { ext.ok() })
-            .flat_map(|ev| {
-                iter(
+            .try_filter_map(|ev: ExtrinsicEvents<C>| async move {
+                let event_stream = iter(
                     ev.find::<ContractEmitted>()
-                        .filter_map(|ev| ev.ok())
-                        .collect::<Vec<ContractEmitted>>(),
-                )
-            });
+                        .collect::<Vec<Result<ContractEmitted, Error>>>(),
+                );
+                Ok(Some(event_stream))
+            })
+            .try_flatten();
 
         Ok(contract_event_stream)
     }
