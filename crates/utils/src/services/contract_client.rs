@@ -7,7 +7,7 @@ use crate::{
     ink_project::{InkProject, InkProjectError},
 };
 use codec::{Decode, Encode};
-use futures::{stream::iter, Stream, StreamExt, TryStreamExt};
+use futures::{stream::iter, Stream, TryStreamExt};
 use pallet_contracts::{Code, ContractAccessError, ContractExecResult, ContractInstantiateResult};
 use std::{fmt::Display, fs::File, io::BufReader, marker::PhantomData};
 use std::{future::Future, marker::Sync, sync::Arc};
@@ -38,6 +38,11 @@ pub trait ContractClient {
     ) -> impl Future<
         Output = Result<impl Stream<Item = Result<ContractEmitted, Error>>, ContractClientError>,
     > + Send;
+
+    fn decode_event<Ev: Decode>(&self, ev: &ContractEmitted) -> Result<Ev, ContractClientError> {
+        let result = <Ev as Decode>::decode(&mut ev.data.as_slice())?;
+        Ok(result)
+    }
 }
 
 pub struct Client<'a, C, E, S> {
@@ -70,6 +75,8 @@ where
         contract_address: &<Self::C as Config>::AccountId,
     ) -> Result<impl Stream<Item = Result<ContractEmitted, Error>>, ContractClientError> {
         let client = self.online_client().await?;
+
+        // try doing same thing with addr without using arc mutext?
         let addr = Arc::new(Mutex::new(contract_address.encode()));
 
         let contract_event_stream = client
@@ -101,8 +108,7 @@ where
                 move |ev: ContractEmitted| {
                     let addr = Arc::clone(&addr);
                     async move {
-                        let foo = addr.lock().await;
-                        let res = if ev.contract.encode() == *foo {
+                        let res = if ev.contract.encode() == *addr.lock().await {
                             Some(ev)
                         } else {
                             None
@@ -139,51 +145,6 @@ where
             _config: PhantomData,
             _env: PhantomData,
         })
-    }
-
-    pub async fn foo(&self) -> Result<impl Stream<Item = ContractEmitted>, ContractClientError> {
-        let client = self.online_client().await.unwrap();
-
-        let contract_event_stream = client
-            .blocks()
-            .subscribe_finalized()
-            .await
-            .unwrap()
-            .filter_map(|b| async move { b.ok() })
-            .then(|b: Block<C, OnlineClient<C>>| async move {
-                let ext = b.extrinsics().await.unwrap().iter();
-                let ext_stream = iter(ext);
-                ext_stream
-            })
-            .flat_map(|ext| ext)
-            .filter_map(|ext| async move { ext.ok() })
-            .then(|ext| async move { ext.events().await.unwrap() })
-            .flat_map(|ev| {
-                iter(
-                    ev.find::<ContractEmitted>()
-                        .filter_map(|ev| ev.ok())
-                        .collect::<Vec<ContractEmitted>>(),
-                )
-            });
-
-        // let contract_event_stream = try_stream! {
-        //     let block_sub = client.blocks().subscribe_finalized().await?;
-
-        //     for await block in block_sub {
-        //         let block = block?;
-        //         let extrinsics = block.extrinsics().await?;
-
-        //         for ext in extrinsics.iter() {
-        //             let ext = ext?;
-        //             let ext_events = ext.events().await?;
-
-        //             let events = ext_events.find::<ContractEmitted>().filter_map(|ev| ev.ok()).filter(|ev| ev.contract == contract_address );
-        //             yield events
-        //         }
-        //     }
-        // };
-
-        Ok(contract_event_stream)
     }
 
     pub async fn instantiate(&self, constructor: &str) -> Result<AccountId32, ContractClientError> {

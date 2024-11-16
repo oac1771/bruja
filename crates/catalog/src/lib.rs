@@ -35,30 +35,24 @@ pub mod catalog {
     pub struct JobRequestSubmitted {
         pub who: AccountId,
         pub id: HashId,
-        pub resources: Vec<u8>,
     }
 
     #[derive(Debug, Encode, Decode, PartialEq, Clone)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
     pub struct JobRequest {
         id: HashId,
-        resources: Vec<u8>,
     }
 
     impl JobRequest {
-        pub fn new(mut code: Vec<u8>, params: Vec<Vec<u8>>, resources: Vec<u8>) -> Self {
-            params.encode().encode_to(&mut code);
+        pub fn new(code: &[u8], params: Vec<Vec<u8>>) -> Self {
+            code.encode_to(&mut params.encode());
             let id = hash(&code);
 
-            Self { id, resources }
+            Self { id }
         }
 
         pub fn id(&self) -> HashId {
             self.id
-        }
-
-        pub fn resources(&self) -> &Vec<u8> {
-            &self.resources
         }
     }
 
@@ -102,7 +96,6 @@ pub mod catalog {
         pub fn submit_job_request(&mut self, job_request: JobRequest) {
             let who = self.env().caller();
             let id = job_request.id();
-            let resources = job_request.resources();
 
             let ids = if let Some(mut ids) = self.requests.get(who) {
                 ids.push(id);
@@ -112,11 +105,7 @@ pub mod catalog {
             };
 
             self.requests.insert(who, &ids);
-            self.env().emit_event(JobRequestSubmitted {
-                who,
-                id,
-                resources: resources.to_vec(),
-            });
+            self.env().emit_event(JobRequestSubmitted { who, id });
         }
     }
 
@@ -138,9 +127,8 @@ pub mod catalog {
         impl JobRequest {
             fn test(code: Vec<u8>) -> Self {
                 let params: Vec<Vec<u8>> = vec![];
-                let resources: Vec<u8> = vec![];
 
-                Self::new(code, params, resources)
+                Self::new(code.as_slice(), params)
             }
         }
 
@@ -180,10 +168,6 @@ pub mod catalog {
 
             assert_eq!(job_submitted_event.who, who);
             assert_eq!(job_submitted_event.id, job_request.id());
-            assert_eq!(
-                job_submitted_event.resources,
-                job_request.resources().clone()
-            );
             assert_eq!(job_ids[0], job_request.id());
         }
 

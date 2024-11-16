@@ -1,36 +1,16 @@
 use crate::{config::Config, controller::worker::WorkerController, error::Error};
-use catalog::catalog::JobRequestSubmitted;
 use clap::Parser;
-use clis::Gossip;
-use codec::{Decode, Encode};
 use ink_env::DefaultEnvironment;
 use std::str::FromStr;
-use subxt::{
-    blocks::{Block, ExtrinsicDetails},
-    utils::AccountId32,
-    OnlineClient, SubstrateConfig,
-};
+use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
-use tokio::{
-    select, signal,
-    task::JoinHandle,
-    time::{sleep, Duration},
-};
-use tracing::{error, info, instrument};
-use utils::{
-    chain::contracts::events::ContractEmitted,
-    contract_client::Client,
-    p2p::{Error as P2pError, NodeBuilder, NodeClient},
-};
+use tracing::instrument;
+use utils::services::contract_client::Client;
 
 #[derive(Debug, Parser)]
 pub struct StartCmd {
     #[arg(long)]
     pub address: String,
-}
-
-enum WatchedEvents {
-    JobRequest(JobRequestSubmitted),
 }
 
 impl StartCmd {
@@ -44,10 +24,7 @@ impl StartCmd {
         )
         .await?;
 
-        let worker_controller = WorkerController::<
-            SubstrateConfig,
-            Client<SubstrateConfig, DefaultEnvironment, Keypair>,
-        >::new(contract_client, contract_address);
+        let worker_controller = WorkerController::new(contract_client, contract_address);
 
         worker_controller.start().await;
 

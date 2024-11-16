@@ -1,11 +1,13 @@
+use catalog::catalog::JobRequestSubmitted;
 use subxt::{ext::futures::StreamExt, Config};
-use tokio::{select, signal::ctrl_c};
+use tokio::{pin, select, signal::ctrl_c};
 use tracing::{error, info};
 use utils::{
     chain::contracts::events::ContractEmitted,
-    contract_client::{ContractClient, ContractClientError},
+    services::contract_client::{ContractClient, ContractClientError},
 };
 
+// might need to not pass contract address except to start maybe?
 pub struct WorkerController<C: Config, CC> {
     contract_client: CC,
     contract_address: <C as Config>::AccountId,
@@ -27,20 +29,23 @@ where
         info!("Starting Controller");
 
         select! {
-            _ = self.listen() => {}
+            result = self.listen() => {
+                if let Err(e) = result {
+                    error!("Error: {}", e);
+                }
+            }
             _ = ctrl_c() => {
                 info!("Shutting down...")
             }
         };
     }
 
-    async fn listen(&self) {
+    async fn listen(&self) -> Result<(), WorkerControllerError> {
         let ev_stream = self
             .contract_client
             .contract_event_sub(&self.contract_address)
-            .await
-            .unwrap();
-        tokio::pin!(ev_stream);
+            .await?;
+        pin!(ev_stream);
 
         while let Some(stream_result) = ev_stream.next().await {
             match stream_result {
@@ -48,9 +53,23 @@ where
                 Err(err) => error!("Error retreiving event: {}", err),
             }
         }
+
+        Ok(())
     }
 
-    async fn handle_event(&self, ev: ContractEmitted) {}
+    async fn handle_event(&self, ev: ContractEmitted) {
+        if let Ok(_ev) = self
+            .contract_client
+            .decode_event::<JobRequestSubmitted>(&ev)
+        {
+            //
+        } else {
+            error!(
+                "Unable to decode Contract Emitted event: {:?}",
+                ev.data.to_vec()
+            );
+        }
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

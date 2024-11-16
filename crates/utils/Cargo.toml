@@ -18,15 +18,17 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 codec = { workspace = true }
 hex = { workspace = true }
-tokio = { workspace = true, features = ["rt-multi-thread", "sync"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "fs"] }
 rand = { workspace = true }
 libp2p = { workspace = true, features = ["tcp", "tls", "dns", "yamux", "websocket", "macros", "mdns", "tokio", "gossipsub", "request-response", "cbor", "quic"] }
 futures = { workspace = true }
 tracing = { workspace = true, features = ["attributes"] }
-
+wasmtime = { workspace = true }
 pallet-contracts = { workspace = true, default-features = false }
 sp-runtime = { workspace = true, default-features = false }
 sp-weights = { workspace = true, default-features = false }
+
+catalog = { workspace = true }
 
 [features]
 default = ["std"]

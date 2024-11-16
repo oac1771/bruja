@@ -3,45 +3,24 @@ pub enum Error {
     #[error("{source}")]
     ContractClient {
         #[from]
-        source: utils::contract_client::ContractClientError,
+        source: utils::services::contract_client::ContractClientError,
     },
 
     #[error("{source}")]
-    Subxt {
+    SubmitJobController {
         #[from]
-        source: subxt::Error,
+        source: crate::controller::submit_job::SubmitJobControllerError,
     },
 
     #[error("{source}")]
-    Decode {
+    JobService {
         #[from]
-        source: codec::Error,
+        source: utils::services::job::JobServiceError,
     },
 
-    #[error("{source}")]
-    Std {
-        #[from]
-        source: std::io::Error,
-    },
+    #[error("unable to parse contract address from provided string")]
+    ParsingContractAddress,
 
-    #[error("{source}")]
-    WasmTime {
-        #[from]
-        source: anyhow::Error,
-    },
-
-    #[error("{source}")]
-    ParseInt {
-        #[from]
-        source: std::num::ParseIntError,
-    },
-
-    #[error("{source}")]
-    P2p {
-        #[from]
-        source: utils::p2p::Error,
-    },
-
-    #[error("Error: {0}")]
-    Other(String),
+    #[error(transparent)]
+    Unknown(#[from] anyhow::Error),
 }

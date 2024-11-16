@@ -1,9 +1,9 @@
-pub trait SubstrateClient {
-    fn get_contract_events(&self) {}
-}
+// pub trait SubstrateClient {
+//     fn get_contract_events(&self) {}
+// }
 
-struct Client {}
+// struct Client {}
 
-impl SubstrateClient for Client {
-    fn get_contract_events(&self) {}
-}
+// impl SubstrateClient for Client {
+//     fn get_contract_events(&self) {}
+// }

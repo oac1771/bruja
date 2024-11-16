@@ -3,7 +3,7 @@ use ink::env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::SubstrateConfig;
 use subxt_signer::{sr25519::Keypair, SecretUri};
-use utils::contract_client::Client;
+use utils::services::contract_client::Client;
 
 #[derive(Debug, Parser)]
 pub struct InstantiateCmd {
