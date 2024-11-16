@@ -197,17 +197,10 @@ mod tests {
         let gossip_stream = client_2.gossip_msg_stream().await;
         tokio::pin!(gossip_stream);
 
-        let result = loop {
-            if let Some(msg) = gossip_stream.next().await {
-                if msg.message() == expected_msg {
-                    break true;
-                }
-            } else {
-                panic!("No gossip messages received")
-            }
-        };
-
-        assert!(result);
+        while let Some(msg) = gossip_stream.next().await {
+            assert_eq!(msg.message(), expected_msg);
+            break;
+        }
     }
 
     #[test_macro::test]

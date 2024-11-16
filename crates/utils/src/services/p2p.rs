@@ -27,11 +27,13 @@ use tokio::{
 use tracing::{error, info, info_span, Instrument};
 
 pub trait NetworkClient {
+    type Err;
+
     fn publish_message(
         &self,
         topic: &str,
         msg: Vec<u8>,
-    ) -> impl Future<Output = Result<(), NetworkClientError>>;
+    ) -> impl Future<Output = Result<(), Self::Err>>;
 
     fn gossip_msg_stream(&self) -> impl Future<Output = impl Stream<Item = GossipMessage>> + Send;
 }
@@ -344,7 +346,9 @@ impl Node {
 }
 
 impl NetworkClient for NodeClient {
-    async fn publish_message(&self, topic: &str, msg: Vec<u8>) -> Result<(), NetworkClientError> {
+    type Err = NetworkClientError;
+
+    async fn publish_message(&self, topic: &str, msg: Vec<u8>) -> Result<(), Self::Err> {
         let payload = ClientRequestPayload::Publish {
             topic: topic.to_string(),
             msg,

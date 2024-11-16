@@ -19,7 +19,6 @@ thiserror = { workspace = true }
 codec = { workspace = true }
 hex = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread", "fs", "sync"] }
-# tokio-stream = "0.1.16"
 rand = { workspace = true }
 libp2p = { workspace = true, features = ["tcp", "tls", "dns", "yamux", "websocket", "macros", "mdns", "tokio", "gossipsub", "request-response", "cbor", "quic"] }
 futures = { workspace = true }

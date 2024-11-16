@@ -25,6 +25,7 @@ where
     <C as Config>::AccountId: Display,
     CC: ContractClient<C = C>,
     NC: NetworkClient,
+    WorkerControllerError: From<<NC as NetworkClient>::Err>,
 {
     pub fn new(
         contract_client: CC,
@@ -38,7 +39,7 @@ where
         }
     }
 
-    pub async fn start(&self, node_handle: JoinHandle<Result<(), NetworkClientError>>) {
+    pub async fn start(&self, node_handle: JoinHandle<Result<(), <NC as NetworkClient>::Err>>) {
         info!("Starting Worker Controller");
 
         select! {
