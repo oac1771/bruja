@@ -46,7 +46,7 @@ pub mod catalog {
     impl JobRequest {
         pub fn new(code: &[u8], params: Vec<Vec<u8>>) -> Self {
             code.encode_to(&mut params.encode());
-            let id = hash(&code);
+            let id = hash(code);
 
             Self { id }
         }

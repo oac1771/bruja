@@ -1,3 +1,4 @@
+use catalog::catalog::{JobRequest, JobRequestSubmitted};
 use subxt::Config;
 use tokio::{select, signal::ctrl_c};
 use tracing::{error, info};
@@ -6,13 +7,13 @@ use utils::services::{
     job::{JobService, JobServiceError},
 };
 
-pub struct SubmitJobController<C: Config, CC, JS> {
+pub struct RequesterController<C: Config, CC, JS> {
     contract_client: CC,
     contract_address: <C as Config>::AccountId,
     job_service: JS,
 }
 
-impl<C, CC, JS> SubmitJobController<C, CC, JS>
+impl<C, CC, JS> RequesterController<C, CC, JS>
 where
     C: Config,
     CC: ContractClient<C = C>,
@@ -48,7 +49,15 @@ where
 
     async fn submit_job(&self) -> Result<(), SubmitJobControllerError> {
         let job_request = self.job_service.build_job_request().await?;
+        self.contract_client
+            .write::<JobRequestSubmitted, JobRequest>(
+                self.contract_address.clone(),
+                "submit_job_request",
+                &job_request,
+            )
+            .await?;
 
+        info!("Job Request Submitted!");
         Ok(())
     }
 }

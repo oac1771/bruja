@@ -1,4 +1,4 @@
-use crate::{config::Config, controller::submit_job::SubmitJobController, error::Error};
+use crate::{config::Config, controller::requester::RequesterController, error::Error};
 use clap::Parser;
 use ink_env::DefaultEnvironment;
 use std::str::FromStr;
@@ -42,21 +42,12 @@ impl SubmitJobCmd {
         )
         .await?;
 
-        let submit_job_controller =
-            SubmitJobController::new(contract_client, contract_address, job_service);
+        let submit_job_controller = RequesterController::new(contract_client, contract_address, job_service);
 
-        let result = submit_job_controller.start().await?;
+        submit_job_controller.start().await?;
 
-        Ok(result)
+        Ok(())
     }
-
-    // async fn join_network(&self) -> Result<(JoinHandle<Result<(), P2pError>>, NodeClient), Error> {
-    //     let node = NodeBuilder::build()?;
-    //     let (node_handle, node_client) = node.start()?;
-    //     node_client.subscribe(&self.address).await?;
-
-    //     Ok((node_handle, node_client))
-    // }
 }
 
 // impl Requester {

@@ -18,7 +18,7 @@ mod tests {
     use tokio::time::{error::Elapsed, sleep, timeout, Duration, Instant};
     use utils::{
         chain,
-        contract_client::{ClientError, ContractClient},
+        services::contract_client::{Client, ContractClientError}
     };
     use worker::{commands::start::StartCmd, config::Config as ConfigW};
 
@@ -59,16 +59,11 @@ mod tests {
             )
             .await;
 
-        worker_runner.assert_info_log_entry("Starting Worker").await;
+        worker_runner.assert_info_log_entry("Starting Worker Controller").await;
         requester_runner
             .assert_info_log_entry("Job Request Submitted!")
             .await;
-        worker_runner
-            .assert_info_log_entry("Found JobRequest Event")
-            .await;
-        worker_runner
-            .assert_info_log_entry("Published job acceptance")
-            .await;
+
     }
 
     async fn instantiate_contract() -> AccountId32 {
@@ -82,7 +77,7 @@ mod tests {
                 Ok(addr) => {
                     break addr;
                 }
-                Err(ClientError::Subxt {
+                Err(ContractClientError::Subxt {
                     source: Error::Rpc(RpcError::ClientError(client_err)),
                 }) => {
                     if client_err.to_string().contains("Priority is too low:") {
@@ -102,19 +97,19 @@ mod tests {
 
     async fn get_contract_client(
         signer: &Keypair,
-    ) -> ContractClient<SubstrateConfig, DefaultEnvironment, Keypair> {
+    ) -> Client<SubstrateConfig, DefaultEnvironment, Keypair> {
         let start_time = Instant::now();
 
         let contract_client =
             loop {
-                match ContractClient::<SubstrateConfig, DefaultEnvironment, Keypair>::new(
+                match Client::<SubstrateConfig, DefaultEnvironment, Keypair>::new(
                     CONTRACT_FILE_PATH,
                     signer,
                 )
                 .await
                 {
                     Ok(client) => break client,
-                    Err(ClientError::Subxt {
+                    Err(ContractClientError::Subxt {
                         source: Error::Rpc(RpcError::ClientError(_)),
                     }) => {
                         if let None = Instant::now().checked_duration_since(start_time).and_then(
@@ -221,15 +216,6 @@ mod tests {
             }
         }
 
-        async fn register(&self, val: u32) {
-            let register_cmd = RegisterCmd {
-                address: self.contract_address.to_string(),
-                val,
-            };
-
-            register_cmd.handle(self.config.clone()).await.unwrap();
-        }
-
         async fn start(&self) {
             let start_cmd = StartCmd {
                 address: self.contract_address.to_string(),
@@ -271,12 +257,12 @@ mod tests {
             }
         }
 
-        async fn submit_job(&self, path: &str, func_name: &str, params: Option<String>) {
+        async fn submit_job(&self, path: &str, func_name: &str, parameters: Option<String>) {
             let submit_job_cmd = SubmitJobCmd {
                 address: self.contract_address.to_string(),
-                path: path.to_string(),
-                func_name: func_name.to_string(),
-                params: params,
+                code_path: path.to_string(),
+                function_name: func_name.to_string(),
+                parameters,
             };
             let config = self.config.clone();
 

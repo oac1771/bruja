@@ -109,7 +109,7 @@ pub struct Params(Vec<String>);
 impl Params {
     pub fn new(params: String) -> Self {
         let res = params
-            .split(",")
+            .split(',')
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
 

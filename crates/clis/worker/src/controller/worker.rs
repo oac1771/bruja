@@ -7,7 +7,6 @@ use utils::{
     services::contract_client::{ContractClient, ContractClientError},
 };
 
-// might need to not pass contract address except to start maybe?
 pub struct WorkerController<C: Config, CC> {
     contract_client: CC,
     contract_address: <C as Config>::AccountId,
@@ -26,12 +25,14 @@ where
     }
 
     pub async fn start(&self) {
-        info!("Starting Controller");
+        info!("Starting Worker Controller");
 
         select! {
             result = self.listen() => {
                 if let Err(e) = result {
                     error!("Error: {}", e);
+                } else {
+                    info!("Shutting down...")
                 }
             }
             _ = ctrl_c() => {
@@ -43,7 +44,7 @@ where
     async fn listen(&self) -> Result<(), WorkerControllerError> {
         let ev_stream = self
             .contract_client
-            .contract_event_sub(&self.contract_address)
+            .contract_event_sub(self.contract_address.clone())
             .await?;
         pin!(ev_stream);
 

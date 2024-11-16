@@ -10,8 +10,7 @@ use codec::{Decode, Encode};
 use futures::{stream::iter, Stream, TryStreamExt};
 use pallet_contracts::{Code, ContractAccessError, ContractExecResult, ContractInstantiateResult};
 use std::{fmt::Display, fs::File, io::BufReader, marker::PhantomData};
-use std::{future::Future, marker::Sync, sync::Arc};
-use tokio::sync::Mutex;
+use std::{future::Future, marker::Sync};
 
 use ink::{
     env::Environment,
@@ -34,10 +33,17 @@ pub trait ContractClient {
 
     fn contract_event_sub(
         &self,
-        contract_address: &<Self::C as Config>::AccountId,
+        contract_address: <Self::C as Config>::AccountId,
     ) -> impl Future<
         Output = Result<impl Stream<Item = Result<ContractEmitted, Error>>, ContractClientError>,
     > + Send;
+
+    fn write<Ev: Decode, Args: Encode + Sync + Send>(
+        &self,
+        address: <Self::C as Config>::AccountId,
+        message: &str,
+        args: &Args,
+    ) -> impl Future<Output = Result<Ev, ContractClientError>> + Send;
 
     fn decode_event<Ev: Decode>(&self, ev: &ContractEmitted) -> Result<Ev, ContractClientError> {
         let result = <Ev as Decode>::decode(&mut ev.data.as_slice())?;
@@ -63,21 +69,20 @@ where
         + EncodeAsType
         + Into<MultiAddress<AccountId32, ()>>
         + Send
-        + Sync,
+        + Sync
+        + Into<AccountId32>,
     <<C as Config>::ExtrinsicParams as ExtrinsicParams<C>>::Params:
-        From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default,
+        From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default + Send + Sync,
     E::Balance: Default + EncodeAsType + Serialize + From<u128>,
 {
     type C = C;
 
     async fn contract_event_sub(
         &self,
-        contract_address: &<Self::C as Config>::AccountId,
+        contract_address: <Self::C as Config>::AccountId,
     ) -> Result<impl Stream<Item = Result<ContractEmitted, Error>>, ContractClientError> {
         let client = self.online_client().await?;
-
-        // try doing same thing with addr without using arc mutext?
-        let addr = Arc::new(Mutex::new(contract_address.encode()));
+        let addr: AccountId32 = contract_address.into();
 
         let contract_event_stream = client
             .blocks()
@@ -106,9 +111,9 @@ where
             .try_flatten()
             .try_filter_map({
                 move |ev: ContractEmitted| {
-                    let addr = Arc::clone(&addr);
+                    let addr = addr.clone();
                     async move {
-                        let res = if ev.contract.encode() == *addr.lock().await {
+                        let res = if ev.contract == addr {
                             Some(ev)
                         } else {
                             None
@@ -119,6 +124,37 @@ where
             });
 
         Ok(contract_event_stream)
+    }
+
+    async fn write<Ev: Decode, Args: Encode + Sync + Send>(
+        &self,
+        address: <C as Config>::AccountId,
+        message: &str,
+        args: &Args,
+    ) -> Result<Ev, ContractClientError> {
+        let message = self.ink_project.get_message(message)?;
+        let mut data = message.get_selector()?;
+        args.encode_to(&mut data);
+
+        let gas_limit = self
+            .call(address.clone(), message.get_label(), &args)
+            .await?
+            .gas_required;
+
+        let call_tx =
+            chain::tx()
+                .contracts()
+                .call(address.clone().into(), 0, gas_limit.into(), None, data);
+
+        let events = self.submit_extrinsic(call_tx).await?;
+
+        let contract_emitted = events
+            .find_first::<ContractEmitted>()?
+            .ok_or_else(|| ContractClientError::EventNotFound)?;
+
+        let result = <Ev as Decode>::decode(&mut contract_emitted.data.as_slice())?;
+
+        Ok(result)
     }
 }
 
@@ -177,37 +213,6 @@ where
             .ok_or_else(|| ContractClientError::EventNotFound)?;
 
         Ok(instantiated.contract)
-    }
-
-    pub async fn write<Ev: Decode, Args: Encode>(
-        &self,
-        address: impl Into<<C as Config>::AccountId>,
-        message: &str,
-        args: &Args,
-    ) -> Result<Ev, ContractClientError> {
-        let address: <C as Config>::AccountId = address.into();
-        let message = self.ink_project.get_message(message)?;
-        let mut data = message.get_selector()?;
-        args.encode_to(&mut data);
-
-        let gas_limit = self
-            .call(address.clone(), message.get_label(), &args)
-            .await?
-            .gas_required;
-
-        let call_tx = chain::tx()
-            .contracts()
-            .call(address.into(), 0, gas_limit.into(), None, data);
-
-        let events = self.submit_extrinsic(call_tx).await?;
-
-        let contract_emitted = events
-            .find_first::<ContractEmitted>()?
-            .ok_or_else(|| ContractClientError::EventNotFound)?;
-
-        let result = <Ev as Decode>::decode(&mut contract_emitted.data.as_slice())?;
-
-        Ok(result)
     }
 
     pub async fn read<D: Decode, Args: Encode + Clone>(
@@ -353,31 +358,31 @@ where
 
 #[derive(Debug, thiserror::Error)]
 pub enum ContractClientError {
-    #[error("Codec Decode Error: {source}")]
+    #[error("{source}")]
     Decode {
         #[from]
         source: codec::Error,
     },
 
-    #[error("Subxt Crate Error: {source}")]
+    #[error("{source}")]
     Subxt {
         #[from]
         source: subxt::Error,
     },
 
-    #[error("Io error: {source}")]
+    #[error("{source}")]
     StdIo {
         #[from]
         source: std::io::Error,
     },
 
-    #[error("SerdeJson error: {source}")]
+    #[error("{source}")]
     SerdeJson {
         #[from]
         source: serde_json::Error,
     },
 
-    #[error("Ink project error: {source}")]
+    #[error("{source}")]
     InkProject {
         #[from]
         source: InkProjectError,
