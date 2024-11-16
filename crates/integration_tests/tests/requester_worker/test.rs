@@ -18,7 +18,7 @@ mod tests {
     use tokio::time::{error::Elapsed, sleep, timeout, Duration, Instant};
     use utils::{
         chain,
-        services::contract_client::{Client, ContractClientError}
+        services::contract_client::{Client, ContractClientError},
     };
     use worker::{commands::start::StartCmd, config::Config as ConfigW};
 
@@ -59,11 +59,12 @@ mod tests {
             )
             .await;
 
-        worker_runner.assert_info_log_entry("Starting Worker Controller").await;
+        worker_runner
+            .assert_info_log_entry("Starting Worker Controller")
+            .await;
         requester_runner
             .assert_info_log_entry("Job Request Submitted!")
             .await;
-
     }
 
     async fn instantiate_contract() -> AccountId32 {

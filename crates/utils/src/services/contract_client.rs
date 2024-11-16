@@ -113,11 +113,7 @@ where
                 move |ev: ContractEmitted| {
                     let addr = addr.clone();
                     async move {
-                        let res = if ev.contract == addr {
-                            Some(ev)
-                        } else {
-                            None
-                        };
+                        let res = if ev.contract == addr { Some(ev) } else { None };
                         Ok(res)
                     }
                 }

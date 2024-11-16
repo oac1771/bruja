@@ -1,39 +1,53 @@
 use catalog::catalog::JobRequestSubmitted;
+use clis::Gossip;
+use codec::Encode;
+use std::fmt::Display;
 use subxt::{ext::futures::StreamExt, Config};
-use tokio::{pin, select, signal::ctrl_c};
+use tokio::{pin, select, signal::ctrl_c, task::JoinHandle};
 use tracing::{error, info};
 use utils::{
     chain::contracts::events::ContractEmitted,
-    services::contract_client::{ContractClient, ContractClientError},
+    services::{
+        contract_client::{ContractClient, ContractClientError},
+        p2p::{NetworkClient, NetworkClientError},
+    },
 };
 
-pub struct WorkerController<C: Config, CC> {
+pub struct WorkerController<C: Config, CC, NC> {
     contract_client: CC,
     contract_address: <C as Config>::AccountId,
+    network_client: NC,
 }
 
-impl<C, CC> WorkerController<C, CC>
+impl<C, CC, NC> WorkerController<C, CC, NC>
 where
     C: Config,
+    <C as Config>::AccountId: Display,
     CC: ContractClient<C = C>,
+    NC: NetworkClient,
 {
-    pub fn new(contract_client: CC, contract_address: <C as Config>::AccountId) -> Self {
+    pub fn new(
+        contract_client: CC,
+        contract_address: <C as Config>::AccountId,
+        network_client: NC,
+    ) -> Self {
         Self {
             contract_address,
             contract_client,
+            network_client,
         }
     }
 
-    pub async fn start(&self) {
+    pub async fn start(&self, node_handle: JoinHandle<Result<(), NetworkClientError>>) {
         info!("Starting Worker Controller");
 
         select! {
+            _ = node_handle => {},
             result = self.listen() => {
-                if let Err(e) = result {
-                    error!("Error: {}", e);
-                } else {
-                    info!("Shutting down...")
-                }
+                match result {
+                    Err(err) => error!("Error: {}", err),
+                    Ok(()) => info!("Shutting down...")
+                };
             }
             _ = ctrl_c() => {
                 info!("Shutting down...")
@@ -59,17 +73,33 @@ where
     }
 
     async fn handle_event(&self, ev: ContractEmitted) {
-        if let Ok(_ev) = self
+        let res = if let Ok(job_request) = self
             .contract_client
             .decode_event::<JobRequestSubmitted>(&ev)
         {
-            //
+            self.accept_job(job_request).await
         } else {
-            error!(
-                "Unable to decode Contract Emitted event: {:?}",
-                ev.data.to_vec()
-            );
+            Err(WorkerControllerError::DecodeContractEvent { data: ev.data })
+        };
+
+        if let Err(e) = res {
+            error!("Error while handling event: {}", e);
         }
+    }
+
+    async fn accept_job(
+        &self,
+        job_request: JobRequestSubmitted,
+    ) -> Result<(), WorkerControllerError> {
+        let job_id = job_request.id.to_vec();
+        let msg = Gossip::JobAcceptance { job_id };
+        let topic = self.contract_address.to_string();
+
+        self.network_client
+            .publish_message(&topic, msg.encode())
+            .await?;
+
+        Ok(())
     }
 }
 
@@ -80,4 +110,13 @@ pub enum WorkerControllerError {
         #[from]
         source: ContractClientError,
     },
+
+    #[error("{source}")]
+    NetworkClient {
+        #[from]
+        source: NetworkClientError,
+    },
+
+    #[error("Unable to decode Contract Emitted event: {data:?}")]
+    DecodeContractEvent { data: Vec<u8> },
 }

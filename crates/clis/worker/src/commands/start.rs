@@ -5,7 +5,7 @@ use std::str::FromStr;
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
 use tracing::instrument;
-use utils::services::contract_client::Client;
+use utils::services::{contract_client::Client, p2p::NodeBuilder};
 
 #[derive(Debug, Parser)]
 pub struct StartCmd {
@@ -24,9 +24,13 @@ impl StartCmd {
         )
         .await?;
 
-        let worker_controller = WorkerController::new(contract_client, contract_address);
+        let node = NodeBuilder::build()?;
+        let (handle, network_client) = node.start()?;
 
-        worker_controller.start().await;
+        let worker_controller =
+            WorkerController::new(contract_client, contract_address, network_client);
+
+        worker_controller.start(handle).await;
 
         Ok(())
     }

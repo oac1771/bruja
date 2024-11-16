@@ -1,7 +1,7 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use integration_tests::utils::{Log, Runner};
-    use libp2p::PeerId;
+    use libp2p::{futures::StreamExt, PeerId};
     use rand::{
         distributions::Alphanumeric,
         {thread_rng, Rng},
@@ -13,7 +13,7 @@ mod tests {
         time::{sleep, Duration},
     };
     use tracing::instrument;
-    use utils::p2p::{Error, NodeBuilder, NodeClient};
+    use utils::services::p2p::{Error, NetworkClient, NetworkClientError, NodeBuilder, NodeClient};
 
     struct NodeRunner<'a> {
         log_buffer: Arc<Mutex<Vec<u8>>>,
@@ -26,7 +26,7 @@ mod tests {
         }
 
         #[instrument(skip(self), fields(label = %self.name))]
-        fn start(&self) -> (JoinHandle<Result<(), Error>>, NodeClient) {
+        fn start(&self) -> (JoinHandle<Result<(), NetworkClientError>>, NodeClient) {
             let node = NodeBuilder::build().unwrap();
             let (handle, node_client) = node.start().unwrap();
 
@@ -194,8 +194,11 @@ mod tests {
             .assert_info_log_entry("Gossip message relayed to client")
             .await;
 
+        let gossip_stream = client_2.gossip_msg_stream().await;
+        tokio::pin!(gossip_stream);
+
         let result = loop {
-            if let Some(msg) = client_2.recv_gossip_msg().await {
+            if let Some(msg) = gossip_stream.next().await {
                 if msg.message() == expected_msg {
                     break true;
                 }

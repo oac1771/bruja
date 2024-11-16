@@ -18,6 +18,12 @@ pub enum Error {
         source: utils::services::job::JobServiceError,
     },
 
+    #[error("")]
+    NetworkClient {
+        #[from]
+        source: utils::services::p2p::NetworkClientError,
+    },
+
     #[error("unable to parse contract address from provided string")]
     ParsingContractAddress,
 

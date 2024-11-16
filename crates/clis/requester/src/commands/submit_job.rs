@@ -5,7 +5,7 @@ use std::str::FromStr;
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
 use tracing::instrument;
-use utils::services::{contract_client::Client, job::JobHandler};
+use utils::services::{contract_client::Client, job::JobHandler, p2p::NodeBuilder};
 
 #[derive(Debug, Parser)]
 pub struct SubmitJobCmd {
@@ -42,9 +42,17 @@ impl SubmitJobCmd {
         )
         .await?;
 
-        let submit_job_controller = RequesterController::new(contract_client, contract_address, job_service);
+        let node = NodeBuilder::build()?;
+        let (handle, network_client) = node.start()?;
 
-        submit_job_controller.start().await?;
+        let submit_job_controller = RequesterController::new(
+            contract_client,
+            contract_address,
+            job_service,
+            network_client,
+        );
+
+        submit_job_controller.start(handle).await?;
 
         Ok(())
     }

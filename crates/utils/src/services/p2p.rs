@@ -5,7 +5,7 @@ use libp2p::{
         self, InboundRequestId, Message as RequestResponseMessage, OutboundRequestId,
         ProtocolSupport, ResponseChannel,
     },
-    swarm::{dial_opts::DialOpts, DialError, NetworkBehaviour, SwarmEvent},
+    swarm::{DialError, NetworkBehaviour, SwarmEvent},
     PeerId, StreamProtocol, Swarm,
 };
 use serde::{Deserialize, Serialize};
@@ -26,6 +26,16 @@ use tokio::{
 };
 use tracing::{error, info, info_span, Instrument};
 
+pub trait NetworkClient {
+    fn publish_message(
+        &self,
+        topic: &str,
+        msg: Vec<u8>,
+    ) -> impl Future<Output = Result<(), NetworkClientError>>;
+
+    fn gossip_msg_stream(&self) -> impl Future<Output = impl Stream<Item = GossipMessage>> + Send;
+}
+
 pub struct NodeBuilder;
 
 pub struct Node {
@@ -36,12 +46,12 @@ pub struct NodeClient {
     req_tx: Sender<ClientRequest>,
     inbound_req_rx: Receiver<InboundP2pRequest>,
     inbound_resp_rx: Receiver<InboundP2pResponse>,
-    gossip_msg_rx: Receiver<GossipMessage>,
+    gossip_msg_rx: tokio::sync::Mutex<Receiver<GossipMessage>>,
     pending_inbound_req: HashMap<InboundRequestId, ResponseChannel<P2pResponse>>,
 }
 
 impl NodeBuilder {
-    pub fn build() -> Result<Node, Error> {
+    pub fn build() -> Result<Node, NetworkClientError> {
         let swarm = libp2p::SwarmBuilder::with_new_identity()
             .with_tokio()
             .with_tcp(
@@ -97,7 +107,9 @@ impl NodeBuilder {
 }
 
 impl Node {
-    pub fn start(mut self) -> Result<(JoinHandle<Result<(), Error>>, NodeClient), Error> {
+    pub fn start(
+        mut self,
+    ) -> Result<(JoinHandle<Result<(), NetworkClientError>>, NodeClient), NetworkClientError> {
         let (req_tx, req_rx) = mpsc::channel::<ClientRequest>(100);
         let (inbound_req_tx, inbound_req_rx) = mpsc::channel::<InboundP2pRequest>(100);
         let (inbound_resp_tx, inbound_resp_rx) = mpsc::channel::<InboundP2pResponse>(100);
@@ -114,13 +126,18 @@ impl Node {
                     .await
                 {
                     Ok(_) => Ok(()),
-                    Err(err) => Err(err),
+                    Err(err) => Err(NetworkClientError::from(err)),
                 }
             }
             .instrument(info_span!("")),
         );
 
-        let node_client = NodeClient::new(req_tx, inbound_req_rx, inbound_resp_rx, gossip_msg_rx);
+        let node_client = NodeClient::new(
+            req_tx,
+            inbound_req_rx,
+            inbound_resp_rx,
+            tokio::sync::Mutex::new(gossip_msg_rx),
+        );
 
         Ok((handle, node_client))
     }
@@ -197,23 +214,6 @@ impl Node {
                 let peer_id = self.swarm.local_peer_id();
                 let resp = ClientResponse::PeerId { peer_id: *peer_id };
                 Self::send_client_response(Ok(resp), sender);
-            }
-            ClientRequestPayload::DialPeer { peer_id } => {
-                let opts = DialOpts::peer_id(peer_id)
-                    .condition(libp2p::swarm::dial_opts::PeerCondition::Always)
-                    .build();
-                let result = match self.swarm.dial(opts) {
-                    Ok(_) => {
-                        info!("Successfully dialed peer");
-                        Ok(ClientResponse::PeerDialed)
-                    }
-                    Err(err) => {
-                        error!("Dial peer error");
-                        Err(Error::DialPeerError { err })
-                    }
-                };
-
-                Self::send_client_response(result, sender);
             }
             ClientRequestPayload::GetGossipNodes { topic } => {
                 let hash = gossipsub::IdentTopic::new(topic).hash();
@@ -343,12 +343,35 @@ impl Node {
     }
 }
 
+impl NetworkClient for NodeClient {
+    async fn publish_message(&self, topic: &str, msg: Vec<u8>) -> Result<(), NetworkClientError> {
+        let payload = ClientRequestPayload::Publish {
+            topic: topic.to_string(),
+            msg,
+        };
+        self.send_client_request(payload).await?;
+
+        Ok(())
+    }
+
+    async fn gossip_msg_stream(&self) -> impl Stream<Item = GossipMessage> {
+        let stream = async_stream::stream! {
+
+            while let Some(msg) = self.gossip_msg_rx.lock().await.recv().await {
+                yield msg
+            }
+        };
+
+        stream
+    }
+}
+
 impl NodeClient {
     fn new(
         req_tx: Sender<ClientRequest>,
         inbound_req_rx: Receiver<InboundP2pRequest>,
         inbound_resp_rx: Receiver<InboundP2pResponse>,
-        gossip_msg_rx: Receiver<GossipMessage>,
+        gossip_msg_rx: tokio::sync::Mutex<Receiver<GossipMessage>>,
     ) -> Self {
         let pending_inbound_req: HashMap<InboundRequestId, ResponseChannel<P2pResponse>> =
             HashMap::new();
@@ -428,14 +451,6 @@ impl NodeClient {
         Err(Error::UnexpectedClientResponse)
     }
 
-    pub async fn dial_peer(&mut self, peer_id: PeerId) -> Result<(), Error> {
-        let payload = ClientRequestPayload::DialPeer { peer_id };
-
-        self.send_client_request(payload).await?;
-
-        Ok(())
-    }
-
     pub async fn recv_inbound_req(&mut self) -> Option<(InboundRequestId, P2pRequest)> {
         // refactor this so that you can get a stream of data back rather than just the
         //  first message so usage can be similar to other two
@@ -450,9 +465,9 @@ impl NodeClient {
         self.inbound_resp_rx.recv()
     }
 
-    pub fn recv_gossip_msg(&mut self) -> impl Future<Output = Option<GossipMessage>> + '_ {
-        self.gossip_msg_rx.recv()
-    }
+    // pub fn recv_gossip_msg(&mut self) -> impl Future<Output = Option<GossipMessage>> + '_ {
+    //     self.gossip_msg_rx.recv()
+    // }
 
     async fn send_client_request(
         &self,
@@ -464,7 +479,7 @@ impl NodeClient {
         self.req_tx
             .send(req)
             .await
-            .map_err(|err| Error::SendRequestError {
+            .map_err(|err| Error::SendClientRequest {
                 err: err.to_string(),
             })?;
 
@@ -478,11 +493,14 @@ impl NodeClient {
         receiver: oneshot::Receiver<Result<ClientResponse, Error>>,
     ) -> Result<ClientResponse, Error> {
         let result = select! {
-            _ = sleep(TokioDuration::from_secs(10)) => {
-                Err(Error::TimeOutError {err: "Timedout waiting for response from node".to_string()})
+            _ = sleep(TokioDuration::from_secs(5)) => {
+                Err(Error::TimedOutWaitingForNodeResponse)
             },
-            msgs = receiver => {
-                Ok(msgs?)
+            msg = receiver => {
+                match msg {
+                    Ok(resp) => Ok(resp),
+                    Err(err) => Err(err.into())
+                }
             }
         }??;
 
@@ -510,9 +528,6 @@ pub enum ClientRequestPayload {
         payload: Vec<u8>,
     },
     GetLocalPeerId,
-    DialPeer {
-        peer_id: PeerId,
-    },
     GetGossipNodes {
         topic: String,
     },
@@ -581,17 +596,11 @@ struct Behavior {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("{source}")]
-    RcgenError {
+pub enum NetworkClientError {
+    #[error("")]
+    NetworkError {
         #[from]
-        source: libp2p::tls::certificate::GenError,
-    },
-
-    #[error("{source}")]
-    Infallible {
-        #[from]
-        source: std::convert::Infallible,
+        source: Error,
     },
 
     #[error("{source}")]
@@ -607,6 +616,21 @@ pub enum Error {
     },
 
     #[error("{source}")]
+    RcgenError {
+        #[from]
+        source: libp2p::tls::certificate::GenError,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("{source}")]
+    Infallible {
+        #[from]
+        source: std::convert::Infallible,
+    },
+
+    #[error("{source}")]
     SubscriptionError {
         #[from]
         source: libp2p::gossipsub::SubscriptionError,
@@ -618,14 +642,14 @@ pub enum Error {
         source: libp2p::gossipsub::PublishError,
     },
 
-    #[error("{source}")]
-    RecvError {
+    #[error("")]
+    NodeResponse {
         #[from]
-        source: tokio::sync::oneshot::error::RecvError,
+        source: oneshot::error::RecvError,
     },
 
-    #[error("{err}")]
-    TimeOutError { err: String },
+    #[error("")]
+    TimedOutWaitingForNodeResponse,
 
     #[error("")]
     UnexpectedClientResponse,
@@ -640,7 +664,7 @@ pub enum Error {
     InboundRequestIdNotFound,
 
     #[error("{err}")]
-    SendRequestError { err: String },
+    SendClientRequest { err: String },
 
     #[error("{err}")]
     Other { err: String },
