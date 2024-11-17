@@ -4,8 +4,13 @@ use ink_env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
+use tokio::task::JoinHandle;
 use tracing::instrument;
-use utils::services::{contract_client::Client, job::JobHandler, p2p::NodeBuilder};
+use utils::services::{
+    contract_client::Client,
+    job::JobHandler,
+    p2p::{NetworkClientError, NodeBuilder, NodeClient},
+};
 
 #[derive(Debug, Parser)]
 pub struct SubmitJobCmd {
@@ -42,8 +47,7 @@ impl SubmitJobCmd {
         )
         .await?;
 
-        let node = NodeBuilder::build()?;
-        let (handle, network_client) = node.start()?;
+        let (handle, network_client) = self.join_network(contract_address.to_string()).await?;
 
         let submit_job_controller = RequesterController::new(
             contract_client,
@@ -55,5 +59,16 @@ impl SubmitJobCmd {
         submit_job_controller.start(handle).await?;
 
         Ok(())
+    }
+
+    async fn join_network(
+        &self,
+        address: String,
+    ) -> Result<(JoinHandle<Result<(), NetworkClientError>>, NodeClient), NetworkClientError> {
+        let node = NodeBuilder::build()?;
+        let (handle, network_client) = node.start()?;
+        network_client.subscribe(&address).await?;
+
+        Ok((handle, network_client))
     }
 }

@@ -8736,6 +8736,7 @@ dependencies = [
  "anyhow",
  "catalog",
  "clap",
+ "clis",
  "ink_env",
  "parity-scale-codec",
  "subxt 0.35.3",

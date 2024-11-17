@@ -1,3 +1,4 @@
+use async_stream::stream;
 use libp2p::{
     futures::prelude::*,
     gossipsub, mdns,
@@ -36,6 +37,17 @@ pub trait NetworkClient {
     ) -> impl Future<Output = Result<(), Self::Err>>;
 
     fn gossip_msg_stream(&self) -> impl Future<Output = impl Stream<Item = GossipMessage>> + Send;
+
+    fn send_request(
+        &self,
+        peer_id: PeerId,
+        payload: Vec<u8>,
+    ) -> impl Future<Output = Result<OutboundRequestId, Self::Err>> + Send;
+
+    fn get_gossip_nodes(
+        &self,
+        topic: &str,
+    ) -> impl Future<Output = Result<Vec<PeerId>, Self::Err>> + Send;
 }
 
 pub struct NodeBuilder;
@@ -359,7 +371,7 @@ impl NetworkClient for NodeClient {
     }
 
     async fn gossip_msg_stream(&self) -> impl Stream<Item = GossipMessage> {
-        let stream = async_stream::stream! {
+        let stream = stream! {
 
             while let Some(msg) = self.gossip_msg_rx.lock().await.recv().await {
                 yield msg
@@ -367,6 +379,31 @@ impl NetworkClient for NodeClient {
         };
 
         stream
+    }
+
+    async fn send_request(
+        &self,
+        peer_id: PeerId,
+        payload: Vec<u8>,
+    ) -> Result<OutboundRequestId, Self::Err> {
+        let payload = ClientRequestPayload::SendRequest { payload, peer_id };
+
+        if let ClientResponse::RequestId { request_id } = self.send_client_request(payload).await? {
+            return Ok(request_id);
+        }
+        Err(Error::UnexpectedClientResponse.into())
+    }
+
+    async fn get_gossip_nodes(&self, topic: &str) -> Result<Vec<PeerId>, Self::Err> {
+        let payload = ClientRequestPayload::GetGossipNodes {
+            topic: topic.to_string(),
+        };
+        if let ClientResponse::GossipNodes { gossip_nodes } =
+            self.send_client_request(payload).await?
+        {
+            return Ok(gossip_nodes);
+        }
+        Err(Error::UnexpectedClientResponse.into())
     }
 }
 
@@ -387,18 +424,6 @@ impl NodeClient {
             gossip_msg_rx,
             pending_inbound_req,
         }
-    }
-
-    pub async fn get_gossip_nodes(&self, topic: &str) -> Result<Vec<PeerId>, Error> {
-        let payload = ClientRequestPayload::GetGossipNodes {
-            topic: topic.to_string(),
-        };
-        if let ClientResponse::GossipNodes { gossip_nodes } =
-            self.send_client_request(payload).await?
-        {
-            return Ok(gossip_nodes);
-        }
-        Err(Error::UnexpectedClientResponse)
     }
 
     pub async fn publish(&self, topic: &str, msg: Vec<u8>) -> Result<(), Error> {
@@ -559,8 +584,8 @@ impl GossipMessage {
         self.peer_id
     }
 
-    pub fn message(self) -> Vec<u8> {
-        self.message
+    pub fn message(&self) -> &[u8] {
+        self.message.as_slice()
     }
 }
 

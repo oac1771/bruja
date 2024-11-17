@@ -1,30 +1,29 @@
-use catalog::catalog::JobRequest;
 use codec::Encode;
 use std::{any::type_name, future::Future, path::Path, str::FromStr};
 use tokio::{fs::File, io::AsyncReadExt};
 use wasmtime::{Engine, Module, ValType};
 
 pub trait JobService {
-    fn build_job_request(&self) -> impl Future<Output = Result<JobRequest, JobServiceError>>;
+    fn build_job_request(
+        &self,
+    ) -> impl Future<Output = Result<(&[u8], Vec<Vec<u8>>), JobServiceError>>;
 }
 
 pub struct JobHandler {
     code: Vec<u8>,
-    params: Params,
+    params: RawParams,
     function_name: String,
 }
 
 impl JobService for JobHandler {
-    async fn build_job_request(&self) -> Result<JobRequest, JobServiceError> {
+    async fn build_job_request(&self) -> Result<(&[u8], Vec<Vec<u8>>), JobServiceError> {
         let engine = Engine::default();
         let module = Module::from_binary(&engine, self.code.as_slice())
             .map_err(|e| JobServiceError::WasmModule { err: e.to_string() })?;
 
         let params = self.parse_params(&module)?;
 
-        let job_request = JobRequest::new(self.code.as_slice(), params);
-
-        Ok(job_request)
+        Ok((self.code.as_slice(), params))
     }
 }
 
@@ -50,7 +49,7 @@ impl JobHandler {
             String::from("")
         };
 
-        let params = Params::new(raw_param);
+        let params = RawParams::new(raw_param);
 
         Ok(Self {
             code,
@@ -104,9 +103,9 @@ impl JobHandler {
     }
 }
 
-pub struct Params(Vec<String>);
+pub struct RawParams(Vec<String>);
 
-impl Params {
+impl RawParams {
     pub fn new(params: String) -> Self {
         let res = params
             .split(',')

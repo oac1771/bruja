@@ -44,7 +44,7 @@ pub mod catalog {
     }
 
     impl JobRequest {
-        pub fn new(code: &[u8], params: Vec<Vec<u8>>) -> Self {
+        pub fn new(code: &[u8], params: &Vec<Vec<u8>>) -> Self {
             code.encode_to(&mut params.encode());
             let id = hash(code);
 
@@ -128,7 +128,7 @@ pub mod catalog {
             fn test(code: Vec<u8>) -> Self {
                 let params: Vec<Vec<u8>> = vec![];
 
-                Self::new(code.as_slice(), params)
+                Self::new(code.as_slice(), &params)
             }
         }
 

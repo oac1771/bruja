@@ -28,6 +28,7 @@ impl Write for BufferWriter {
 
 #[allow(async_fn_in_trait)]
 pub trait Runner {
+    // can remove this
     fn label(&self) -> &str;
 
     fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>>;
@@ -55,24 +56,42 @@ pub trait Runner {
     }
 
     async fn assert_info_log_entry(&self, entry: &str) {
-        self.assert_log(entry, tracing::Level::INFO).await;
+        self.assert_log(entry, tracing::Level::INFO, Eval::Equals)
+            .await;
+    }
+
+    async fn assert_info_log_contains(&self, entry: &str) {
+        self.assert_log(entry, tracing::Level::INFO, Eval::Contains)
+            .await;
     }
 
     async fn assert_error_log_entry(&self, entry: &str) {
-        self.assert_log(entry, tracing::Level::ERROR).await;
+        self.assert_log(entry, tracing::Level::ERROR, Eval::Equals)
+            .await;
     }
 
-    async fn assert_log(&self, entry: &str, level: tracing::Level) {
+    async fn assert_log(&self, entry: &str, level: tracing::Level, eval: Eval) {
+        let predicate: Box<dyn Fn(&String) -> bool> = match eval {
+            Eval::Contains => {
+                let entry_clone = entry.to_string();
+                Box::new(move |msg: &String| msg.contains(&entry_clone))
+            }
+            Eval::Equals => {
+                let entry_clone = entry.to_string();
+                Box::new(move |msg: &String| msg == &entry_clone)
+            }
+        };
+
         select! {
             _ = sleep(Duration::from_secs(10)) => {
                 let output = self.log_output();
-                panic!("Logs: {}\nFailed to find log entry: {}", output, entry.to_string())
+                panic!("Logs: {}\nFailed to find log entry: {}", output, entry)
             },
-            _ = self.parse_logs(entry, level) => {}
+            _ = self.parse_logs(predicate, level) => {}
         }
     }
 
-    async fn parse_logs(&self, entry: &str, level: tracing::Level) {
+    async fn parse_logs(&self, predicate: Box<dyn Fn(&String) -> bool>, level: tracing::Level) {
         let mut logs: Vec<Log> = vec![];
 
         while logs.len() == 0 {
@@ -82,7 +101,7 @@ pub trait Runner {
                 .filter(|log| log.level == level.as_str())
                 .filter(|log| self.log_filter(log))
                 .filter(|log| match &log.fields {
-                    Fields::Message { message } => message == entry,
+                    Fields::Message { message } => predicate(message),
                     _ => false,
                 })
                 .collect::<Vec<Log>>();
@@ -90,6 +109,11 @@ pub trait Runner {
             let _ = sleep(Duration::from_millis(100)).await;
         }
     }
+}
+
+pub enum Eval {
+    Contains,
+    Equals,
 }
 
 #[derive(Deserialize, Serialize, Debug)]

@@ -22,7 +22,7 @@ mod tests {
         let code = vec![1, 2, 3, 4];
         let params = vec![vec![1, 2, 3, 4]];
 
-        let job_request = JobRequest::new(&code, params);
+        let job_request = JobRequest::new(&code, &params);
 
         let mut call_builder = contract.call_builder::<Catalog>();
 

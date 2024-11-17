@@ -1,11 +1,13 @@
 use catalog::catalog::{JobRequest, JobRequestSubmitted};
+use clis::{Gossip, Request};
+use codec::Encode;
 use subxt::{ext::futures::StreamExt, Config};
 use tokio::{select, signal::ctrl_c, task::JoinHandle};
 use tracing::{error, info};
 use utils::services::{
     contract_client::{ContractClient, ContractClientError},
     job::{JobService, JobServiceError},
-    p2p::{NetworkClient, NetworkClientError},
+    p2p::{GossipMessage, NetworkClient, NetworkClientError},
 };
 
 pub struct RequesterController<C: Config, CC, JS, NC> {
@@ -58,9 +60,16 @@ where
     }
 
     async fn run(&self) -> Result<(), RequesterControllerError> {
-        let job_request = self.job_service.build_job_request().await?;
+        let (code, params) = self.job_service.build_job_request().await?;
+        let job_request = JobRequest::new(code, &params);
+
         self.submit_job(&job_request).await?;
-        self.wait_for_job_acceptance(&job_request).await?;
+        let msg = self
+            .wait_for_job_acceptance(&job_request)
+            .await
+            .ok_or_else(|| RequesterControllerError::JobNeverAccepted)?;
+        self.send_job(msg, code, params).await?;
+
         Ok(())
     }
 
@@ -77,15 +86,44 @@ where
         Ok(())
     }
 
-    async fn wait_for_job_acceptance(
-        &self,
-        _job_request: &JobRequest,
-    ) -> Result<(), RequesterControllerError> {
+    async fn wait_for_job_acceptance(&self, job_request: &JobRequest) -> Option<GossipMessage> {
         let gossip_stream = self.network_client.gossip_msg_stream().await;
         tokio::pin!(gossip_stream);
-        while let Some(_msg) = gossip_stream.next().await {
-            info!("Gossip Message received");
+
+        while let Some(gsp_msg) = gossip_stream.next().await {
+            if let Ok(Gossip::JobAcceptance { job_id }) = Gossip::decode(gsp_msg.message()) {
+                if job_id == job_request.id() {
+                    info!("Job acceptance received from peer: {}", gsp_msg.peer_id());
+                    return Some(gsp_msg);
+                }
+            } else {
+                error!(
+                    "Unable to decode gossip message from peer {}: {:?}",
+                    gsp_msg.peer_id(),
+                    gsp_msg.message()
+                );
+            }
         }
+
+        None
+    }
+
+    async fn send_job(
+        &self,
+        msg: GossipMessage,
+        code: &[u8],
+        params: Vec<Vec<u8>>,
+    ) -> Result<(), RequesterControllerError> {
+        let peer_id = msg.peer_id();
+        let job = Request::Job {
+            code: code.to_vec(),
+            params,
+        };
+        self.network_client
+            .send_request(peer_id, job.encode())
+            .await?;
+        info!("Job sent to peer: {}", peer_id);
+
         Ok(())
     }
 }
@@ -109,4 +147,7 @@ pub enum RequesterControllerError {
         #[from]
         source: NetworkClientError,
     },
+
+    #[error("")]
+    JobNeverAccepted,
 }

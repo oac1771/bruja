@@ -1,4 +1,3 @@
-refactor requester to be similar pattern to worker
 remove unecessary contractclienterror variants
 remove unecessary network client/node error variants
 add unknown error variants to catchall

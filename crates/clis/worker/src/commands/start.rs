@@ -4,8 +4,12 @@ use ink_env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
+use tokio::task::JoinHandle;
 use tracing::instrument;
-use utils::services::{contract_client::Client, p2p::NodeBuilder};
+use utils::services::{
+    contract_client::Client,
+    p2p::{NetworkClientError, NodeBuilder, NodeClient},
+};
 
 #[derive(Debug, Parser)]
 pub struct StartCmd {
@@ -24,8 +28,7 @@ impl StartCmd {
         )
         .await?;
 
-        let node = NodeBuilder::build()?;
-        let (handle, network_client) = node.start()?;
+        let (handle, network_client) = self.join_network(contract_address.to_string()).await?;
 
         let worker_controller =
             WorkerController::new(contract_client, contract_address, network_client);
@@ -35,13 +38,16 @@ impl StartCmd {
         Ok(())
     }
 
-    // async fn join_network(&self) -> Result<(JoinHandle<Result<(), P2pError>>, NodeClient), Error> {
-    //     let node = NodeBuilder::build()?;
-    //     let (node_handle, node_client) = node.start()?;
-    //     node_client.subscribe(&self.address).await?;
+    async fn join_network(
+        &self,
+        address: String,
+    ) -> Result<(JoinHandle<Result<(), NetworkClientError>>, NodeClient), NetworkClientError> {
+        let node = NodeBuilder::build()?;
+        let (handle, network_client) = node.start()?;
+        network_client.subscribe(&address).await?;
 
-    //     Ok((node_handle, node_client))
-    // }
+        Ok((handle, network_client))
+    }
 }
 
 //     async fn start(&self, node_handle: JoinHandle<Result<(), P2pError>>) -> Result<(), Error> {

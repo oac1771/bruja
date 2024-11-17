@@ -3,7 +3,12 @@ use clis::Gossip;
 use codec::Encode;
 use std::fmt::Display;
 use subxt::{ext::futures::StreamExt, Config};
-use tokio::{pin, select, signal::ctrl_c, task::JoinHandle};
+use tokio::{
+    pin, select,
+    signal::ctrl_c,
+    task::JoinHandle,
+    time::{sleep, Duration},
+};
 use tracing::{error, info};
 use utils::{
     chain::contracts::events::ContractEmitted,
@@ -78,7 +83,7 @@ where
             .contract_client
             .decode_event::<JobRequestSubmitted>(&ev)
         {
-            self.accept_job(job_request).await
+            self.handle_job_request(job_request).await
         } else {
             Err(WorkerControllerError::DecodeContractEvent { data: ev.data })
         };
@@ -86,6 +91,15 @@ where
         if let Err(e) = res {
             error!("Error while handling event: {}", e);
         }
+    }
+
+    async fn handle_job_request(
+        &self,
+        job_request: JobRequestSubmitted,
+    ) -> Result<(), WorkerControllerError> {
+        self.accept_job(job_request).await?;
+
+        Ok(())
     }
 
     async fn accept_job(
@@ -96,10 +110,26 @@ where
         let msg = Gossip::JobAcceptance { job_id };
         let topic = self.contract_address.to_string();
 
+        self.wait_for_gossip_peers().await?;
         self.network_client
             .publish_message(&topic, msg.encode())
             .await?;
 
+        info!("Published job acceptance");
+
+        Ok(())
+    }
+
+    async fn wait_for_gossip_peers(&self) -> Result<(), WorkerControllerError> {
+        let mut gossip_nodes = Vec::new();
+        let address = self.contract_address.to_string();
+
+        while gossip_nodes.is_empty() {
+            info!("Waiting for gossip peers");
+            gossip_nodes = self.network_client.get_gossip_nodes(&address).await?;
+            sleep(Duration::from_millis(500)).await;
+        }
+        info!("Connected to gossip peers");
         Ok(())
     }
 }
