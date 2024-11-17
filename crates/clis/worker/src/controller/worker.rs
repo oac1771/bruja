@@ -25,7 +25,7 @@ where
     <C as Config>::AccountId: Display,
     CC: ContractClient<C = C>,
     NC: NetworkClient,
-    WorkerControllerError: From<<NC as NetworkClient>::Err>,
+    WorkerControllerError: From<<NC as NetworkClient>::Err> + From<<CC as ContractClient>::Err>,
 {
     pub fn new(
         contract_client: CC,

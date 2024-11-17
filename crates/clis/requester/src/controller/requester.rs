@@ -5,7 +5,7 @@ use tracing::{error, info};
 use utils::services::{
     contract_client::{ContractClient, ContractClientError},
     job::{JobService, JobServiceError},
-    p2p::NetworkClient,
+    p2p::{NetworkClient, NetworkClientError},
 };
 
 pub struct RequesterController<C: Config, CC, JS, NC> {
@@ -21,6 +21,7 @@ where
     CC: ContractClient<C = C>,
     JS: JobService,
     NC: NetworkClient,
+    RequesterControllerError: From<<NC as NetworkClient>::Err> + From<<CC as ContractClient>::Err>,
 {
     pub fn new(
         contract_client: CC,
@@ -39,7 +40,7 @@ where
     pub async fn start(
         &self,
         handle: JoinHandle<Result<(), <NC as NetworkClient>::Err>>,
-    ) -> Result<(), SubmitJobControllerError> {
+    ) -> Result<(), RequesterControllerError> {
         select! {
             _ = handle => {},
             result = self.run() => {
@@ -56,14 +57,14 @@ where
         Ok(())
     }
 
-    async fn run(&self) -> Result<(), SubmitJobControllerError> {
+    async fn run(&self) -> Result<(), RequesterControllerError> {
         let job_request = self.job_service.build_job_request().await?;
         self.submit_job(&job_request).await?;
         self.wait_for_job_acceptance(&job_request).await?;
         Ok(())
     }
 
-    async fn submit_job(&self, job_request: &JobRequest) -> Result<(), SubmitJobControllerError> {
+    async fn submit_job(&self, job_request: &JobRequest) -> Result<(), RequesterControllerError> {
         self.contract_client
             .write::<JobRequestSubmitted, JobRequest>(
                 self.contract_address.clone(),
@@ -79,7 +80,7 @@ where
     async fn wait_for_job_acceptance(
         &self,
         _job_request: &JobRequest,
-    ) -> Result<(), SubmitJobControllerError> {
+    ) -> Result<(), RequesterControllerError> {
         let gossip_stream = self.network_client.gossip_msg_stream().await;
         tokio::pin!(gossip_stream);
         while let Some(_msg) = gossip_stream.next().await {
@@ -90,7 +91,7 @@ where
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum SubmitJobControllerError {
+pub enum RequesterControllerError {
     #[error("{source}")]
     ContractClient {
         #[from]
@@ -101,5 +102,11 @@ pub enum SubmitJobControllerError {
     JobService {
         #[from]
         source: JobServiceError,
+    },
+
+    #[error("{source}")]
+    NetworkClient {
+        #[from]
+        source: NetworkClientError,
     },
 }

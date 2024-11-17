@@ -160,7 +160,6 @@ mod tests {
             .map(|val| char::from(val))
             .collect();
         let expected_msg = vec![1, 2, 3, 4, 5];
-        let noise_msg = vec![5, 4, 3, 2, 1];
 
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
         let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
@@ -181,7 +180,6 @@ mod tests {
             .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_1))
             .await;
 
-        client_1.publish(&topic, noise_msg.clone()).await.unwrap();
         client_1
             .publish(&topic, expected_msg.clone())
             .await

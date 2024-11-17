@@ -7,9 +7,9 @@ pub enum Error {
     },
 
     #[error("{source}")]
-    SubmitJobController {
+    RequesterController {
         #[from]
-        source: crate::controller::requester::SubmitJobControllerError,
+        source: crate::controller::requester::RequesterControllerError,
     },
 
     #[error("{source}")]
