@@ -1,6 +1,7 @@
-use catalog::catalog::JobRequestSubmitted;
-use clis::Gossip;
+use catalog::catalog::{HashId, JobRequest, JobRequestSubmitted};
+use clis::{Gossip, Job, Request};
 use codec::Encode;
+use libp2p::request_response::InboundRequestId;
 use std::fmt::Display;
 use subxt::{ext::futures::StreamExt, Config};
 use tokio::{
@@ -97,14 +98,18 @@ where
         &self,
         job_request: JobRequestSubmitted,
     ) -> Result<(), WorkerControllerError> {
-        self.accept_job(job_request).await?;
+        self.accept_job_request(&job_request).await?;
+        let (_id, _job) = self
+            .wait_for_job(job_request.id())
+            .await
+            .ok_or_else(|| WorkerControllerError::JobNeverSent)?;
 
         Ok(())
     }
 
-    async fn accept_job(
+    async fn accept_job_request(
         &self,
-        job_request: JobRequestSubmitted,
+        job_request: &JobRequestSubmitted,
     ) -> Result<(), WorkerControllerError> {
         let job_id = job_request.id.to_vec();
         let msg = Gossip::JobAcceptance { job_id };
@@ -132,6 +137,24 @@ where
         info!("Connected to gossip peers");
         Ok(())
     }
+
+    async fn wait_for_job(&self, id: HashId) -> Option<(InboundRequestId, Job)> {
+        let req_stream = self.network_client.req_stream().await;
+        tokio::pin!(req_stream);
+
+        while let Some((req_id, req)) = req_stream.next().await {
+            if let Ok(Request::Job(job)) = Request::decode(&req.0) {
+                if JobRequest::new(job.code(), job.params()).id() == id {
+                    info!("Job received!");
+                    return Some((req_id, job));
+                }
+            } else {
+                error!("Unable to decode request: {:?}", req.0);
+            }
+        }
+
+        None
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -150,4 +173,7 @@ pub enum WorkerControllerError {
 
     #[error("Unable to decode Contract Emitted event: {data:?}")]
     DecodeContractEvent { data: Vec<u8> },
+
+    #[error("")]
+    JobNeverSent,
 }

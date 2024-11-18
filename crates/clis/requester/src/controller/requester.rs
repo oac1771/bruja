@@ -1,6 +1,7 @@
 use catalog::catalog::{JobRequest, JobRequestSubmitted};
-use clis::{Gossip, Request};
+use clis::{Gossip, Job, Request};
 use codec::Encode;
+use libp2p::PeerId;
 use subxt::{ext::futures::StreamExt, Config};
 use tokio::{select, signal::ctrl_c, task::JoinHandle};
 use tracing::{error, info};
@@ -68,7 +69,7 @@ where
             .wait_for_job_acceptance(&job_request)
             .await
             .ok_or_else(|| RequesterControllerError::JobNeverAccepted)?;
-        self.send_job(msg, code, params).await?;
+        self.send_job(msg.peer_id(), code, params).await?;
 
         Ok(())
     }
@@ -110,15 +111,12 @@ where
 
     async fn send_job(
         &self,
-        msg: GossipMessage,
+        peer_id: PeerId,
         code: &[u8],
         params: Vec<Vec<u8>>,
     ) -> Result<(), RequesterControllerError> {
-        let peer_id = msg.peer_id();
-        let job = Request::Job {
-            code: code.to_vec(),
-            params,
-        };
+        let job = Request::Job(Job::new(code.to_vec(), params));
+
         self.network_client
             .send_request(peer_id, job.encode())
             .await?;

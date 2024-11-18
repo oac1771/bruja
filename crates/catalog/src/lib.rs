@@ -37,6 +37,12 @@ pub mod catalog {
         pub id: HashId,
     }
 
+    impl JobRequestSubmitted {
+        pub fn id(&self) -> HashId {
+            self.id
+        }
+    }
+
     #[derive(Debug, Encode, Decode, PartialEq, Clone)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
     pub struct JobRequest {

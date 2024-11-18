@@ -20,7 +20,7 @@ use tokio::{
     io, select,
     sync::{
         mpsc::{self, Receiver, Sender},
-        oneshot,
+        oneshot, Mutex,
     },
     task::{spawn, yield_now, JoinHandle},
     time::{sleep, Duration as TokioDuration},
@@ -48,6 +48,10 @@ pub trait NetworkClient {
         &self,
         topic: &str,
     ) -> impl Future<Output = Result<Vec<PeerId>, Self::Err>> + Send;
+
+    fn req_stream(
+        &self,
+    ) -> impl Future<Output = impl Stream<Item = (InboundRequestId, P2pRequest)>> + Send;
 }
 
 pub struct NodeBuilder;
@@ -58,10 +62,10 @@ pub struct Node {
 
 pub struct NodeClient {
     req_tx: Sender<ClientRequest>,
-    inbound_req_rx: Receiver<InboundP2pRequest>,
+    inbound_req_rx: Mutex<Receiver<InboundP2pRequest>>,
     inbound_resp_rx: Receiver<InboundP2pResponse>,
-    gossip_msg_rx: tokio::sync::Mutex<Receiver<GossipMessage>>,
-    pending_inbound_req: HashMap<InboundRequestId, ResponseChannel<P2pResponse>>,
+    gossip_msg_rx: Mutex<Receiver<GossipMessage>>,
+    pending_inbound_req: Mutex<HashMap<InboundRequestId, ResponseChannel<P2pResponse>>>,
 }
 
 impl NodeBuilder {
@@ -148,9 +152,9 @@ impl Node {
 
         let node_client = NodeClient::new(
             req_tx,
-            inbound_req_rx,
+            Mutex::new(inbound_req_rx),
             inbound_resp_rx,
-            tokio::sync::Mutex::new(gossip_msg_rx),
+            Mutex::new(gossip_msg_rx),
         );
 
         Ok((handle, node_client))
@@ -405,17 +409,28 @@ impl NetworkClient for NodeClient {
         }
         Err(Error::UnexpectedClientResponse.into())
     }
+
+    async fn req_stream(&self) -> impl Stream<Item = (InboundRequestId, P2pRequest)> {
+        let stream = stream! {
+            while let Some(req) = self.inbound_req_rx.lock().await.recv().await {
+                self.pending_inbound_req.lock().await.insert(req.id, req.channel);
+                yield (req.id, req.request)
+            }
+        };
+
+        stream
+    }
 }
 
 impl NodeClient {
     fn new(
         req_tx: Sender<ClientRequest>,
-        inbound_req_rx: Receiver<InboundP2pRequest>,
+        inbound_req_rx: Mutex<Receiver<InboundP2pRequest>>,
         inbound_resp_rx: Receiver<InboundP2pResponse>,
-        gossip_msg_rx: tokio::sync::Mutex<Receiver<GossipMessage>>,
+        gossip_msg_rx: Mutex<Receiver<GossipMessage>>,
     ) -> Self {
-        let pending_inbound_req: HashMap<InboundRequestId, ResponseChannel<P2pResponse>> =
-            HashMap::new();
+        let pending_inbound_req: Mutex<HashMap<InboundRequestId, ResponseChannel<P2pResponse>>> =
+            Mutex::new(HashMap::new());
 
         Self {
             req_tx,
@@ -458,12 +473,8 @@ impl NodeClient {
         Err(Error::UnexpectedClientResponse)
     }
 
-    pub async fn send_response(
-        &mut self,
-        id: InboundRequestId,
-        payload: Vec<u8>,
-    ) -> Result<(), Error> {
-        if let Some(channel) = self.pending_inbound_req.remove(&id) {
+    pub async fn send_response(&self, id: InboundRequestId, payload: Vec<u8>) -> Result<(), Error> {
+        if let Some(channel) = self.pending_inbound_req.lock().await.remove(&id) {
             let payload = ClientRequestPayload::SendResponse { payload, channel };
             self.send_client_request(payload).await?;
             return Ok(());
@@ -480,23 +491,9 @@ impl NodeClient {
         Err(Error::UnexpectedClientResponse)
     }
 
-    pub async fn recv_inbound_req(&mut self) -> Option<(InboundRequestId, P2pRequest)> {
-        // refactor this so that you can get a stream of data back rather than just the
-        //  first message so usage can be similar to other two
-        if let Some(req) = self.inbound_req_rx.recv().await {
-            self.pending_inbound_req.insert(req.id, req.channel);
-            return Some((req.id, req.request));
-        }
-        None
-    }
-
     pub fn recv_inbound_resp(&mut self) -> impl Future<Output = Option<InboundP2pResponse>> + '_ {
         self.inbound_resp_rx.recv()
     }
-
-    // pub fn recv_gossip_msg(&mut self) -> impl Future<Output = Option<GossipMessage>> + '_ {
-    //     self.gossip_msg_rx.recv()
-    // }
 
     async fn send_client_request(
         &self,

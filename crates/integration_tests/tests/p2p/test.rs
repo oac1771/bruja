@@ -287,8 +287,11 @@ mod tests {
             .assert_info_log_entry("Inbound request relayed to client")
             .await;
 
+        let client_2_req_stream = client_2.req_stream().await;
+        tokio::pin!(client_2_req_stream);
+
         select! {
-            Some((id, req)) = client_2.recv_inbound_req() => client_2.send_response(id, req.0).await.unwrap(),
+            Some((id, req)) = client_2_req_stream.next() => client_2.send_response(id, req.0).await.unwrap(),
             _ = sleep(Duration::from_millis(500)) => {panic!("Timedout waiting for request")}
         }
 
