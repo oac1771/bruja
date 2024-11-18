@@ -66,5 +66,5 @@ rustup component add rust-src
 [tasks.cargo-build]
 script='''
 cargo contract build --manifest-path crates/catalog/Cargo.toml
-cargo build --exclude scripts --exclude tests --workspace
+cargo build --exclude scripts --exclude integration_tests --exclude test_macro --workspace
 '''

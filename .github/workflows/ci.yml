@@ -28,7 +28,6 @@ jobs:
             ~/.cargo/registry/index/
             ~/.cargo/registry/cache/
             ~/.cargo/git/db/
-            target/
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.toml') }}
 
       - name: Install Deps
@@ -51,7 +50,6 @@ jobs:
           cargo install cargo-nextest
 
       - name: Cargo Build
-        if: steps.cache.outputs.cache-hit != 'true'
         shell: bash
         run: |
           cargo make cargo-build
@@ -72,7 +70,3 @@ jobs:
       - name: Requester Worker Tests
         shell: bash
         run: cargo make requester-worker
-
-      - name: check storage
-        shell: bash
-        run: df -h
