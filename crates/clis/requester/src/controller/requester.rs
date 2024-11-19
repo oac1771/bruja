@@ -2,6 +2,7 @@ use catalog::catalog::{JobRequest, JobRequestSubmitted};
 use clis::{Gossip, Request};
 use codec::Encode;
 use libp2p::PeerId;
+use std::any::Any;
 use subxt::{ext::futures::StreamExt, Config};
 use tokio::{select, signal::ctrl_c, task::JoinHandle};
 use tracing::{error, info};
@@ -119,12 +120,14 @@ where
         peer_id: PeerId,
         job: impl JobT,
     ) -> Result<(), RequesterControllerError> {
-        let params = job.params_ref().to_vec();
-        let code = job.code();
-        let job = Request::Job(Job::new(code, params));
+        let boxed_job: Box<dyn Any> = Box::new(job);
+        let job = boxed_job
+            .downcast::<Job>()
+            .map_err(|_| RequesterControllerError::DownCastError)?;
+        let req = Request::Job(*job);
 
         self.network_client
-            .send_request(peer_id, job.encode())
+            .send_request(peer_id, req.encode())
             .await?;
         info!("Job sent to peer: {}", peer_id);
 
@@ -154,4 +157,7 @@ pub enum RequesterControllerError {
 
     #[error("")]
     JobNeverAccepted,
+
+    #[error("")]
+    DownCastError,
 }

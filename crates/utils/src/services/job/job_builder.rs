@@ -31,7 +31,7 @@ impl<'a> JobBuilderService for JobBuilder<'a> {
             .map_err(|e| JobBuilderServiceError::WasmModule { err: e.to_string() })?;
 
         let params = self.parse_params(&module)?;
-        let job = Job::new(code, params);
+        let job = Job::new(code, params, self.function_name.to_string());
 
         Ok(job)
     }
