@@ -1477,6 +1477,7 @@ name = "clis"
 version = "0.0.1"
 dependencies = [
  "parity-scale-codec",
+ "utils",
 ]
 
 [[package]]

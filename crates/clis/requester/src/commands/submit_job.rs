@@ -8,7 +8,7 @@ use tokio::task::JoinHandle;
 use tracing::instrument;
 use utils::services::{
     contract_client::Client,
-    job::JobHandler,
+    job::job_builder::JobBuilder,
     p2p::{NetworkClientError, NodeBuilder, NodeClient},
 };
 
@@ -40,7 +40,7 @@ impl SubmitJobCmd {
         )
         .await?;
 
-        let job_service = JobHandler::new(
+        let job_service = JobBuilder::new(
             &self.code_path,
             self.parameters.clone(),
             &self.function_name,

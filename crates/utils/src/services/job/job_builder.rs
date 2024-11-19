@@ -1,47 +1,53 @@
+use super::{Job, JobT};
 use codec::Encode;
 use std::{any::type_name, future::Future, path::Path, str::FromStr};
 use tokio::{fs::File, io::AsyncReadExt};
 use wasmtime::{Engine, Module, ValType};
 
-pub trait JobService {
-    fn build_job_request(
-        &self,
-    ) -> impl Future<Output = Result<(&[u8], Vec<Vec<u8>>), JobServiceError>>;
+pub trait JobBuilderService {
+    type Err;
+    type Job: JobT;
+
+    fn build_job(&self) -> impl Future<Output = Result<Self::Job, Self::Err>> + Send;
 }
 
-pub struct JobHandler {
-    code: Vec<u8>,
+pub struct JobBuilder<'a> {
+    code_path: Box<&'a Path>,
     params: RawParams,
     function_name: String,
 }
 
-impl JobService for JobHandler {
-    async fn build_job_request(&self) -> Result<(&[u8], Vec<Vec<u8>>), JobServiceError> {
+impl<'a> JobBuilderService for JobBuilder<'a> {
+    type Err = JobBuilderServiceError;
+    type Job = Job;
+
+    async fn build_job(&self) -> Result<Self::Job, JobBuilderServiceError> {
+        let mut code = Vec::<u8>::new();
+        let mut code_file = File::open(self.code_path.as_ref()).await?;
+        code_file.read_to_end(&mut code).await?;
+
         let engine = Engine::default();
-        let module = Module::from_binary(&engine, self.code.as_slice())
-            .map_err(|e| JobServiceError::WasmModule { err: e.to_string() })?;
+        let module = Module::new(&engine, code.as_slice())
+            .map_err(|e| JobBuilderServiceError::WasmModule { err: e.to_string() })?;
 
         let params = self.parse_params(&module)?;
+        let job = Job::new(code, params);
 
-        Ok((self.code.as_slice(), params))
+        Ok(job)
     }
 }
 
-impl JobHandler {
+impl<'a> JobBuilder<'a> {
     pub async fn new(
-        code_path: &str,
+        code_path: &'a str,
         parameters: Option<String>,
         function_name: &str,
-    ) -> Result<Self, JobServiceError> {
+    ) -> Result<Self, JobBuilderServiceError> {
         let path = Path::new(code_path);
 
         if !path.exists() {
-            return Err(JobServiceError::CodeFileNotFound);
+            return Err(JobBuilderServiceError::CodeFileNotFound);
         }
-
-        let mut code = Vec::<u8>::new();
-        let mut code_file = File::open(path).await?;
-        code_file.read_to_end(&mut code).await?;
 
         let raw_param = if let Some(p) = parameters {
             p
@@ -52,23 +58,24 @@ impl JobHandler {
         let params = RawParams::new(raw_param);
 
         Ok(Self {
-            code,
+            code_path: Box::new(path),
             params,
             function_name: function_name.to_string(),
         })
     }
 
-    fn parse_params(&self, module: &Module) -> Result<Vec<Vec<u8>>, JobServiceError> {
+    fn parse_params(&self, module: &Module) -> Result<Vec<Vec<u8>>, JobBuilderServiceError> {
         let extern_type = module.get_export(&self.function_name).ok_or_else(|| {
-            JobServiceError::JobFunctionExportNotFound {
+            JobBuilderServiceError::FunctionExportNotFound {
                 func_name: self.function_name.clone(),
             }
         })?;
-        let func = extern_type
-            .func()
-            .ok_or_else(|| JobServiceError::JobFunctionNameNotFound {
-                func_name: self.function_name.clone(),
-            })?;
+        let func =
+            extern_type
+                .func()
+                .ok_or_else(|| JobBuilderServiceError::FunctionNameNotFound {
+                    func_name: self.function_name.clone(),
+                })?;
 
         let p = self
             .params
@@ -85,18 +92,18 @@ impl JobHandler {
                 match parse_res {
                     Some(Ok(val)) => Ok(val),
                     Some(Err(e)) => Err(e),
-                    None => Err(JobServiceError::ParamTypeNotFound),
+                    None => Err(JobBuilderServiceError::ParamTypeNotFound),
                 }
             })
-            .collect::<Result<Vec<Vec<u8>>, JobServiceError>>()?;
+            .collect::<Result<Vec<Vec<u8>>, JobBuilderServiceError>>()?;
 
         Ok(p)
     }
 
-    fn parse<T: FromStr + Encode>(&self, t: &str) -> Result<Vec<u8>, JobServiceError> {
+    fn parse<T: FromStr + Encode>(&self, t: &str) -> Result<Vec<u8>, JobBuilderServiceError> {
         match t.parse::<T>() {
             Ok(val) => Ok(val.encode()),
-            Err(_) => Err(JobServiceError::ParseParam {
+            Err(_) => Err(JobBuilderServiceError::ParseParam {
                 err: format!("Unable to parse param {} into {}", t, type_name::<T>()),
             }),
         }
@@ -121,11 +128,17 @@ impl RawParams {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum JobServiceError {
+pub enum JobBuilderServiceError {
     #[error("{source}")]
     StdIo {
         #[from]
         source: std::io::Error,
+    },
+
+    #[error("{source}")]
+    WasmTime {
+        #[from]
+        source: wasmtime::Error,
     },
 
     #[error("")]
@@ -135,10 +148,10 @@ pub enum JobServiceError {
     WasmModule { err: String },
 
     #[error("Function {func_name} not defined in job")]
-    JobFunctionNameNotFound { func_name: String },
+    FunctionNameNotFound { func_name: String },
 
     #[error("Export {func_name} not defined in job")]
-    JobFunctionExportNotFound { func_name: String },
+    FunctionExportNotFound { func_name: String },
 
     #[error("Unable to parse param: {err}")]
     ParseParam { err: String },

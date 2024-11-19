@@ -1,5 +1,5 @@
 use catalog::catalog::{HashId, JobRequest, JobRequestSubmitted};
-use clis::{Gossip, Job, Request};
+use clis::{Gossip, Request};
 use codec::Encode;
 use libp2p::request_response::InboundRequestId;
 use std::fmt::Display;
@@ -15,6 +15,7 @@ use utils::{
     chain::contracts::events::ContractEmitted,
     services::{
         contract_client::{ContractClient, ContractClientError},
+        job::{Job, JobT},
         p2p::{NetworkClient, NetworkClientError},
     },
 };
@@ -144,7 +145,7 @@ where
 
         while let Some((req_id, req)) = req_stream.next().await {
             if let Ok(Request::Job(job)) = Request::decode(&req.0) {
-                if JobRequest::new(job.code(), job.params()).id() == id {
+                if JobRequest::new(job.code_ref(), job.params_ref()).id() == id {
                     info!("Job received!");
                     return Some((req_id, job));
                 }

@@ -1,5 +1,5 @@
 use catalog::catalog::{JobRequest, JobRequestSubmitted};
-use clis::{Gossip, Job, Request};
+use clis::{Gossip, Request};
 use codec::Encode;
 use libp2p::PeerId;
 use subxt::{ext::futures::StreamExt, Config};
@@ -7,35 +7,40 @@ use tokio::{select, signal::ctrl_c, task::JoinHandle};
 use tracing::{error, info};
 use utils::services::{
     contract_client::{ContractClient, ContractClientError},
-    job::{JobService, JobServiceError},
+    job::{
+        job_builder::{JobBuilderService, JobBuilderServiceError},
+        Job, JobT,
+    },
     p2p::{GossipMessage, NetworkClient, NetworkClientError},
 };
 
-pub struct RequesterController<C: Config, CC, JS, NC> {
+pub struct RequesterController<C: Config, CC, JB, NC> {
     contract_client: CC,
     contract_address: <C as Config>::AccountId,
-    job_service: JS,
+    job_builder_service: JB,
     network_client: NC,
 }
 
-impl<C, CC, JS, NC> RequesterController<C, CC, JS, NC>
+impl<C, CC, JB, NC> RequesterController<C, CC, JB, NC>
 where
     C: Config,
     CC: ContractClient<C = C>,
-    JS: JobService,
+    JB: JobBuilderService,
     NC: NetworkClient,
-    RequesterControllerError: From<<NC as NetworkClient>::Err> + From<<CC as ContractClient>::Err>,
+    RequesterControllerError: From<<NC as NetworkClient>::Err>
+        + From<<CC as ContractClient>::Err>
+        + From<<JB as JobBuilderService>::Err>,
 {
     pub fn new(
         contract_client: CC,
         contract_address: <C as Config>::AccountId,
-        job_service: JS,
+        job_builder_service: JB,
         network_client: NC,
     ) -> Self {
         Self {
             contract_client,
             contract_address,
-            job_service,
+            job_builder_service,
             network_client,
         }
     }
@@ -61,15 +66,15 @@ where
     }
 
     async fn run(&self) -> Result<(), RequesterControllerError> {
-        let (code, params) = self.job_service.build_job_request().await?;
-        let job_request = JobRequest::new(code, &params);
+        let job = self.job_builder_service.build_job().await?;
+        let job_request = JobRequest::new(job.code_ref(), job.params_ref());
 
         self.submit_job(&job_request).await?;
         let msg = self
             .wait_for_job_acceptance(&job_request)
             .await
             .ok_or_else(|| RequesterControllerError::JobNeverAccepted)?;
-        self.send_job(msg.peer_id(), code, params).await?;
+        self.send_job(msg.peer_id(), job).await?;
 
         Ok(())
     }
@@ -112,10 +117,11 @@ where
     async fn send_job(
         &self,
         peer_id: PeerId,
-        code: &[u8],
-        params: Vec<Vec<u8>>,
+        job: impl JobT,
     ) -> Result<(), RequesterControllerError> {
-        let job = Request::Job(Job::new(code.to_vec(), params));
+        let params = job.params_ref().to_vec();
+        let code = job.code();
+        let job = Request::Job(Job::new(code, params));
 
         self.network_client
             .send_request(peer_id, job.encode())
@@ -135,9 +141,9 @@ pub enum RequesterControllerError {
     },
 
     #[error("{source}")]
-    JobService {
+    JobBuilderService {
         #[from]
-        source: JobServiceError,
+        source: JobBuilderServiceError,
     },
 
     #[error("{source}")]
