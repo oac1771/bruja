@@ -241,12 +241,8 @@ mod tests {
     }
 
     impl Runner for WorkerRunner {
-        fn label(&self) -> &str {
-            "worker::"
-        }
-
         fn log_filter(&self, log: &Log) -> bool {
-            log.target().contains(self.label())
+            log.target().contains("worker::")
         }
 
         fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>> {
@@ -286,12 +282,8 @@ mod tests {
     }
 
     impl Runner for RequesterRunner {
-        fn label(&self) -> &str {
-            "requester::"
-        }
-
         fn log_filter(&self, log: &Log) -> bool {
-            log.target().contains(self.label())
+            log.target().contains("requester::")
         }
 
         fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>> {

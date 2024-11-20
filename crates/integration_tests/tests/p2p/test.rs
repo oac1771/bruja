@@ -35,10 +35,6 @@ mod tests {
     }
 
     impl<'a> Runner for NodeRunner<'a> {
-        fn label(&self) -> &str {
-            self.name
-        }
-
         fn log_filter(&self, log: &Log) -> bool {
             log.spans()
                 .into_iter()

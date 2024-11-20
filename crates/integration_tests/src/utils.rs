@@ -28,9 +28,6 @@ impl Write for BufferWriter {
 
 #[allow(async_fn_in_trait)]
 pub trait Runner {
-    // can remove this
-    fn label(&self) -> &str;
-
     fn log_buffer(&self) -> Arc<Mutex<Vec<u8>>>;
 
     fn log_filter(&self, log: &Log) -> bool;
