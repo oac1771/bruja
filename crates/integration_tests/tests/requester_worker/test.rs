@@ -75,6 +75,9 @@ mod tests {
             .assert_info_log_contains("Job sent to peer: ")
             .await;
         worker_runner.assert_info_log_entry("Job received!").await;
+        worker_runner
+            .assert_info_log_entry("Job acknowledgement sent")
+            .await;
     }
 
     async fn instantiate_contract() -> AccountId32 {

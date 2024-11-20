@@ -140,7 +140,7 @@ mod tests {
             _ = sleep(Duration::from_secs(2)) => {panic!("Timedout waiting for gossip nodes")}
         }
 
-        client_1.publish(&topic, msg.clone()).await.unwrap();
+        client_1.publish_message(&topic, msg.clone()).await.unwrap();
         node_1
             .assert_info_log_entry(&format!(
                 "Successfully published message to {} topic",
@@ -181,7 +181,7 @@ mod tests {
             .await;
 
         client_1
-            .publish(&topic, expected_msg.clone())
+            .publish_message(&topic, expected_msg.clone())
             .await
             .unwrap();
 
@@ -217,7 +217,10 @@ mod tests {
         let (_, client_1) = node_1.start();
         client_1.subscribe(&topic).await.unwrap();
 
-        if let Err(Error::PublishError { source }) = client_1.publish(&topic, msg).await {
+        if let Err(NetworkClientError::NetworkError {
+            source: Error::PublishError { source },
+        }) = client_1.publish_message(&topic, msg).await
+        {
             if let libp2p::gossipsub::PublishError::InsufficientPeers = source {
                 node_1
                     .assert_error_log_entry(&format!("Publishing Error: {}", source))

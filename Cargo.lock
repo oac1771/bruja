@@ -1476,6 +1476,7 @@ checksum = "1462739cb27611015575c0c11df5df7601141071f07518d56fcc1be504cbec97"
 name = "clis"
 version = "0.0.1"
 dependencies = [
+ "catalog",
  "parity-scale-codec",
  "utils",
 ]

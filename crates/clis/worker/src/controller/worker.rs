@@ -100,10 +100,17 @@ where
         job_request: JobRequestSubmitted,
     ) -> Result<(), WorkerControllerError> {
         self.accept_job_request(&job_request).await?;
-        let (_id, _job) = self
+        let (id, _job) = self
             .wait_for_job(job_request.id())
             .await
             .ok_or_else(|| WorkerControllerError::JobNeverSent)?;
+
+        // send job acceptance response to requester
+        self.acknowledge_job_acceptance(id, job_request.id())
+            .await?;
+
+        // start job
+        // send result to requester
 
         Ok(())
     }
@@ -112,7 +119,7 @@ where
         &self,
         job_request: &JobRequestSubmitted,
     ) -> Result<(), WorkerControllerError> {
-        let job_id = job_request.id.to_vec();
+        let job_id = job_request.id();
         let msg = Gossip::JobAcceptance { job_id };
         let topic = self.contract_address.to_string();
 
@@ -145,7 +152,7 @@ where
 
         while let Some((req_id, req)) = req_stream.next().await {
             if let Ok(Request::Job(job)) = Request::decode(&req.0) {
-                if JobRequest::new(job.code_ref(), job.params_ref()).id() == id {
+                if JobRequest::hash(job.code_ref(), job.params_ref()) == id {
                     info!("Job received!");
                     return Some((req_id, job));
                 }
@@ -155,6 +162,20 @@ where
         }
 
         None
+    }
+
+    async fn acknowledge_job_acceptance(
+        &self,
+        id: InboundRequestId,
+        job_id: HashId,
+    ) -> Result<(), WorkerControllerError> {
+        let request = Request::AcknowledgeJob { job_id };
+        self.network_client
+            .send_response(id, request.encode())
+            .await?;
+        info!("Job acknowledgement sent");
+
+        Ok(())
     }
 }
 

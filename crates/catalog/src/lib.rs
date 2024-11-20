@@ -51,14 +51,20 @@ pub mod catalog {
 
     impl JobRequest {
         pub fn new(code: &[u8], params: &Vec<Vec<u8>>) -> Self {
-            code.encode_to(&mut params.encode());
-            let id = hash(code);
+            let id = Self::hash(code, params);
 
             Self { id }
         }
 
         pub fn id(&self) -> HashId {
             self.id
+        }
+
+        pub fn hash(code: &[u8], params: &Vec<Vec<u8>>) -> HashId {
+            code.encode_to(&mut params.encode());
+            let id = hash(code);
+
+            id
         }
     }
 

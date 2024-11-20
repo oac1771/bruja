@@ -6,6 +6,7 @@ mod test_job_builder;
 #[cfg(test)]
 mod test_job_runner;
 
+use catalog::catalog::JobRequest;
 use codec::{Decode, Encode};
 use std::{any::Any, string::FromUtf8Error};
 
@@ -50,6 +51,12 @@ impl JobT for Job {
     fn func_name_string(&self) -> Result<String, FromUtf8Error> {
         let string = String::from_utf8(self.func_name.clone())?;
         Ok(string)
+    }
+}
+
+impl Into<JobRequest> for Job {
+    fn into(self) -> JobRequest {
+        JobRequest::new(self.code_ref(), self.params_ref())
     }
 }
 

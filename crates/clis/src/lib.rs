@@ -1,14 +1,16 @@
+use catalog::catalog::HashId;
 use codec::{Decode, Encode};
 use utils::services::job::Job;
 
 #[derive(Encode, Decode)]
 pub enum Gossip {
-    JobAcceptance { job_id: Vec<u8> },
+    JobAcceptance { job_id: HashId },
 }
 
 #[derive(Encode, Decode)]
 pub enum Request {
     Job(Job),
+    AcknowledgeJob { job_id: HashId },
 }
 
 impl Gossip {

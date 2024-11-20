@@ -44,6 +44,12 @@ pub trait NetworkClient {
         payload: Vec<u8>,
     ) -> impl Future<Output = Result<OutboundRequestId, Self::Err>> + Send;
 
+    fn send_response(
+        &self,
+        id: InboundRequestId,
+        payload: Vec<u8>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     fn get_gossip_nodes(
         &self,
         topic: &str,
@@ -398,6 +404,15 @@ impl NetworkClient for NodeClient {
         Err(Error::UnexpectedClientResponse.into())
     }
 
+    async fn send_response(&self, id: InboundRequestId, payload: Vec<u8>) -> Result<(), Self::Err> {
+        if let Some(channel) = self.pending_inbound_req.lock().await.remove(&id) {
+            let payload = ClientRequestPayload::SendResponse { payload, channel };
+            self.send_client_request(payload).await?;
+            return Ok(());
+        }
+        Err(Error::InboundRequestIdNotFound.into())
+    }
+
     async fn get_gossip_nodes(&self, topic: &str) -> Result<Vec<PeerId>, Self::Err> {
         let payload = ClientRequestPayload::GetGossipNodes {
             topic: topic.to_string(),
@@ -441,16 +456,6 @@ impl NodeClient {
         }
     }
 
-    pub async fn publish(&self, topic: &str, msg: Vec<u8>) -> Result<(), Error> {
-        let payload = ClientRequestPayload::Publish {
-            topic: topic.to_string(),
-            msg,
-        };
-        self.send_client_request(payload).await?;
-
-        Ok(())
-    }
-
     pub async fn subscribe(&self, topic: &str) -> Result<(), Error> {
         let payload = ClientRequestPayload::Subscribe {
             topic: topic.trim().to_string(),
@@ -458,28 +463,6 @@ impl NodeClient {
         self.send_client_request(payload).await?;
 
         Ok(())
-    }
-
-    pub async fn send_request(
-        &mut self,
-        peer_id: PeerId,
-        payload: Vec<u8>,
-    ) -> Result<OutboundRequestId, Error> {
-        let payload = ClientRequestPayload::SendRequest { payload, peer_id };
-
-        if let ClientResponse::RequestId { request_id } = self.send_client_request(payload).await? {
-            return Ok(request_id);
-        }
-        Err(Error::UnexpectedClientResponse)
-    }
-
-    pub async fn send_response(&self, id: InboundRequestId, payload: Vec<u8>) -> Result<(), Error> {
-        if let Some(channel) = self.pending_inbound_req.lock().await.remove(&id) {
-            let payload = ClientRequestPayload::SendResponse { payload, channel };
-            self.send_client_request(payload).await?;
-            return Ok(());
-        }
-        Err(Error::InboundRequestIdNotFound)
     }
 
     pub async fn get_local_peer_id(&mut self) -> Result<PeerId, Error> {
