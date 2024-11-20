@@ -4,7 +4,7 @@ use super::{
 };
 use crate::services::job::wat::*;
 use wabt::wat2wasm;
-use wasmtime::{Engine, Module};
+use wasmtime::{Engine, Linker, Module, Store};
 
 #[test]
 fn get_func_type_returns_func_type() {
@@ -98,4 +98,31 @@ fn build_params_returns_empty_vec_if_init_params_is_empty() {
     let res = runner.build_params(&job, &func).unwrap();
 
     assert_eq!(res.len(), 0);
+}
+
+#[test]
+fn execute_export_fn_works() {
+    let code = wat2wasm(ADD_ONE).unwrap();
+    let func_name = "add_one";
+    let val: i32 = 10;
+    let params = vec![val.encode()];
+
+    let engine = Engine::default();
+    let linker: Linker<()> = Linker::new(&engine);
+    let mut store: Store<()> = Store::new(&engine, ());
+    let module = Module::new(&engine, code.clone()).unwrap();
+    let instance = linker.instantiate(&mut store, &module).unwrap();
+
+    let job = Job::new(code.clone(), params, func_name);
+    let runner = WasmJobRunner;
+
+    let func = runner.get_func_type(&job, &module).unwrap();
+    let params = runner.build_params(&job, &func).unwrap();
+    let results = runner.build_results(&func);
+
+    let res = runner
+        .execute_export_function(store, instance, &job, params.as_slice(), results)
+        .unwrap();
+
+    assert_eq!(res[0].i32().unwrap(), 11);
 }

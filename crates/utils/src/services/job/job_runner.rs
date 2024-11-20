@@ -97,7 +97,7 @@ impl WasmJobRunner {
         Ok(params)
     }
 
-    fn build_results(&self, func: &FuncType) -> Vec<Val> {
+    pub(crate) fn build_results(&self, func: &FuncType) -> Vec<Val> {
         let results = func
             .results()
             .map(|val_type| match val_type {
@@ -109,14 +109,14 @@ impl WasmJobRunner {
         results
     }
 
-    fn execute_export_function<T>(
+    pub(crate) fn execute_export_function<T>(
         &self,
         mut store: Store<T>,
         instance: Instance,
         job: &<WasmJobRunner as WasmJobRunnerService>::Job,
         params: &[Val],
         mut results: Vec<Val>,
-    ) -> Result<(), WasmJobRunnerServiceError> {
+    ) -> Result<Vec<Val>, WasmJobRunnerServiceError> {
         let name = job.func_name_string().unwrap();
         instance
             .get_func(&mut store, &name)
@@ -124,7 +124,7 @@ impl WasmJobRunner {
             .call(store, params, &mut results)
             .unwrap();
 
-        Ok(())
+        Ok(results.clone())
     }
 
     fn decode_param<P: Decode + Into<Val>>(
