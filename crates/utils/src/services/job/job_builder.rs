@@ -49,13 +49,7 @@ impl<'a> JobBuilder<'a> {
             return Err(JobBuilderServiceError::CodeFileNotFound);
         }
 
-        let raw_param = if let Some(p) = parameters {
-            p
-        } else {
-            String::from("")
-        };
-
-        let params = RawParams::new(raw_param);
+        let params = RawParams::new(parameters);
 
         Ok(Self {
             code_path: Box::new(path),
@@ -64,7 +58,10 @@ impl<'a> JobBuilder<'a> {
         })
     }
 
-    fn parse_params(&self, module: &Module) -> Result<Vec<Vec<u8>>, JobBuilderServiceError> {
+    pub(crate) fn parse_params(
+        &self,
+        module: &Module,
+    ) -> Result<Vec<Vec<u8>>, JobBuilderServiceError> {
         let extern_type = module.get_export(&self.function_name).ok_or_else(|| {
             JobBuilderServiceError::FunctionExportNotFound {
                 func_name: self.function_name.clone(),
@@ -104,7 +101,7 @@ impl<'a> JobBuilder<'a> {
         match t.parse::<T>() {
             Ok(val) => Ok(val.encode()),
             Err(_) => Err(JobBuilderServiceError::ParseParam {
-                err: format!("Unable to parse param {} into {}", t, type_name::<T>()),
+                err: format!("Unable to parse param '{}' into {}", t, type_name::<T>()),
             }),
         }
     }
@@ -113,11 +110,12 @@ impl<'a> JobBuilder<'a> {
 pub struct RawParams(Vec<String>);
 
 impl RawParams {
-    pub fn new(params: String) -> Self {
-        let res = params
-            .split(',')
-            .map(|s| s.to_string())
-            .collect::<Vec<String>>();
+    pub fn new(params: Option<String>) -> Self {
+        let res = if let Some(p) = params {
+            p.split(',').map(|s| s.to_string()).collect::<Vec<String>>()
+        } else {
+            vec![]
+        };
 
         Self(res)
     }
@@ -158,4 +156,19 @@ pub enum JobBuilderServiceError {
 
     #[error("Param type not found")]
     ParamTypeNotFound,
+}
+
+#[cfg(test)]
+impl<'a> JobBuilder<'a> {
+    pub(crate) fn test(parameters: Option<String>, function_name: &str) -> Self {
+        let code_path = Box::new(Path::new(""));
+
+        let params = RawParams::new(parameters);
+
+        Self {
+            code_path,
+            params,
+            function_name: function_name.to_string(),
+        }
+    }
 }
