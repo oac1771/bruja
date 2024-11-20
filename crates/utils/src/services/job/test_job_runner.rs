@@ -58,3 +58,44 @@ fn build_params_returns_wasm_val() {
     assert_eq!(params.len(), 1);
     assert_eq!(params[0].i32().unwrap(), val);
 }
+
+#[test]
+fn build_params_errors_if_cannot_parse_param() {
+    let code = wat2wasm(ADD_ONE).unwrap();
+    let func_name = "add_one";
+    let val = i8::MAX;
+    let params = vec![val.encode()];
+
+    let engine = Engine::default();
+    let module = Module::new(&engine, code.clone()).unwrap();
+
+    let job = Job::new(code.clone(), params, func_name);
+    let runner = WasmJobRunner;
+
+    let func = runner.get_func_type(&job, &module).unwrap();
+    let err = runner.build_params(&job, &func).err().unwrap();
+
+    if let WasmJobRunnerServiceError::Codec { source: _ } = err {
+        assert!(true)
+    } else {
+        panic!("Unexpected error returned")
+    }
+}
+
+#[test]
+fn build_params_returns_empty_vec_if_init_params_is_empty() {
+    let code = wat2wasm(ADD_ONE).unwrap();
+    let func_name = "add_one";
+    let params = vec![];
+
+    let engine = Engine::default();
+    let module = Module::new(&engine, code.clone()).unwrap();
+
+    let job = Job::new(code.clone(), params, func_name);
+    let runner = WasmJobRunner;
+
+    let func = runner.get_func_type(&job, &module).unwrap();
+    let res = runner.build_params(&job, &func).unwrap();
+
+    assert_eq!(res.len(), 0);
+}
