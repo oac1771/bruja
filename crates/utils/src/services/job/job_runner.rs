@@ -21,14 +21,12 @@ impl WasmJobRunnerService for WasmJobRunner {
         let mut store: Store<()> = Store::new(&engine, ());
         let module = Module::new(&engine, job.code_ref())
             .map_err(|e| WasmJobRunnerServiceError::WasmModule { err: e.to_string() })?;
-
-        self.define_host_fn(&module, &mut linker)?;
         let instance = linker.instantiate(&mut store, &module)?;
 
+        self.define_host_fn(&module, &mut linker)?;
         let func = self.get_func_type(&job, &module)?;
         let params = self.build_params(&job, &func)?;
         let results = self.build_results(&func);
-
         self.execute_export_function(store, instance, &job, params.as_slice(), results)?;
 
         Ok(())

@@ -1426,7 +1426,7 @@ version = "1.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b023947811758c97c59bf9d1c188fd619ad4718dcaa767947df1cadb14f39f4"
 dependencies = [
- "glob",
+ "glob 0.3.1",
  "libc",
  "libloading",
 ]
@@ -1478,6 +1478,15 @@ version = "0.0.1"
 dependencies = [
  "parity-scale-codec",
  "utils",
+]
+
+[[package]]
+name = "cmake"
+version = "0.1.51"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fb1e43aa7fd152b1f968787f7dbcdeb306d1867ff373c69955211876c053f91a"
+dependencies = [
+ "cc",
 ]
 
 [[package]]
@@ -3645,6 +3654,12 @@ dependencies = [
  "indexmap 2.3.0",
  "stable_deref_trait",
 ]
+
+[[package]]
+name = "glob"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8be18de09a56b60ed0edf84bc9df007e30040691af7acd1c41874faac5895bfb"
 
 [[package]]
 name = "glob"
@@ -5988,7 +6003,7 @@ dependencies = [
  "bindgen",
  "bzip2-sys",
  "cc",
- "glob",
+ "glob 0.3.1",
  "libc",
  "libz-sys",
  "tikv-jemalloc-sys",
@@ -13753,6 +13768,7 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
+ "wabt",
  "wasmtime 25.0.1",
 ]
 
@@ -13824,6 +13840,29 @@ dependencies = [
  "sha3",
  "thiserror",
  "zeroize",
+]
+
+[[package]]
+name = "wabt"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "94b5f5d6984ca42df66280baa8a15ac188a173ddaf4580b574a98931c01920e7"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "wabt-sys",
+]
+
+[[package]]
+name = "wabt-sys"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b064c81821100adb4b71923cecfc67fef083db21c3bbd454b0162c7ffe63eeaa"
+dependencies = [
+ "cc",
+ "cmake",
+ "glob 0.2.11",
 ]
 
 [[package]]

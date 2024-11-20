@@ -1,6 +1,9 @@
 pub mod job_builder;
 pub mod job_runner;
 
+#[cfg(test)]
+mod test_job_builder;
+
 use codec::{Decode, Encode};
 use std::{any::Any, string::FromUtf8Error};
 

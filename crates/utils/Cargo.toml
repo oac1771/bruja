@@ -31,6 +31,9 @@ sp-weights = { workspace = true, default-features = false }
 catalog = { workspace = true }
 async-stream = "0.3.6"
 
+[dev-dependencies]
+wabt = "0.9.0"
+
 [features]
 default = ["std"]
 std = [

@@ -6,6 +6,8 @@ remove unecessary contractclienterror variants
 remove unecessary network client/node error variants
 add unknown error variants to catchall
 
+create derive macro for mock stuff
+
 - requester
     - payment
         - look into module.resources_required()
