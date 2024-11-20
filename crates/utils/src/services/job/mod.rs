@@ -2,13 +2,13 @@ pub mod job_builder;
 pub mod job_runner;
 
 use codec::{Decode, Encode};
-use std::any::Any;
+use std::{any::Any, string::FromUtf8Error};
 
 pub trait JobT: Encode + Decode + Any {
     fn code_ref(&self) -> &[u8];
     fn code(self) -> Vec<u8>;
     fn params_ref(&self) -> &Vec<Vec<u8>>;
-    fn func_name_ref(&self) -> &Vec<u8>;
+    fn func_name_string(&self) -> Result<String, FromUtf8Error>;
 }
 
 #[derive(Encode, Decode)]
@@ -42,7 +42,8 @@ impl JobT for Job {
         &self.params
     }
 
-    fn func_name_ref(&self) -> &Vec<u8> {
-        &self.func_name
+    fn func_name_string(&self) -> Result<String, FromUtf8Error> {
+        let string = String::from_utf8(self.func_name.clone())?;
+        Ok(string)
     }
 }
