@@ -1,17 +1,10 @@
-use super::*;
-use job_builder::{JobBuilder, JobBuilderServiceError, RawParams};
+use super::{
+    job_builder::{JobBuilder, JobBuilderServiceError, RawParams},
+    Encode,
+};
+use crate::services::job::wat::*;
 use wabt::wat2wasm;
 use wasmtime::{Engine, Module};
-
-const ADD_ONE: &'static str = r#"
-        (module
-            (func $add_one (param $lhs i32) (result i32)
-                local.get $lhs
-                i32.const 1
-                i32.add)
-            (export "add_one" (func $add_one))
-        )
-    "#;
 
 #[test]
 fn raw_params_parses_none_option_to_empty_vec() {

@@ -9,7 +9,7 @@ pub trait WasmJobRunnerService {
     fn start_job(&self, job: Self::Job) -> Result<(), Self::Err>;
 }
 
-struct WasmJobRunner;
+pub struct WasmJobRunner;
 
 impl WasmJobRunnerService for WasmJobRunner {
     type Err = WasmJobRunnerServiceError;
@@ -50,7 +50,7 @@ impl WasmJobRunner {
         Ok(())
     }
 
-    fn get_func_type(
+    pub(crate) fn get_func_type(
         &self,
         job: &<WasmJobRunner as WasmJobRunnerService>::Job,
         module: &Module,
@@ -70,7 +70,7 @@ impl WasmJobRunner {
         Ok(res)
     }
 
-    fn build_params(
+    pub(crate) fn build_params(
         &self,
         job: &<WasmJobRunner as WasmJobRunnerService>::Job,
         func: &FuncType,
