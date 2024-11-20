@@ -123,7 +123,7 @@ where
         let boxed_job: Box<dyn Any> = Box::new(job);
         let job = boxed_job
             .downcast::<Job>()
-            .map_err(|_| RequesterControllerError::DownCastError)?;
+            .map_err(|_| RequesterControllerError::DownCast)?;
         let req = Request::Job(*job);
 
         self.network_client
@@ -159,5 +159,5 @@ pub enum RequesterControllerError {
     JobNeverAccepted,
 
     #[error("")]
-    DownCastError,
+    DownCast,
 }

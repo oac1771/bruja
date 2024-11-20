@@ -8,6 +8,7 @@ use tokio::task::JoinHandle;
 use tracing::instrument;
 use utils::services::{
     contract_client::Client,
+    job::job_runner::WasmJobRunner,
     p2p::{NetworkClientError, NodeBuilder, NodeClient},
 };
 
@@ -30,8 +31,14 @@ impl StartCmd {
 
         let (handle, network_client) = self.join_network(contract_address.to_string()).await?;
 
-        let worker_controller =
-            WorkerController::new(contract_client, contract_address, network_client);
+        let job_runner = WasmJobRunner;
+
+        let worker_controller = WorkerController::new(
+            contract_client,
+            contract_address,
+            network_client,
+            job_runner,
+        );
 
         worker_controller.start(handle).await;
 

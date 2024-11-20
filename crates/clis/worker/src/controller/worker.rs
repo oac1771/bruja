@@ -15,34 +15,43 @@ use utils::{
     chain::contracts::events::ContractEmitted,
     services::{
         contract_client::{ContractClient, ContractClientError},
-        job::{Job, JobT},
+        job::{
+            job_runner::{WasmJobRunnerService, WasmJobRunnerServiceError},
+            Job, JobT,
+        },
         p2p::{NetworkClient, NetworkClientError},
     },
 };
 
-pub struct WorkerController<C: Config, CC, NC> {
+pub struct WorkerController<C: Config, CC, NC, JR> {
     contract_client: CC,
     contract_address: <C as Config>::AccountId,
     network_client: NC,
+    job_runner: JR,
 }
 
-impl<C, CC, NC> WorkerController<C, CC, NC>
+impl<C, CC, NC, JR> WorkerController<C, CC, NC, JR>
 where
     C: Config,
     <C as Config>::AccountId: Display,
     CC: ContractClient<C = C>,
     NC: NetworkClient,
-    WorkerControllerError: From<<NC as NetworkClient>::Err> + From<<CC as ContractClient>::Err>,
+    JR: WasmJobRunnerService,
+    WorkerControllerError: From<<NC as NetworkClient>::Err>
+        + From<<CC as ContractClient>::Err>
+        + From<<JR as WasmJobRunnerService>::Err>,
 {
     pub fn new(
         contract_client: CC,
         contract_address: <C as Config>::AccountId,
         network_client: NC,
+        job_runner: JR,
     ) -> Self {
         Self {
             contract_address,
             contract_client,
             network_client,
+            job_runner,
         }
     }
 
@@ -104,8 +113,6 @@ where
             .wait_for_job(job_request.id())
             .await
             .ok_or_else(|| WorkerControllerError::JobNeverSent)?;
-
-        // send job acceptance response to requester
         self.acknowledge_job_acceptance(id, job_request.id())
             .await?;
 
@@ -191,6 +198,12 @@ pub enum WorkerControllerError {
     NetworkClient {
         #[from]
         source: NetworkClientError,
+    },
+
+    #[error("{source}")]
+    JobRunner {
+        #[from]
+        source: WasmJobRunnerServiceError,
     },
 
     #[error("Unable to decode Contract Emitted event: {data:?}")]
