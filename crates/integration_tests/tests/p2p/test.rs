@@ -302,9 +302,11 @@ mod tests {
             .await;
 
         let result_payload: Vec<u8>;
+        let resp_stream = client_1.resp_stream().await;
+        tokio::pin!(resp_stream);
 
         select! {
-            Some(resp) = client_1.recv_inbound_resp() => {result_payload = resp.response().0.clone();},
+            Some(resp) = resp_stream.next() => {result_payload = resp.response().0.clone();},
             _ = sleep(Duration::from_millis(500)) => {panic!("Timedout waiting for response")}
         }
 
