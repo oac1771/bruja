@@ -116,9 +116,10 @@ where
         self.acknowledge_job_acceptance(id, job_request.id())
             .await?;
 
-        // start job
-        self.start_job(job).await;
+        let _result = self.start_job(job).await?;
+
         // send result to requester
+        // wait for result acknoledgement
 
         Ok(())
     }
@@ -197,8 +198,13 @@ where
         Ok(())
     }
 
-    async fn start_job(&self, job: <JR as WasmJobRunnerService>::Job) {
-        let _ = self.job_runner.start_job(job);
+    async fn start_job(
+        &self,
+        job: <JR as WasmJobRunnerService>::Job,
+    ) -> Result<<JR as WasmJobRunnerService>::Results, WorkerControllerError> {
+        let result = self.job_runner.start_job(job)?;
+
+        Ok(result)
     }
 }
 

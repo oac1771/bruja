@@ -29,15 +29,13 @@ use tracing::{error, info, info_span, Instrument};
 
 pub trait NetworkClient {
     type Err;
-    // add associated type for gossipmessage and have its traits bounded
+    // make all return types associated types
 
     fn publish_message(
         &self,
         topic: &str,
         msg: Vec<u8>,
     ) -> impl Future<Output = Result<(), Self::Err>>;
-
-    fn gossip_msg_stream(&self) -> impl Future<Output = impl Stream<Item = GossipMessage>> + Send;
 
     fn send_request(
         &self,
@@ -56,9 +54,13 @@ pub trait NetworkClient {
         topic: &str,
     ) -> impl Future<Output = Result<Vec<PeerId>, Self::Err>> + Send;
 
+    fn gossip_msg_stream(&self) -> impl Future<Output = impl Stream<Item = GossipMessage>> + Send;
+
     fn req_stream(
         &self,
     ) -> impl Future<Output = impl Stream<Item = (InboundRequestId, P2pRequest)>> + Send;
+
+    fn resp_stream(&self) -> impl Future<Output = impl Stream<Item = InboundP2pResponse>> + Send;
 }
 
 pub struct NodeBuilder;
@@ -70,7 +72,7 @@ pub struct Node {
 pub struct NodeClient {
     req_tx: Sender<ClientRequest>,
     inbound_req_rx: Mutex<Receiver<InboundP2pRequest>>,
-    inbound_resp_rx: Receiver<InboundP2pResponse>,
+    inbound_resp_rx: Mutex<Receiver<InboundP2pResponse>>,
     gossip_msg_rx: Mutex<Receiver<GossipMessage>>,
     pending_inbound_req: Mutex<HashMap<InboundRequestId, ResponseChannel<P2pResponse>>>,
 }
@@ -160,7 +162,7 @@ impl Node {
         let node_client = NodeClient::new(
             req_tx,
             Mutex::new(inbound_req_rx),
-            inbound_resp_rx,
+            Mutex::new(inbound_resp_rx),
             Mutex::new(gossip_msg_rx),
         );
 
@@ -436,13 +438,23 @@ impl NetworkClient for NodeClient {
 
         stream
     }
+
+    async fn resp_stream(&self) -> impl Stream<Item = InboundP2pResponse> {
+        let stream = stream! {
+            while let Some(resp) = self.inbound_resp_rx.lock().await.recv().await {
+                yield resp
+            }
+        };
+
+        stream
+    }
 }
 
 impl NodeClient {
     fn new(
         req_tx: Sender<ClientRequest>,
         inbound_req_rx: Mutex<Receiver<InboundP2pRequest>>,
-        inbound_resp_rx: Receiver<InboundP2pResponse>,
+        inbound_resp_rx: Mutex<Receiver<InboundP2pResponse>>,
         gossip_msg_rx: Mutex<Receiver<GossipMessage>>,
     ) -> Self {
         let pending_inbound_req: Mutex<HashMap<InboundRequestId, ResponseChannel<P2pResponse>>> =
@@ -473,10 +485,6 @@ impl NodeClient {
             return Ok(peer_id);
         }
         Err(Error::UnexpectedClientResponse)
-    }
-
-    pub fn recv_inbound_resp(&mut self) -> impl Future<Output = Option<InboundP2pResponse>> + '_ {
-        self.inbound_resp_rx.recv()
     }
 
     async fn send_client_request(

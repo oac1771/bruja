@@ -5,8 +5,9 @@ use wasmtime::{Engine, ExternType, FuncType, Instance, Linker, Module, Store, Va
 pub trait WasmJobRunnerService {
     type Err;
     type Job: JobT;
+    type Results;
 
-    fn start_job(&self, job: Self::Job) -> Result<(), Self::Err>;
+    fn start_job(&self, job: Self::Job) -> Result<Self::Results, Self::Err>;
 }
 
 pub struct WasmJobRunner;
@@ -14,8 +15,9 @@ pub struct WasmJobRunner;
 impl WasmJobRunnerService for WasmJobRunner {
     type Err = WasmJobRunnerServiceError;
     type Job = Job;
+    type Results = Vec<Val>;
 
-    fn start_job(&self, job: Self::Job) -> Result<(), Self::Err> {
+    fn start_job(&self, job: Self::Job) -> Result<Self::Results, Self::Err> {
         let engine = Engine::default();
         let mut linker: Linker<()> = Linker::new(&engine);
         let mut store: Store<()> = Store::new(&engine, ());
@@ -27,9 +29,10 @@ impl WasmJobRunnerService for WasmJobRunner {
         let func = self.get_func_type(&job, &module)?;
         let params = self.build_params(&job, &func)?;
         let results = self.build_results(&func);
-        self.execute_export_function(store, instance, &job, params.as_slice(), results)?;
+        let res =
+            self.execute_export_function(store, instance, &job, params.as_slice(), results)?;
 
-        Ok(())
+        Ok(res)
     }
 }
 

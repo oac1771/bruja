@@ -26,8 +26,8 @@ impl Gossip {
 }
 
 impl Request {
-    pub fn decode(mut msg: &[u8]) -> Result<Self, codec::Error> {
-        let res = <Request as Decode>::decode(&mut msg)?;
+    pub fn decode(mut req: &[u8]) -> Result<Self, codec::Error> {
+        let res = <Request as Decode>::decode(&mut req)?;
         Ok(res)
     }
 }

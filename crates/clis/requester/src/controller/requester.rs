@@ -1,4 +1,4 @@
-use catalog::catalog::{JobRequest, JobRequestSubmitted};
+use catalog::catalog::{HashId, JobRequest, JobRequestSubmitted};
 use clis::{Gossip, Request};
 use codec::Encode;
 use libp2p::PeerId;
@@ -75,6 +75,10 @@ where
             .await
             .ok_or_else(|| RequesterControllerError::JobNeverAccepted)?;
         self.send_job(msg.peer_id(), job).await?;
+        self.wait_for_job_acknowledgement(job_request.id()).await;
+
+        // wait for job results
+        // send result acknoledgment
 
         Ok(())
     }
@@ -127,6 +131,21 @@ where
         info!("Job sent to peer: {}", peer_id);
 
         Ok(())
+    }
+
+    async fn wait_for_job_acknowledgement(&self, id: HashId) {
+        let resp_stream = self.network_client.resp_stream().await;
+        tokio::pin!(resp_stream);
+
+        while let Some(resp) = resp_stream.next().await {
+            if let Ok(Request::AcknowledgeJob { job_id }) = Request::decode(&resp.response().0) {
+                if job_id == id {
+                    info!("Job has been accepted by a worker");
+                }
+            } else {
+                error!("Unable to decode request");
+            }
+        }
     }
 }
 
