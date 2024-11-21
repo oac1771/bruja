@@ -2,7 +2,6 @@ use catalog::catalog::{JobRequest, JobRequestSubmitted};
 use clis::{Gossip, Request};
 use codec::Encode;
 use libp2p::PeerId;
-use std::any::Any;
 use subxt::{ext::futures::StreamExt, Config};
 use tokio::{select, signal::ctrl_c, task::JoinHandle};
 use tracing::{error, info};
@@ -10,7 +9,7 @@ use utils::services::{
     contract_client::{ContractClient, ContractClientError},
     job::{
         job_builder::{JobBuilderService, JobBuilderServiceError},
-        Job, JobT,
+        JobT,
     },
     p2p::{GossipMessage, NetworkClient, NetworkClientError},
 };
@@ -120,11 +119,7 @@ where
         peer_id: PeerId,
         job: impl JobT,
     ) -> Result<(), RequesterControllerError> {
-        let boxed_job: Box<dyn Any> = Box::new(job);
-        let job = boxed_job
-            .downcast::<Job>()
-            .map_err(|_| RequesterControllerError::DownCast)?;
-        let req = Request::Job(*job);
+        let req = Request::from(job.into_parts());
 
         self.network_client
             .send_request(peer_id, req.encode())

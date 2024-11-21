@@ -17,7 +17,7 @@ use utils::{
         contract_client::{ContractClient, ContractClientError},
         job::{
             job_runner::{WasmJobRunnerService, WasmJobRunnerServiceError},
-            Job, JobT,
+            JobT,
         },
         p2p::{NetworkClient, NetworkClientError},
     },
@@ -109,7 +109,7 @@ where
         job_request: JobRequestSubmitted,
     ) -> Result<(), WorkerControllerError> {
         self.accept_job_request(&job_request).await?;
-        let (id, _job) = self
+        let (id, job) = self
             .wait_for_job(job_request.id())
             .await
             .ok_or_else(|| WorkerControllerError::JobNeverSent)?;
@@ -117,6 +117,7 @@ where
             .await?;
 
         // start job
+        self.start_job(job).await;
         // send result to requester
 
         Ok(())
@@ -153,14 +154,25 @@ where
         Ok(())
     }
 
-    async fn wait_for_job(&self, id: HashId) -> Option<(InboundRequestId, Job)> {
+    async fn wait_for_job(
+        &self,
+        id: HashId,
+    ) -> Option<(InboundRequestId, <JR as WasmJobRunnerService>::Job)> {
         let req_stream = self.network_client.req_stream().await;
         tokio::pin!(req_stream);
 
         while let Some((req_id, req)) = req_stream.next().await {
-            if let Ok(Request::Job(job)) = Request::decode(&req.0) {
-                if JobRequest::hash(job.code_ref(), job.params_ref()) == id {
+            if let Ok(Request::Job {
+                code,
+                params,
+                func_name,
+            }) = Request::decode(&req.0)
+            {
+                if JobRequest::hash(&code, &params) == id {
                     info!("Job received!");
+
+                    let job: <JR as WasmJobRunnerService>::Job =
+                        JobT::from_parts(code, params, func_name);
                     return Some((req_id, job));
                 }
             } else {
@@ -183,6 +195,10 @@ where
         info!("Job acknowledgement sent");
 
         Ok(())
+    }
+
+    async fn start_job(&self, job: <JR as WasmJobRunnerService>::Job) {
+        let _ = self.job_runner.start_job(job);
     }
 }
 

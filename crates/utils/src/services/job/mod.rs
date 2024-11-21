@@ -6,15 +6,15 @@ mod test_job_builder;
 #[cfg(test)]
 mod test_job_runner;
 
-use catalog::catalog::JobRequest;
 use codec::{Decode, Encode};
-use std::{any::Any, string::FromUtf8Error};
+use std::string::FromUtf8Error;
 
-pub trait JobT: Encode + Decode + Any {
+pub trait JobT: Encode + Decode {
     fn code_ref(&self) -> &[u8];
-    fn code(self) -> Vec<u8>;
     fn params_ref(&self) -> &Vec<Vec<u8>>;
     fn func_name_string(&self) -> Result<String, FromUtf8Error>;
+    fn into_parts(self) -> (Vec<u8>, Vec<Vec<u8>>, Vec<u8>);
+    fn from_parts(code: Vec<u8>, params: Vec<Vec<u8>>, func_name: Vec<u8>) -> Self;
 }
 
 #[derive(Encode, Decode)]
@@ -40,10 +40,6 @@ impl JobT for Job {
         self.code.as_slice()
     }
 
-    fn code(self) -> Vec<u8> {
-        self.code
-    }
-
     fn params_ref(&self) -> &Vec<Vec<u8>> {
         &self.params
     }
@@ -52,11 +48,17 @@ impl JobT for Job {
         let string = String::from_utf8(self.func_name.clone())?;
         Ok(string)
     }
-}
 
-impl Into<JobRequest> for Job {
-    fn into(self) -> JobRequest {
-        JobRequest::new(self.code_ref(), self.params_ref())
+    fn into_parts(self) -> (Vec<u8>, Vec<Vec<u8>>, Vec<u8>) {
+        (self.code, self.params, self.func_name)
+    }
+
+    fn from_parts(code: Vec<u8>, params: Vec<Vec<u8>>, func_name: Vec<u8>) -> Self {
+        Self {
+            code,
+            params,
+            func_name,
+        }
     }
 }
 

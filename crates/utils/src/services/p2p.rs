@@ -29,6 +29,7 @@ use tracing::{error, info, info_span, Instrument};
 
 pub trait NetworkClient {
     type Err;
+    // add associated type for gossipmessage and have its traits bounded
 
     fn publish_message(
         &self,
