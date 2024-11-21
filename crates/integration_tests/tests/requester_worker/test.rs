@@ -81,6 +81,19 @@ mod tests {
         requester_runner
             .assert_info_log_contains("Job has been accepted by a worker")
             .await;
+        worker_runner.assert_info_log_entry("Results sent").await;
+        requester_runner
+            .assert_info_log_contains("Received results")
+            .await;
+        requester_runner
+            .assert_info_log_contains("Result acknowledgement sent")
+            .await;
+        worker_runner
+            .assert_info_log_entry("Result acknowledged by requester")
+            .await;
+        requester_runner
+            .assert_info_log_contains("Received results!")
+            .await;
     }
 
     async fn instantiate_contract() -> AccountId32 {

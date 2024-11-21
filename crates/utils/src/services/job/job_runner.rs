@@ -1,13 +1,12 @@
 use super::{Job, JobT};
-use codec::Decode;
+use codec::{Decode, Encode};
 use wasmtime::{Engine, ExternType, FuncType, Instance, Linker, Module, Store, Val, ValType};
 
 pub trait WasmJobRunnerService {
     type Err;
     type Job: JobT;
-    type Results;
 
-    fn start_job(&self, job: Self::Job) -> Result<Self::Results, Self::Err>;
+    fn start_job(&self, job: Self::Job) -> Result<Vec<Vec<u8>>, Self::Err>;
 }
 
 pub struct WasmJobRunner;
@@ -15,9 +14,8 @@ pub struct WasmJobRunner;
 impl WasmJobRunnerService for WasmJobRunner {
     type Err = WasmJobRunnerServiceError;
     type Job = Job;
-    type Results = Vec<Val>;
 
-    fn start_job(&self, job: Self::Job) -> Result<Self::Results, Self::Err> {
+    fn start_job(&self, job: Self::Job) -> Result<Vec<Vec<u8>>, Self::Err> {
         let engine = Engine::default();
         let mut linker: Linker<()> = Linker::new(&engine);
         let mut store: Store<()> = Store::new(&engine, ());
@@ -32,7 +30,9 @@ impl WasmJobRunnerService for WasmJobRunner {
         let res =
             self.execute_export_function(store, instance, &job, params.as_slice(), results)?;
 
-        Ok(res)
+        let r = self.prepare_results(res);
+
+        Ok(r)
     }
 }
 
@@ -137,6 +137,17 @@ impl WasmJobRunner {
         let param = <P as Decode>::decode(&mut p)?;
         let val: Val = param.into();
         Ok(val)
+    }
+
+    fn prepare_results(&self, results: Vec<Val>) -> Vec<Vec<u8>> {
+        results
+            .iter()
+            .map(|v| match v {
+                Val::I32(t) => t.encode(),
+                Val::I64(t) => t.encode(),
+                _ => vec![],
+            })
+            .collect::<Vec<Vec<u8>>>()
     }
 }
 

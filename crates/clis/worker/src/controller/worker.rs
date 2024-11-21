@@ -1,7 +1,7 @@
 use catalog::catalog::{HashId, JobRequest, JobRequestSubmitted};
-use clis::{Gossip, Request};
+use clis::{Gossip, Request, Response};
 use codec::Encode;
-use libp2p::request_response::InboundRequestId;
+use libp2p::{request_response::InboundRequestId, PeerId};
 use std::fmt::Display;
 use subxt::{ext::futures::StreamExt, Config};
 use tokio::{
@@ -109,17 +109,16 @@ where
         job_request: JobRequestSubmitted,
     ) -> Result<(), WorkerControllerError> {
         self.accept_job_request(&job_request).await?;
-        let (id, job) = self
+        let (id, job, who) = self
             .wait_for_job(job_request.id())
             .await
             .ok_or_else(|| WorkerControllerError::JobNeverSent)?;
         self.acknowledge_job_acceptance(id, job_request.id())
             .await?;
 
-        let _result = self.start_job(job).await?;
-
-        // send result to requester
-        // wait for result acknoledgement
+        let result = self.start_job(job).await?;
+        self.send_result(result, job_request.id(), who).await?;
+        self.wait_for_result_acknowledgement(job_request.id()).await;
 
         Ok(())
     }
@@ -158,7 +157,7 @@ where
     async fn wait_for_job(
         &self,
         id: HashId,
-    ) -> Option<(InboundRequestId, <JR as WasmJobRunnerService>::Job)> {
+    ) -> Option<(InboundRequestId, <JR as WasmJobRunnerService>::Job, PeerId)> {
         let req_stream = self.network_client.req_stream().await;
         tokio::pin!(req_stream);
 
@@ -167,6 +166,7 @@ where
                 code,
                 params,
                 func_name,
+                who,
             }) = Request::decode(&req.0)
             {
                 if JobRequest::hash(&code, &params) == id {
@@ -174,7 +174,8 @@ where
 
                     let job: <JR as WasmJobRunnerService>::Job =
                         JobT::from_parts(code, params, func_name);
-                    return Some((req_id, job));
+                    let peer_id = PeerId::from_bytes(&who).unwrap();
+                    return Some((req_id, job, peer_id));
                 }
             } else {
                 error!("Unable to decode request: {:?}", req.0);
@@ -189,7 +190,7 @@ where
         id: InboundRequestId,
         job_id: HashId,
     ) -> Result<(), WorkerControllerError> {
-        let request = Request::AcknowledgeJob { job_id };
+        let request = Response::AcknowledgeJob { job_id };
         self.network_client
             .send_response(id, request.encode())
             .await?;
@@ -201,10 +202,38 @@ where
     async fn start_job(
         &self,
         job: <JR as WasmJobRunnerService>::Job,
-    ) -> Result<<JR as WasmJobRunnerService>::Results, WorkerControllerError> {
+    ) -> Result<Vec<Vec<u8>>, WorkerControllerError> {
         let result = self.job_runner.start_job(job)?;
 
         Ok(result)
+    }
+
+    async fn send_result(
+        &self,
+        result: Vec<Vec<u8>>,
+        job_id: HashId,
+        who: PeerId,
+    ) -> Result<(), WorkerControllerError> {
+        let req = Request::Result { result, job_id };
+
+        self.network_client.send_request(who, req.encode()).await?;
+        info!("Results sent");
+
+        Ok(())
+    }
+
+    async fn wait_for_result_acknowledgement(&self, id: HashId) {
+        let resp_stream = self.network_client.resp_stream().await;
+        tokio::pin!(resp_stream);
+
+        while let Some(resp) = resp_stream.next().await {
+            if let Ok(Response::AcknowledgeResult { job_id }) = Response::decode(&resp.response().0)
+            {
+                if id == job_id {
+                    info!("Result acknowledged by requester")
+                }
+            }
+        }
     }
 }
 

@@ -66,8 +66,8 @@ mod tests {
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
         let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
 
-        let (_, mut client_1) = node_1.start();
-        let (_, mut client_2) = node_2.start();
+        let (_, client_1) = node_1.start();
+        let (_, client_2) = node_2.start();
 
         client_1.subscribe(&topic).await.unwrap();
         client_2.subscribe(&topic).await.unwrap();
@@ -108,8 +108,8 @@ mod tests {
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
         let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
 
-        let (_, mut client_1) = node_1.start();
-        let (_, mut client_2) = node_2.start();
+        let (_, client_1) = node_1.start();
+        let (_, client_2) = node_2.start();
 
         let peer_id_1 = client_1.get_local_peer_id().await.unwrap();
         let peer_id_2 = client_2.get_local_peer_id().await.unwrap();
@@ -160,8 +160,8 @@ mod tests {
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
         let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
 
-        let (_, mut client_1) = node_1.start();
-        let (_, mut client_2) = node_2.start();
+        let (_, client_1) = node_1.start();
+        let (_, client_2) = node_2.start();
 
         client_1.subscribe(&topic).await.unwrap();
         client_2.subscribe(&topic).await.unwrap();
@@ -232,8 +232,8 @@ mod tests {
         let node_1 = NodeRunner::new(log_buffer.clone(), "node_1");
         let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
 
-        let (_, mut client_1) = node_1.start();
-        let (_, mut client_2) = node_2.start();
+        let (_, client_1) = node_1.start();
+        let (_, client_2) = node_2.start();
 
         let peer_id1 = client_1.get_local_peer_id().await.unwrap();
         let peer_id2 = client_2.get_local_peer_id().await.unwrap();
@@ -261,8 +261,8 @@ mod tests {
         let node_2 = NodeRunner::new(log_buffer.clone(), "node_2");
         let expected_payload = vec![1, 2, 3, 4];
 
-        let (_, mut client_1) = node_1.start();
-        let (_, mut client_2) = node_2.start();
+        let (_, client_1) = node_1.start();
+        let (_, client_2) = node_2.start();
 
         let peer_id1 = client_1.get_local_peer_id().await.unwrap();
         let peer_id2 = client_2.get_local_peer_id().await.unwrap();

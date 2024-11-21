@@ -54,6 +54,8 @@ pub trait NetworkClient {
         topic: &str,
     ) -> impl Future<Output = Result<Vec<PeerId>, Self::Err>> + Send;
 
+    fn get_local_peer_id(&self) -> impl Future<Output = Result<PeerId, Self::Err>> + Send;
+
     fn gossip_msg_stream(&self) -> impl Future<Output = impl Stream<Item = GossipMessage>> + Send;
 
     fn req_stream(
@@ -383,15 +385,13 @@ impl NetworkClient for NodeClient {
         Ok(())
     }
 
-    async fn gossip_msg_stream(&self) -> impl Stream<Item = GossipMessage> {
-        let stream = stream! {
+    async fn get_local_peer_id(&self) -> Result<PeerId, Self::Err> {
+        let payload = ClientRequestPayload::GetLocalPeerId;
 
-            while let Some(msg) = self.gossip_msg_rx.lock().await.recv().await {
-                yield msg
-            }
-        };
-
-        stream
+        if let ClientResponse::PeerId { peer_id } = self.send_client_request(payload).await? {
+            return Ok(peer_id);
+        }
+        Err(Error::UnexpectedClientResponse.into())
     }
 
     async fn send_request(
@@ -448,6 +448,17 @@ impl NetworkClient for NodeClient {
 
         stream
     }
+
+    async fn gossip_msg_stream(&self) -> impl Stream<Item = GossipMessage> {
+        let stream = stream! {
+
+            while let Some(msg) = self.gossip_msg_rx.lock().await.recv().await {
+                yield msg
+            }
+        };
+
+        stream
+    }
 }
 
 impl NodeClient {
@@ -476,15 +487,6 @@ impl NodeClient {
         self.send_client_request(payload).await?;
 
         Ok(())
-    }
-
-    pub async fn get_local_peer_id(&mut self) -> Result<PeerId, Error> {
-        let payload = ClientRequestPayload::GetLocalPeerId;
-
-        if let ClientResponse::PeerId { peer_id } = self.send_client_request(payload).await? {
-            return Ok(peer_id);
-        }
-        Err(Error::UnexpectedClientResponse)
     }
 
     async fn send_client_request(

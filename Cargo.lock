@@ -1477,6 +1477,7 @@ name = "clis"
 version = "0.0.1"
 dependencies = [
  "catalog",
+ "libp2p 0.54.1",
  "parity-scale-codec",
  "utils",
 ]
