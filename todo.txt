@@ -11,6 +11,8 @@ refactor job runner to create task that has builder pattern to build up job and 
     so it can be in its own task::spawn()
 refactor contract client so that it calls subxt client
 
+figure out env logging and make p2p stuff debug to declutter output
+
 create derive macro for mock stuff
 
 - requester
@@ -20,7 +22,6 @@ create derive macro for mock stuff
 
 - worker
     - refactor error handling and logging 
-    - figure out wasmtime 
 
 - catalog
     - make contract upgradeable 

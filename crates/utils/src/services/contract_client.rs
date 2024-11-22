@@ -31,11 +31,14 @@ use subxt::{
 pub trait ContractClient {
     type C: Config;
     type Err: From<codec::Error>;
+    type ContractEmitted: ContractEmittedT;
 
     fn contract_event_sub(
         &self,
         contract_address: <Self::C as Config>::AccountId,
-    ) -> impl Future<Output = Result<impl Stream<Item = Result<ContractEmitted, Error>>, Self::Err>> + Send;
+    ) -> impl Future<
+        Output = Result<impl Stream<Item = Result<Self::ContractEmitted, Error>>, Self::Err>,
+    > + Send;
 
     fn write<Ev: Decode, Args: Encode + Sync + Send>(
         &self,
@@ -44,8 +47,8 @@ pub trait ContractClient {
         args: &Args,
     ) -> impl Future<Output = Result<Ev, Self::Err>> + Send;
 
-    fn decode_event<Ev: Decode>(&self, ev: &ContractEmitted) -> Result<Ev, Self::Err> {
-        let result = <Ev as Decode>::decode(&mut ev.data.as_slice())?;
+    fn decode_event<Ev: Decode>(&self, mut ev_data: &[u8]) -> Result<Ev, Self::Err> {
+        let result = <Ev as Decode>::decode(&mut ev_data)?;
         Ok(result)
     }
 }
@@ -76,11 +79,12 @@ where
 {
     type C = C;
     type Err = ContractClientError;
+    type ContractEmitted = ContractEmitted;
 
     async fn contract_event_sub(
         &self,
         contract_address: <Self::C as Config>::AccountId,
-    ) -> Result<impl Stream<Item = Result<ContractEmitted, Error>>, Self::Err> {
+    ) -> Result<impl Stream<Item = Result<Self::ContractEmitted, Error>>, Self::Err> {
         let client = self.online_client().await?;
         let addr: AccountId32 = contract_address.into();
 
@@ -523,5 +527,20 @@ impl From<sp_weights::Weight> for Weight {
             ref_time: value.ref_time(),
             proof_size: value.proof_size(),
         }
+    }
+}
+
+pub trait ContractEmittedT {
+    fn data_ref(&self) -> &[u8];
+    fn data(self) -> Vec<u8>;
+}
+
+impl ContractEmittedT for ContractEmitted {
+    fn data_ref(&self) -> &[u8] {
+        self.data.as_slice()
+    }
+
+    fn data(self) -> Vec<u8> {
+        self.data
     }
 }

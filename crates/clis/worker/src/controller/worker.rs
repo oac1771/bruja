@@ -11,16 +11,13 @@ use tokio::{
     time::{sleep, Duration},
 };
 use tracing::{error, info};
-use utils::{
-    chain::contracts::events::ContractEmitted,
-    services::{
-        contract_client::{ContractClient, ContractClientError},
-        job::{
-            job_runner::{WasmJobRunnerService, WasmJobRunnerServiceError},
-            JobT,
-        },
-        p2p::{NetworkClient, NetworkClientError},
+use utils::services::{
+    contract_client::{ContractClient, ContractClientError, ContractEmittedT},
+    job::{
+        job_runner::{WasmJobRunnerService, WasmJobRunnerServiceError},
+        JobT,
     },
+    p2p::{NetworkClient, NetworkClientError},
 };
 
 pub struct WorkerController<C: Config, CC, NC, JR> {
@@ -89,14 +86,14 @@ where
         Ok(())
     }
 
-    async fn handle_event(&self, ev: ContractEmitted) {
+    async fn handle_event(&self, ev: <CC as ContractClient>::ContractEmitted) {
         let res = if let Ok(job_request) = self
             .contract_client
-            .decode_event::<JobRequestSubmitted>(&ev)
+            .decode_event::<JobRequestSubmitted>(ev.data_ref())
         {
             self.handle_job_request(job_request).await
         } else {
-            Err(WorkerControllerError::DecodeContractEvent { data: ev.data })
+            Err(WorkerControllerError::DecodeContractEvent { data: ev.data() })
         };
 
         if let Err(e) = res {
