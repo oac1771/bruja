@@ -1,7 +1,6 @@
 use catalog::catalog::{HashId, JobRequest, JobRequestSubmitted};
 use clis::{Gossip, Request, Response};
 use codec::Encode;
-use libp2p::{request_response::InboundRequestId, PeerId};
 use subxt::{ext::futures::StreamExt, Config};
 use tokio::{select, signal::ctrl_c, task::JoinHandle};
 use tracing::{error, info};
@@ -11,7 +10,7 @@ use utils::services::{
         job_builder::{JobBuilderService, JobBuilderServiceError},
         JobT,
     },
-    p2p::{GossipMessage, NetworkClient, NetworkClientError},
+    p2p::{GossipMessageT, NetworkClient, NetworkClientError, NetworkIdT, RequestT, ResponseT},
 };
 
 pub struct RequesterController<C: Config, CC, JB, NC> {
@@ -76,7 +75,7 @@ where
             .wait_for_job_acceptance(&job_request)
             .await
             .ok_or_else(|| RequesterControllerError::JobNeverAccepted)?;
-        self.send_job(msg.peer_id(), job).await?;
+        self.send_job(msg.network_id(), job).await?;
         self.wait_for_job_acknowledgement(job_request.id()).await;
         let (req_id, results) = self
             .wait_for_job_results(job_request.id())
@@ -101,21 +100,25 @@ where
         Ok(())
     }
 
-    async fn wait_for_job_acceptance(&self, job_request: &JobRequest) -> Option<GossipMessage> {
+    async fn wait_for_job_acceptance(
+        &self,
+        job_request: &JobRequest,
+    ) -> Option<<NC as NetworkClient>::GossipMessage> {
         let gossip_stream = self.network_client.gossip_msg_stream().await;
         tokio::pin!(gossip_stream);
 
         while let Some(gsp_msg) = gossip_stream.next().await {
-            if let Ok(Gossip::JobAcceptance { job_id }) = Gossip::decode(gsp_msg.message()) {
+            let network_id = gsp_msg.network_id();
+            if let Ok(Gossip::JobAcceptance { job_id }) = Gossip::decode(gsp_msg.message_ref()) {
                 if job_id == job_request.id() {
-                    info!("Job acceptance received from peer: {}", gsp_msg.peer_id());
+                    info!("Job acceptance received from peer: {}", network_id);
                     return Some(gsp_msg);
                 }
             } else {
                 error!(
                     "Unable to decode gossip message from peer {}: {:?}",
-                    gsp_msg.peer_id(),
-                    gsp_msg.message()
+                    network_id,
+                    gsp_msg.message_ref()
                 );
             }
         }
@@ -125,17 +128,17 @@ where
 
     async fn send_job(
         &self,
-        peer_id: PeerId,
+        network_id: <NC as NetworkClient>::NetworkId,
         job: impl JobT,
     ) -> Result<(), RequesterControllerError> {
-        let who = self.network_client.get_local_peer_id().await?;
-        let req = Request::build_job_req(job.into_parts(), who);
+        let who = self.network_client.get_local_network_id().await?;
+        let req = Request::build_job_req(job.into_parts(), who.to_vec());
 
         self.network_client
-            .send_request(peer_id, req.encode())
+            .send_request(network_id, req.encode())
             .await?;
 
-        info!("Job sent to peer: {}", peer_id);
+        info!("Job sent to peer: {:?}", network_id.to_vec());
 
         Ok(())
     }
@@ -145,7 +148,7 @@ where
         tokio::pin!(resp_stream);
 
         while let Some(resp) = resp_stream.next().await {
-            if let Ok(Response::AcknowledgeJob { job_id }) = Response::decode(&resp.response().0) {
+            if let Ok(Response::AcknowledgeJob { job_id }) = Response::decode(resp.body_ref()) {
                 if job_id == id {
                     info!("Job has been accepted by a worker");
                     break;
@@ -156,14 +159,17 @@ where
         }
     }
 
-    async fn wait_for_job_results(&self, id: HashId) -> Option<(InboundRequestId, Vec<Vec<u8>>)> {
+    async fn wait_for_job_results(
+        &self,
+        id: HashId,
+    ) -> Option<(<NC as NetworkClient>::Id, Vec<Vec<u8>>)> {
         let req_stream = self.network_client.req_stream().await;
         tokio::pin!(req_stream);
-        while let Some((req_id, req)) = req_stream.next().await {
-            if let Ok(Request::Result { result, job_id }) = Request::decode(&req.0) {
+        while let Some(req) = req_stream.next().await {
+            if let Ok(Request::Result { result, job_id }) = Request::decode(req.body_ref()) {
                 if job_id == id {
                     info!("Received results");
-                    return Some((req_id, result));
+                    return Some((req.id(), result));
                 }
             } else {
                 error!("Unable to decode request");
@@ -175,7 +181,7 @@ where
 
     async fn send_result_acknowledgement(
         &self,
-        req_id: InboundRequestId,
+        req_id: <NC as NetworkClient>::Id,
         job_id: HashId,
     ) -> Result<(), RequesterControllerError> {
         let resp = Response::AcknowledgeResult { job_id };

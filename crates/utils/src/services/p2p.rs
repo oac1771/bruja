@@ -12,6 +12,7 @@ use libp2p::{
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{hash_map::DefaultHasher, HashMap},
+    fmt::{self, Debug, Display, Formatter},
     future::Future,
     hash::{Hash, Hasher},
     time::Duration,
@@ -29,7 +30,11 @@ use tracing::{error, info, info_span, Instrument};
 
 pub trait NetworkClient {
     type Err;
-    // make all return types associated types
+    type Id;
+    type NetworkId: NetworkIdT + Display;
+    type GossipMessage: GossipMessageT<NetworkId = Self::NetworkId>;
+    type Request: RequestT<Id = Self::Id>;
+    type Response: ResponseT<Id = Self::Id>;
 
     fn publish_message(
         &self,
@@ -39,36 +44,39 @@ pub trait NetworkClient {
 
     fn send_request(
         &self,
-        peer_id: PeerId,
+        network_id: Self::NetworkId,
         payload: Vec<u8>,
-    ) -> impl Future<Output = Result<OutboundRequestId, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Self::Id, Self::Err>> + Send;
 
     fn send_response(
         &self,
-        id: InboundRequestId,
+        id: Self::Id,
         payload: Vec<u8>,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     fn get_gossip_nodes(
         &self,
         topic: &str,
-    ) -> impl Future<Output = Result<Vec<PeerId>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<impl Iterator<Item = Self::NetworkId>, Self::Err>> + Send;
 
-    fn get_local_peer_id(&self) -> impl Future<Output = Result<PeerId, Self::Err>> + Send;
-
-    fn gossip_msg_stream(&self) -> impl Future<Output = impl Stream<Item = GossipMessage>> + Send;
-
-    fn req_stream(
+    fn get_local_network_id(
         &self,
-    ) -> impl Future<Output = impl Stream<Item = (InboundRequestId, P2pRequest)>> + Send;
+    ) -> impl Future<Output = Result<Self::NetworkId, Self::Err>> + Send;
 
-    fn resp_stream(&self) -> impl Future<Output = impl Stream<Item = InboundP2pResponse>> + Send;
+    fn gossip_msg_stream(
+        &self,
+    ) -> impl Future<Output = impl Stream<Item = Self::GossipMessage>> + Send;
+
+    fn req_stream(&self) -> impl Future<Output = impl Stream<Item = Self::Request>> + Send;
+
+    fn resp_stream(&self) -> impl Future<Output = impl Stream<Item = Self::Response>> + Send;
 }
 
 pub struct NodeBuilder;
 
 pub struct Node {
     swarm: Swarm<Behavior>,
+    pending_inbound_req: HashMap<u64, ResponseChannel<P2pResponse>>,
 }
 
 pub struct NodeClient {
@@ -76,7 +84,6 @@ pub struct NodeClient {
     inbound_req_rx: Mutex<Receiver<InboundP2pRequest>>,
     inbound_resp_rx: Mutex<Receiver<InboundP2pResponse>>,
     gossip_msg_rx: Mutex<Receiver<GossipMessage>>,
-    pending_inbound_req: Mutex<HashMap<InboundRequestId, ResponseChannel<P2pResponse>>>,
 }
 
 impl NodeBuilder {
@@ -131,7 +138,12 @@ impl NodeBuilder {
             })
             .build();
 
-        Ok(Node { swarm })
+        let pending_inbound_req: HashMap<u64, ResponseChannel<P2pResponse>> = HashMap::new();
+
+        Ok(Node {
+            swarm,
+            pending_inbound_req,
+        })
     }
 }
 
@@ -214,34 +226,44 @@ impl Node {
                     };
                 Self::send_client_response(result, sender);
             }
-            ClientRequestPayload::SendRequest { payload, peer_id } => {
+            ClientRequestPayload::SendRequest {
+                payload,
+                network_id,
+            } => {
                 let request_id = self
                     .swarm
                     .behaviour_mut()
                     .request_response
-                    .send_request(&peer_id, P2pRequest(payload));
+                    .send_request(&network_id.inner(), P2pRequest(payload));
+
                 let resp = ClientResponse::RequestId { request_id };
                 Self::send_client_response(Ok(resp), sender);
             }
-            ClientRequestPayload::SendResponse { payload, channel } => {
-                let result = if self
-                    .swarm
-                    .behaviour_mut()
-                    .request_response
-                    .send_response(channel, P2pResponse(payload))
-                    .is_ok()
-                {
-                    info!("Response successfully sent");
-                    Ok(ClientResponse::ResponseSent)
+            ClientRequestPayload::SendResponse { payload, id } => {
+                let result = if let Some(channel) = self.pending_inbound_req.remove(&id) {
+                    if self
+                        .swarm
+                        .behaviour_mut()
+                        .request_response
+                        .send_response(channel, P2pResponse(payload))
+                        .is_ok()
+                    {
+                        info!("Response successfully sent");
+                        Ok(ClientResponse::ResponseSent)
+                    } else {
+                        error!("Send Response Error");
+                        Err(Error::SendResponseError)
+                    }
                 } else {
-                    error!("Send Response Error");
-                    Err(Error::SendResponseError)
+                    Err(Error::ChannelNotFoundForGivenRequestId)
                 };
+
                 Self::send_client_response(result, sender);
             }
             ClientRequestPayload::GetLocalPeerId => {
                 let peer_id = self.swarm.local_peer_id();
-                let resp = ClientResponse::PeerId { peer_id: *peer_id };
+                let network_id = NetworkId::new(*peer_id);
+                let resp = ClientResponse::NetworkId { network_id };
                 Self::send_client_response(Ok(resp), sender);
             }
             ClientRequestPayload::GetGossipNodes { topic } => {
@@ -252,8 +274,8 @@ impl Node {
                     .gossipsub
                     .all_peers()
                     .filter(|(_, t)| t.contains(&&hash))
-                    .map(|(p, _)| *p)
-                    .collect::<Vec<PeerId>>();
+                    .map(|(p, _)| NetworkId::new(*p))
+                    .collect::<Vec<NetworkId>>();
 
                 let resp = ClientResponse::GossipNodes { gossip_nodes };
                 Self::send_client_response(Ok(resp), sender);
@@ -283,8 +305,9 @@ impl Node {
                 message,
                 ..
             })) => {
+                let network_id = NetworkId::new(peer_id);
                 let gsp_msg = GossipMessage {
-                    peer_id,
+                    network_id,
                     message: message.data,
                 };
                 match gossip_msg_tx.send(gsp_msg).await {
@@ -303,13 +326,11 @@ impl Node {
                     channel,
                 } => {
                     info!("Received request from peer: {}", peer);
-                    let req = InboundP2pRequest {
-                        request,
-                        channel,
-                        id,
-                    };
+                    let req = InboundP2pRequest { request, id };
+                    let req_id = req.id();
                     match inbound_req_tx.send(req).await {
                         Ok(_) => {
+                            self.pending_inbound_req.insert(req_id, channel);
                             info!("Inbound request relayed to client");
                         }
                         Err(err) => error!("Error relaying inbound request to client: {}", err),
@@ -374,6 +395,11 @@ impl Node {
 
 impl NetworkClient for NodeClient {
     type Err = NetworkClientError;
+    type Id = u64;
+    type NetworkId = NetworkId;
+    type GossipMessage = GossipMessage;
+    type Request = InboundP2pRequest;
+    type Response = InboundP2pResponse;
 
     async fn publish_message(&self, topic: &str, msg: Vec<u8>) -> Result<(), Self::Err> {
         let payload = ClientRequestPayload::Publish {
@@ -385,61 +411,65 @@ impl NetworkClient for NodeClient {
         Ok(())
     }
 
-    async fn get_local_peer_id(&self) -> Result<PeerId, Self::Err> {
+    async fn get_local_network_id(&self) -> Result<Self::NetworkId, Self::Err> {
         let payload = ClientRequestPayload::GetLocalPeerId;
 
-        if let ClientResponse::PeerId { peer_id } = self.send_client_request(payload).await? {
-            return Ok(peer_id);
+        if let ClientResponse::NetworkId { network_id } = self.send_client_request(payload).await? {
+            return Ok(network_id);
         }
         Err(Error::UnexpectedClientResponse.into())
     }
 
     async fn send_request(
         &self,
-        peer_id: PeerId,
+        network_id: Self::NetworkId,
         payload: Vec<u8>,
-    ) -> Result<OutboundRequestId, Self::Err> {
-        let payload = ClientRequestPayload::SendRequest { payload, peer_id };
+    ) -> Result<Self::Id, Self::Err> {
+        let payload = ClientRequestPayload::SendRequest {
+            payload,
+            network_id,
+        };
 
         if let ClientResponse::RequestId { request_id } = self.send_client_request(payload).await? {
-            return Ok(request_id);
+            let id = hash_id(request_id);
+
+            return Ok(id);
         }
         Err(Error::UnexpectedClientResponse.into())
     }
 
-    async fn send_response(&self, id: InboundRequestId, payload: Vec<u8>) -> Result<(), Self::Err> {
-        if let Some(channel) = self.pending_inbound_req.lock().await.remove(&id) {
-            let payload = ClientRequestPayload::SendResponse { payload, channel };
-            self.send_client_request(payload).await?;
-            return Ok(());
-        }
-        Err(Error::InboundRequestIdNotFound.into())
+    async fn send_response(&self, id: Self::Id, payload: Vec<u8>) -> Result<(), Self::Err> {
+        let payload = ClientRequestPayload::SendResponse { payload, id };
+        self.send_client_request(payload).await?;
+        return Ok(());
     }
 
-    async fn get_gossip_nodes(&self, topic: &str) -> Result<Vec<PeerId>, Self::Err> {
+    async fn get_gossip_nodes(
+        &self,
+        topic: &str,
+    ) -> Result<impl Iterator<Item = Self::NetworkId>, Self::Err> {
         let payload = ClientRequestPayload::GetGossipNodes {
             topic: topic.to_string(),
         };
         if let ClientResponse::GossipNodes { gossip_nodes } =
             self.send_client_request(payload).await?
         {
-            return Ok(gossip_nodes);
+            return Ok(gossip_nodes.into_iter());
         }
         Err(Error::UnexpectedClientResponse.into())
     }
 
-    async fn req_stream(&self) -> impl Stream<Item = (InboundRequestId, P2pRequest)> {
+    async fn req_stream(&self) -> impl Stream<Item = Self::Request> {
         let stream = stream! {
             while let Some(req) = self.inbound_req_rx.lock().await.recv().await {
-                self.pending_inbound_req.lock().await.insert(req.id, req.channel);
-                yield (req.id, req.request)
+                yield req
             }
         };
 
         stream
     }
 
-    async fn resp_stream(&self) -> impl Stream<Item = InboundP2pResponse> {
+    async fn resp_stream(&self) -> impl Stream<Item = Self::Response> {
         let stream = stream! {
             while let Some(resp) = self.inbound_resp_rx.lock().await.recv().await {
                 yield resp
@@ -449,9 +479,8 @@ impl NetworkClient for NodeClient {
         stream
     }
 
-    async fn gossip_msg_stream(&self) -> impl Stream<Item = GossipMessage> {
+    async fn gossip_msg_stream(&self) -> impl Stream<Item = Self::GossipMessage> {
         let stream = stream! {
-
             while let Some(msg) = self.gossip_msg_rx.lock().await.recv().await {
                 yield msg
             }
@@ -468,15 +497,11 @@ impl NodeClient {
         inbound_resp_rx: Mutex<Receiver<InboundP2pResponse>>,
         gossip_msg_rx: Mutex<Receiver<GossipMessage>>,
     ) -> Self {
-        let pending_inbound_req: Mutex<HashMap<InboundRequestId, ResponseChannel<P2pResponse>>> =
-            Mutex::new(HashMap::new());
-
         Self {
             req_tx,
             inbound_req_rx,
             inbound_resp_rx,
             gossip_msg_rx,
-            pending_inbound_req,
         }
     }
 
@@ -540,12 +565,12 @@ pub enum ClientRequestPayload {
         topic: String,
     },
     SendRequest {
-        peer_id: PeerId,
+        network_id: NetworkId,
         payload: Vec<u8>,
     },
     SendResponse {
-        channel: ResponseChannel<P2pResponse>,
         payload: Vec<u8>,
+        id: u64,
     },
     GetLocalPeerId,
     GetGossipNodes {
@@ -560,30 +585,112 @@ pub enum ClientResponse {
     PeerDialed,
     GossipMessages { msgs: Vec<GossipMessage> },
     RequestId { request_id: OutboundRequestId },
-    PeerId { peer_id: PeerId },
-    GossipNodes { gossip_nodes: Vec<PeerId> },
+    NetworkId { network_id: NetworkId },
+    GossipNodes { gossip_nodes: Vec<NetworkId> },
+}
+
+pub trait NetworkIdT: Copy {
+    fn to_vec(self) -> Vec<u8>;
+    fn from_bytes(v: &[u8]) -> Self;
+}
+
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
+pub struct NetworkId(PeerId);
+
+impl NetworkIdT for NetworkId {
+    fn to_vec(self) -> Vec<u8> {
+        self.0.to_bytes()
+    }
+
+    fn from_bytes(v: &[u8]) -> Self {
+        let peer_id = PeerId::from_bytes(v).unwrap();
+        Self(peer_id)
+    }
+}
+
+impl NetworkId {
+    fn new(peer_id: PeerId) -> Self {
+        Self(peer_id)
+    }
+
+    fn inner(self) -> PeerId {
+        self.0
+    }
+}
+
+impl Debug for NetworkId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("NetworkId")
+            .field(&self.0.to_base58())
+            .finish()
+    }
+}
+
+impl Display for NetworkId {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        Display::fmt(&self.0.to_base58(), f)
+    }
+}
+
+pub trait GossipMessageT {
+    type NetworkId: NetworkIdT;
+    fn message_ref(&self) -> &[u8];
+    fn network_id(&self) -> Self::NetworkId;
 }
 
 #[derive(Clone, Eq, PartialEq, Hash)]
 pub struct GossipMessage {
-    peer_id: PeerId,
+    network_id: NetworkId,
     message: Vec<u8>,
 }
 
-impl GossipMessage {
-    pub fn peer_id(&self) -> PeerId {
-        self.peer_id
+impl GossipMessageT for GossipMessage {
+    type NetworkId = NetworkId;
+
+    fn network_id(&self) -> Self::NetworkId {
+        self.network_id
     }
 
-    pub fn message(&self) -> &[u8] {
+    fn message_ref(&self) -> &[u8] {
         self.message.as_slice()
     }
 }
 
+pub trait RequestT {
+    type Id;
+
+    fn body_ref(&self) -> &[u8];
+    fn id(&self) -> Self::Id;
+}
+
 pub struct InboundP2pRequest {
     request: P2pRequest,
-    channel: ResponseChannel<P2pResponse>,
     id: InboundRequestId,
+}
+
+impl RequestT for InboundP2pRequest {
+    type Id = u64;
+
+    fn body_ref(&self) -> &[u8] {
+        self.request.0.as_slice()
+    }
+
+    fn id(&self) -> Self::Id {
+        hash_id(self.id)
+    }
+}
+
+fn hash_id(val: impl Hash) -> u64 {
+    let mut hasher = DefaultHasher::new();
+    val.hash(&mut hasher);
+    hasher.finish()
+}
+
+pub trait ResponseT {
+    type Id;
+
+    fn id(&self) -> Self::Id;
+    fn body_ref(&self) -> &[u8];
 }
 
 #[derive(Debug)]
@@ -592,13 +699,15 @@ pub struct InboundP2pResponse {
     id: OutboundRequestId,
 }
 
-impl InboundP2pResponse {
-    pub fn response(&self) -> &P2pResponse {
-        &self.response
+impl ResponseT for InboundP2pResponse {
+    type Id = u64;
+
+    fn body_ref(&self) -> &[u8] {
+        self.response.0.as_slice()
     }
 
-    pub fn id(&self) -> &OutboundRequestId {
-        &self.id
+    fn id(&self) -> Self::Id {
+        hash_id(self.id)
     }
 }
 
@@ -640,6 +749,12 @@ pub enum NetworkClientError {
         #[from]
         source: libp2p::tls::certificate::GenError,
     },
+
+    #[error("")]
+    PeerIdParse {
+        #[from]
+        source: libp2p::identity::ParseError,
+    },
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -676,6 +791,9 @@ pub enum Error {
 
     #[error("")]
     SendResponseError,
+
+    #[error("")]
+    ChannelNotFoundForGivenRequestId,
 
     #[error("")]
     DialPeerError { err: DialError },

@@ -1,7 +1,7 @@
 #[cfg(feature = "integration_tests")]
 mod tests {
     use integration_tests::utils::{Log, Runner};
-    use libp2p::{futures::StreamExt, PeerId};
+    use libp2p::futures::StreamExt;
     use rand::{
         distributions::Alphanumeric,
         {thread_rng, Rng},
@@ -13,7 +13,10 @@ mod tests {
         time::{sleep, Duration},
     };
     use tracing::instrument;
-    use utils::services::p2p::{Error, NetworkClient, NetworkClientError, NodeBuilder, NodeClient};
+    use utils::services::p2p::{
+        Error, GossipMessageT, NetworkClient, NetworkClientError, NodeBuilder, NodeClient,
+        RequestT, ResponseT,
+    };
 
     struct NodeRunner<'a> {
         log_buffer: Arc<Mutex<Vec<u8>>>,
@@ -47,11 +50,7 @@ mod tests {
     }
 
     async fn wait_for_gossip_nodes(client: &NodeClient, topic: &str) -> bool {
-        let mut gsp_nodes: Vec<PeerId> = Vec::new();
-
-        while gsp_nodes.is_empty() {
-            gsp_nodes = client.get_gossip_nodes(topic).await.unwrap()
-        }
+        while let None = client.get_gossip_nodes(topic).await.unwrap().next() {}
         true
     }
 
@@ -72,14 +71,14 @@ mod tests {
         client_1.subscribe(&topic).await.unwrap();
         client_2.subscribe(&topic).await.unwrap();
 
-        let peer_id_1 = client_1.get_local_peer_id().await.unwrap();
-        let peer_id_2 = client_2.get_local_peer_id().await.unwrap();
+        let network_id_1 = client_1.get_local_network_id().await.unwrap();
+        let network_id_2 = client_2.get_local_network_id().await.unwrap();
 
         node_1
-            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_2))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", network_id_2))
             .await;
         node_2
-            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_1))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", network_id_1))
             .await;
 
         node_1
@@ -89,11 +88,11 @@ mod tests {
             .assert_info_log_entry(&format!("A remote subscribed to a topic: {}", topic))
             .await;
 
-        let gossip_nodes_1 = client_1.get_gossip_nodes(&topic).await.unwrap();
-        let gossip_nodes_2 = client_2.get_gossip_nodes(&topic).await.unwrap();
+        let mut gossip_nodes_1 = client_1.get_gossip_nodes(&topic).await.unwrap();
+        let mut gossip_nodes_2 = client_2.get_gossip_nodes(&topic).await.unwrap();
 
-        assert_eq!(gossip_nodes_1[0], peer_id_2);
-        assert_eq!(gossip_nodes_2[0], peer_id_1);
+        assert_eq!(gossip_nodes_1.next(), Some(network_id_2));
+        assert_eq!(gossip_nodes_2.next(), Some(network_id_1));
     }
 
     #[test_macro::test]
@@ -111,17 +110,17 @@ mod tests {
         let (_, client_1) = node_1.start();
         let (_, client_2) = node_2.start();
 
-        let peer_id_1 = client_1.get_local_peer_id().await.unwrap();
-        let peer_id_2 = client_2.get_local_peer_id().await.unwrap();
+        let network_id_1 = client_1.get_local_network_id().await.unwrap();
+        let network_id_2 = client_2.get_local_network_id().await.unwrap();
 
         client_1.subscribe(&topic).await.unwrap();
         client_2.subscribe(&topic).await.unwrap();
 
         node_1
-            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_2))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", network_id_2))
             .await;
         node_2
-            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_1))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", network_id_1))
             .await;
 
         node_1
@@ -166,14 +165,14 @@ mod tests {
         client_1.subscribe(&topic).await.unwrap();
         client_2.subscribe(&topic).await.unwrap();
 
-        let peer_id_1 = client_1.get_local_peer_id().await.unwrap();
-        let peer_id_2 = client_2.get_local_peer_id().await.unwrap();
+        let network_id_1 = client_1.get_local_network_id().await.unwrap();
+        let network_id_2 = client_2.get_local_network_id().await.unwrap();
 
         node_1
-            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_2))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", network_id_2))
             .await;
         node_2
-            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id_1))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", network_id_1))
             .await;
 
         client_1
@@ -192,7 +191,7 @@ mod tests {
         tokio::pin!(gossip_stream);
 
         while let Some(msg) = gossip_stream.next().await {
-            assert_eq!(msg.message(), expected_msg);
+            assert_eq!(msg.message_ref(), &expected_msg);
             break;
         }
     }
@@ -235,18 +234,18 @@ mod tests {
         let (_, client_1) = node_1.start();
         let (_, client_2) = node_2.start();
 
-        let peer_id1 = client_1.get_local_peer_id().await.unwrap();
-        let peer_id2 = client_2.get_local_peer_id().await.unwrap();
+        let network_id_1 = client_1.get_local_network_id().await.unwrap();
+        let network_id_2 = client_2.get_local_network_id().await.unwrap();
 
         node_1
-            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", network_id_2))
             .await;
         node_2
-            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", network_id_1))
             .await;
 
         client_1
-            .send_request(peer_id2, vec![1, 2, 3])
+            .send_request(network_id_2, vec![1, 2, 3])
             .await
             .unwrap();
 
@@ -264,23 +263,23 @@ mod tests {
         let (_, client_1) = node_1.start();
         let (_, client_2) = node_2.start();
 
-        let peer_id1 = client_1.get_local_peer_id().await.unwrap();
-        let peer_id2 = client_2.get_local_peer_id().await.unwrap();
+        let network_id_1 = client_1.get_local_network_id().await.unwrap();
+        let network_id_2 = client_2.get_local_network_id().await.unwrap();
 
         node_1
-            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id2))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", network_id_2))
             .await;
         node_2
-            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", peer_id1))
+            .assert_info_log_entry(&format!("mDNS discovered a new peer: {}", network_id_1))
             .await;
 
         client_1
-            .send_request(peer_id2, expected_payload.clone())
+            .send_request(network_id_2, expected_payload.clone())
             .await
             .unwrap();
 
         node_2
-            .assert_info_log_entry(&format!("Received request from peer: {}", peer_id1))
+            .assert_info_log_entry(&format!("Received request from peer: {}", network_id_1))
             .await;
         node_2
             .assert_info_log_entry("Inbound request relayed to client")
@@ -290,12 +289,12 @@ mod tests {
         tokio::pin!(client_2_req_stream);
 
         select! {
-            Some((id, req)) = client_2_req_stream.next() => client_2.send_response(id, req.0).await.unwrap(),
+            Some(req) = client_2_req_stream.next() => client_2.send_response(req.id(), req.body_ref().to_vec()).await.unwrap(),
             _ = sleep(Duration::from_millis(500)) => {panic!("Timedout waiting for request")}
         }
 
         node_1
-            .assert_info_log_entry(&format!("Received response from peer: {}", peer_id2))
+            .assert_info_log_entry(&format!("Received response from peer: {}", network_id_2))
             .await;
         node_1
             .assert_info_log_entry("Inbound response relayed to client")
@@ -306,7 +305,7 @@ mod tests {
         tokio::pin!(resp_stream);
 
         select! {
-            Some(resp) = resp_stream.next() => {result_payload = resp.response().0.clone();},
+            Some(resp) = resp_stream.next() => {result_payload = resp.body_ref().to_vec();},
             _ = sleep(Duration::from_millis(500)) => {panic!("Timedout waiting for response")}
         }
 

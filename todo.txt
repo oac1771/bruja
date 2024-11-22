@@ -3,16 +3,18 @@ structs implementing triat with type Err use a error variant specific to structs
 struct methods not inside trait impl should be different error variant which are specific to implementation 
 
 remove unecessary contractclienterror variants
-remove unecessary network client/node error variants
+remove unecessary network network error variants
 add unknown error variants to catchall
 
-refactor network client to return associated type 
+refactor job builder to job handler so it can unpack results to desired result types
+
 refactor job runner to create task that has builder pattern to build up job and execute
     so it can be in its own task::spawn()
-refactor contract client so that it calls subxt client
+
+might not need async_stream -> try without
 
 figure out env logging and make p2p stuff debug to declutter output
-
+refactor contract client so that it calls subxt client
 create derive macro for mock stuff
 
 - requester

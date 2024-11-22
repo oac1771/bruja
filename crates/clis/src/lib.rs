@@ -1,6 +1,5 @@
 use catalog::catalog::HashId;
 use codec::{Decode, Encode};
-use libp2p::PeerId;
 
 #[derive(Encode, Decode)]
 pub enum Gossip {
@@ -42,12 +41,12 @@ impl Request {
 }
 
 impl Request {
-    pub fn build_job_req(value: (Vec<u8>, Vec<Vec<u8>>, Vec<u8>), who: PeerId) -> Self {
+    pub fn build_job_req(value: (Vec<u8>, Vec<Vec<u8>>, Vec<u8>), who: Vec<u8>) -> Self {
         Self::Job {
             code: value.0,
             params: value.1,
             func_name: value.2,
-            who: who.to_bytes(),
+            who,
         }
     }
 }
