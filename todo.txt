@@ -1,8 +1,3 @@
-pattern should be that traits define type Err
-structs implementing triat with type Err use a error variant specific to structs
-struct methods not inside trait impl should be different error variant which are specific to implementation 
-remove unecessary contractclienterror variants
-remove unecessary network network error variants
 add unknown error variants to catchall
 
 refactor job builder to job handler so it can unpack results to desired result types

@@ -37,15 +37,11 @@ impl WasmJobRunnerService for WasmJobRunner {
 }
 
 impl WasmJobRunner {
-    fn define_host_fn<T>(
-        &self,
-        module: &Module,
-        linker: &mut Linker<T>,
-    ) -> Result<(), WasmJobRunnerServiceError> {
+    fn define_host_fn<T>(&self, module: &Module, linker: &mut Linker<T>) -> Result<(), Error> {
         module.imports().try_for_each(|i| match i.ty() {
             ExternType::Func(func) => {
                 linker.func_new(i.module(), i.name(), func, |_, _, _| Ok(()))?;
-                Ok::<(), WasmJobRunnerServiceError>(())
+                Ok::<(), Error>(())
             }
             _ => Ok(()),
         })?;
@@ -57,17 +53,17 @@ impl WasmJobRunner {
         &self,
         job: &<WasmJobRunner as WasmJobRunnerService>::Job,
         module: &Module,
-    ) -> Result<FuncType, WasmJobRunnerServiceError> {
+    ) -> Result<FuncType, Error> {
         let name = job.func_name_string()?;
 
         let func = module
             .get_export(&name)
-            .ok_or_else(|| WasmJobRunnerServiceError::FunctionExportNotFound { func_name: name })?;
+            .ok_or_else(|| Error::FunctionExportNotFound { func_name: name })?;
 
         let res = if let ExternType::Func(f) = func {
             Ok(f)
         } else {
-            Err(WasmJobRunnerServiceError::FuncTypeNotFound)
+            Err(Error::FuncTypeNotFound)
         }?;
 
         Ok(res)
@@ -77,7 +73,7 @@ impl WasmJobRunner {
         &self,
         job: &<WasmJobRunner as WasmJobRunnerService>::Job,
         func: &FuncType,
-    ) -> Result<Vec<Val>, WasmJobRunnerServiceError> {
+    ) -> Result<Vec<Val>, Error> {
         let params = job
             .params_ref()
             .iter()
@@ -92,10 +88,10 @@ impl WasmJobRunner {
                 match decoded {
                     Some(Ok(val)) => Ok(val),
                     Some(Err(e)) => Err(e),
-                    None => Err(WasmJobRunnerServiceError::ParamTypeNotFound),
+                    None => Err(Error::ParamTypeNotFound),
                 }
             })
-            .collect::<Result<Vec<Val>, WasmJobRunnerServiceError>>()?;
+            .collect::<Result<Vec<Val>, Error>>()?;
 
         Ok(params)
     }
@@ -119,21 +115,18 @@ impl WasmJobRunner {
         job: &<WasmJobRunner as WasmJobRunnerService>::Job,
         params: &[Val],
         mut results: Vec<Val>,
-    ) -> Result<Vec<Val>, WasmJobRunnerServiceError> {
+    ) -> Result<Vec<Val>, Error> {
         let name = job.func_name_string().unwrap();
         instance
             .get_func(&mut store, &name)
-            .ok_or_else(|| WasmJobRunnerServiceError::FunctionExportNotFound { func_name: name })?
+            .ok_or_else(|| Error::FunctionExportNotFound { func_name: name })?
             .call(store, params, &mut results)
             .unwrap();
 
         Ok(results.clone())
     }
 
-    fn decode_param<P: Decode + Into<Val>>(
-        &self,
-        mut p: &[u8],
-    ) -> Result<Val, WasmJobRunnerServiceError> {
+    fn decode_param<P: Decode + Into<Val>>(&self, mut p: &[u8]) -> Result<Val, Error> {
         let param = <P as Decode>::decode(&mut p)?;
         let val: Val = param.into();
         Ok(val)
@@ -154,6 +147,12 @@ impl WasmJobRunner {
 #[derive(Debug, thiserror::Error)]
 pub enum WasmJobRunnerServiceError {
     #[error("{source}")]
+    WasmJobRunner {
+        #[from]
+        source: Error,
+    },
+
+    #[error("{source}")]
     WasmTime {
         #[from]
         source: wasmtime::Error,
@@ -161,12 +160,15 @@ pub enum WasmJobRunnerServiceError {
 
     #[error("")]
     WasmModule { err: String },
+}
 
-    #[error("")]
-    FuncTypeNotFound,
-
-    #[error("Export {func_name} not defined in job")]
-    FunctionExportNotFound { func_name: String },
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("{source}")]
+    WasmTime {
+        #[from]
+        source: wasmtime::Error,
+    },
 
     #[error("")]
     FromUtf8 {
@@ -179,6 +181,12 @@ pub enum WasmJobRunnerServiceError {
         #[from]
         source: codec::Error,
     },
+
+    #[error("")]
+    FuncTypeNotFound,
+
+    #[error("Export {func_name} not defined in job")]
+    FunctionExportNotFound { func_name: String },
 
     #[error("Param type not found")]
     ParamTypeNotFound,

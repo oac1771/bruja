@@ -234,7 +234,7 @@ pub enum WorkerControllerError {
     },
 
     #[error("{source}")]
-    JobRunner {
+    WasmJobRunner {
         #[from]
         source: WasmJobRunnerServiceError,
     },

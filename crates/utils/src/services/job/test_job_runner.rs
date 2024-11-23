@@ -1,5 +1,5 @@
 use super::{
-    job_runner::{WasmJobRunner, WasmJobRunnerServiceError},
+    job_runner::{Error, WasmJobRunner},
     Encode, Job,
 };
 use crate::services::job::wat::*;
@@ -32,7 +32,7 @@ fn get_func_type_returns_error_if_not_found() {
 
     let err = runner.get_func_type(&job, &module).err().unwrap();
 
-    if let WasmJobRunnerServiceError::FunctionExportNotFound { func_name } = err {
+    if let Error::FunctionExportNotFound { func_name } = err {
         assert_eq!(func_name, function_name);
     } else {
         panic!("Returned unexpected error")
@@ -75,7 +75,7 @@ fn build_params_errors_if_cannot_parse_param() {
     let func = runner.get_func_type(&job, &module).unwrap();
     let err = runner.build_params(&job, &func).err().unwrap();
 
-    if let WasmJobRunnerServiceError::Codec { source: _ } = err {
+    if let Error::Codec { source: _ } = err {
         assert!(true)
     } else {
         panic!("Unexpected error returned")
