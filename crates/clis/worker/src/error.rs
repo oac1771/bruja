@@ -6,6 +6,12 @@ pub enum Error {
         source: utils::services::contract_client::ContractClientError,
     },
 
+    #[error("{source}")]
+    Client {
+        #[from]
+        source: utils::services::contract_client::Error,
+    },
+
     #[error("")]
     NetworkClient {
         #[from]

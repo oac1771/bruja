@@ -21,7 +21,6 @@ use subxt::{
     backend::{legacy::LegacyRpcMethods, rpc::RpcClient},
     blocks::{Block, ExtrinsicDetails, ExtrinsicEvents},
     config::{Config, DefaultExtrinsicParams, ExtrinsicParams},
-    error::Error,
     ext::{scale_decode::IntoVisitor, scale_encode::EncodeAsType},
     tx::{Payload, Signer, TxPayload},
     utils::{AccountId32, MultiAddress},
@@ -37,7 +36,7 @@ pub trait ContractClient {
         &self,
         contract_address: <Self::C as Config>::AccountId,
     ) -> impl Future<
-        Output = Result<impl Stream<Item = Result<Self::ContractEmitted, Error>>, Self::Err>,
+        Output = Result<impl Stream<Item = Result<Self::ContractEmitted, subxt::Error>>, Self::Err>,
     > + Send;
 
     fn write<Ev: Decode, Args: Encode + Sync + Send>(
@@ -84,7 +83,7 @@ where
     async fn contract_event_sub(
         &self,
         contract_address: <Self::C as Config>::AccountId,
-    ) -> Result<impl Stream<Item = Result<Self::ContractEmitted, Error>>, Self::Err> {
+    ) -> Result<impl Stream<Item = Result<Self::ContractEmitted, subxt::Error>>, Self::Err> {
         let client = self.online_client().await?;
         let addr: AccountId32 = contract_address.into();
 
@@ -108,7 +107,7 @@ where
             .try_filter_map(|ev: ExtrinsicEvents<C>| async move {
                 let event_stream = iter(
                     ev.find::<ContractEmitted>()
-                        .collect::<Vec<Result<ContractEmitted, Error>>>(),
+                        .collect::<Vec<Result<ContractEmitted, subxt::Error>>>(),
                 );
                 Ok(Some(event_stream))
             })
@@ -150,7 +149,7 @@ where
 
         let contract_emitted = events
             .find_first::<ContractEmitted>()?
-            .ok_or_else(|| ContractClientError::EventNotFound)?;
+            .ok_or_else(|| Error::EventNotFound)?;
 
         let result = <Ev as Decode>::decode(&mut contract_emitted.data.as_slice())?;
 
@@ -167,7 +166,7 @@ where
         From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default,
     E::Balance: Default + EncodeAsType + Serialize + From<u128>,
 {
-    pub async fn new(artifact_file: &'a str, signer: &'a S) -> Result<Self, ContractClientError> {
+    pub async fn new(artifact_file: &'a str, signer: &'a S) -> Result<Self, Error> {
         let file = File::open(artifact_file)?;
         let reader = BufReader::new(file);
         let ink_project: InkProject = serde_json::from_reader(reader)?;
@@ -183,7 +182,7 @@ where
         })
     }
 
-    pub async fn instantiate(&self, constructor: &str) -> Result<AccountId32, ContractClientError> {
+    pub async fn instantiate(&self, constructor: &str) -> Result<AccountId32, Error> {
         let salt = rand::random::<[u8; 8]>().to_vec();
         let code = self.ink_project.code()?;
 
@@ -210,7 +209,7 @@ where
 
         let instantiated = events
             .find_first::<Instantiated>()?
-            .ok_or_else(|| ContractClientError::EventNotFound)?;
+            .ok_or_else(|| Error::EventNotFound)?;
 
         Ok(instantiated.contract)
     }
@@ -220,7 +219,7 @@ where
         address: <C as Config>::AccountId,
         message: &str,
         args: Args,
-    ) -> Result<D, ContractClientError> {
+    ) -> Result<D, Error> {
         let exec_return = self.call(address, message, &args).await?.result?;
 
         let result = <MessageResult<D>>::decode(&mut exec_return.data.as_slice())??;
@@ -233,7 +232,7 @@ where
         contract_address: C::AccountId,
         field_name: &str,
         key: &[u8],
-    ) -> Result<D, ContractClientError> {
+    ) -> Result<D, Error> {
         let field = self.ink_project.get_storage_field(field_name)?;
         let mut field_key = field.get_storage_key()?;
 
@@ -248,7 +247,7 @@ where
                 None,
             )
             .await??
-            .ok_or_else(|| ContractClientError::StorageEntryIsEmpty)?;
+            .ok_or_else(|| Error::StorageEntryIsEmpty)?;
 
         let data = D::decode(&mut raw_bytes.as_slice())?;
 
@@ -268,7 +267,7 @@ where
         code: Vec<u8>,
         data: Vec<u8>,
         salt: Vec<u8>,
-    ) -> Result<Weight, ContractClientError> {
+    ) -> Result<Weight, Error> {
         let instantiate_call_data: Instantiate<C::AccountId, E::Balance, C::Hash> =
             Instantiate::new(origin, value, code, data.clone(), salt);
 
@@ -290,7 +289,7 @@ where
         address: <C as Config>::AccountId,
         message: &str,
         args: &Args,
-    ) -> Result<ContractExecResult<E::Balance, ()>, ContractClientError> {
+    ) -> Result<ContractExecResult<E::Balance, ()>, Error> {
         let message = self.ink_project.get_message(message)?;
 
         let mut input_data = message.get_selector()?;
@@ -323,7 +322,7 @@ where
         function: &str,
         call_parameters: Option<&[u8]>,
         at: Option<C::Hash>,
-    ) -> Result<R, ContractClientError> {
+    ) -> Result<R, Error> {
         let rpc_client: LegacyRpcMethods<C> = LegacyRpcMethods::new(self.rpc_client.clone());
         let response = rpc_client.state_call(function, call_parameters, at).await?;
 
@@ -335,7 +334,7 @@ where
     async fn submit_extrinsic<Tx>(
         &self,
         tx_payload: Payload<Tx>,
-    ) -> Result<ExtrinsicEvents<C>, ContractClientError>
+    ) -> Result<ExtrinsicEvents<C>, Error>
     where
         Payload<Tx>: TxPayload,
     {
@@ -359,6 +358,12 @@ where
 #[derive(Debug, thiserror::Error)]
 pub enum ContractClientError {
     #[error("{source}")]
+    NetworkError {
+        #[from]
+        source: Error,
+    },
+
+    #[error("{source}")]
     Decode {
         #[from]
         source: codec::Error,
@@ -371,15 +376,30 @@ pub enum ContractClientError {
     },
 
     #[error("{source}")]
+    InkProject {
+        #[from]
+        source: InkProjectError,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("{source}")]
+    SerdeJson {
+        #[from]
+        source: serde_json::Error,
+    },
+
+    #[error("{source}")]
     StdIo {
         #[from]
         source: std::io::Error,
     },
 
     #[error("{source}")]
-    SerdeJson {
+    Subxt {
         #[from]
-        source: serde_json::Error,
+        source: subxt::Error,
     },
 
     #[error("{source}")]
@@ -388,38 +408,29 @@ pub enum ContractClientError {
         source: InkProjectError,
     },
 
+    #[error("{source}")]
+    Decode {
+        #[from]
+        source: codec::Error,
+    },
+
+    #[error("Codec Decode Error: {message}")]
+    InkMessage { message: String },
+
     #[error("Sp runtime dispatch error {error}")]
     SpRuntime { error: String },
 
     #[error("Contract access Error {error}")]
     ContractAccess { error: String },
 
-    #[error("Contract Dispatch Error: {error}")]
-    ContractDispatch { error: String },
-
-    #[error("Message Not Found: {message}")]
-    MessageNotFound { message: String },
-
-    #[error("Unexpected Message Mutability State: {message}")]
-    MessageMutability { message: String },
-
-    #[error("Codec Decode Error: {message}")]
-    InkMessage { message: String },
-
-    #[error("CallExec Error: {error}")]
-    CallExec { error: String },
-
-    #[error("ContractEmitted event not found")]
-    ContractEmitted,
-
-    #[error("Event not found")]
+    #[error("")]
     EventNotFound,
 
     #[error("No data found at provided storage key")]
     StorageEntryIsEmpty,
 }
 
-impl From<LangError> for ContractClientError {
+impl From<LangError> for Error {
     fn from(_value: LangError) -> Self {
         Self::InkMessage {
             message: "Failed to read execution input for the dispatchable.".to_string(),
@@ -427,7 +438,7 @@ impl From<LangError> for ContractClientError {
     }
 }
 
-impl From<sp_runtime::DispatchError> for ContractClientError {
+impl From<sp_runtime::DispatchError> for Error {
     fn from(value: sp_runtime::DispatchError) -> Self {
         let error = match value {
             sp_runtime::DispatchError::Other(err) => err.to_string(),
@@ -450,7 +461,7 @@ impl From<sp_runtime::DispatchError> for ContractClientError {
     }
 }
 
-impl From<ContractAccessError> for ContractClientError {
+impl From<ContractAccessError> for Error {
     fn from(value: ContractAccessError) -> Self {
         let error = match value {
             ContractAccessError::DoesntExist => {

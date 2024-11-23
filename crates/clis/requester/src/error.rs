@@ -7,6 +7,12 @@ pub enum Error {
     },
 
     #[error("{source}")]
+    Client {
+        #[from]
+        source: utils::services::contract_client::Error,
+    },
+
+    #[error("{source}")]
     RequesterController {
         #[from]
         source: crate::controller::requester::RequesterControllerError,

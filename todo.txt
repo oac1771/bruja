@@ -1,7 +1,6 @@
 pattern should be that traits define type Err
 structs implementing triat with type Err use a error variant specific to structs
 struct methods not inside trait impl should be different error variant which are specific to implementation 
-
 remove unecessary contractclienterror variants
 remove unecessary network network error variants
 add unknown error variants to catchall
@@ -12,6 +11,7 @@ refactor job runner to create task that has builder pattern to build up job and 
     so it can be in its own task::spawn()
 
 might not need async_stream -> try without
+    - use recvstream tokio struct
 
 figure out env logging and make p2p stuff debug to declutter output
 refactor contract client so that it calls subxt client
