@@ -42,11 +42,11 @@ impl<'a> JobBuilder<'a> {
         code_path: &'a str,
         parameters: Option<String>,
         function_name: &str,
-    ) -> Result<Self, JobBuilderServiceError> {
+    ) -> Result<Self, Error> {
         let path = Path::new(code_path);
 
         if !path.exists() {
-            return Err(JobBuilderServiceError::CodeFileNotFound);
+            return Err(Error::CodeFileNotFound);
         }
 
         let params = RawParams::new(parameters);
@@ -58,21 +58,17 @@ impl<'a> JobBuilder<'a> {
         })
     }
 
-    pub(crate) fn parse_params(
-        &self,
-        module: &Module,
-    ) -> Result<Vec<Vec<u8>>, JobBuilderServiceError> {
+    pub(crate) fn parse_params(&self, module: &Module) -> Result<Vec<Vec<u8>>, Error> {
         let extern_type = module.get_export(&self.function_name).ok_or_else(|| {
-            JobBuilderServiceError::FunctionExportNotFound {
+            Error::FunctionExportNotFound {
                 func_name: self.function_name.clone(),
             }
         })?;
-        let func =
-            extern_type
-                .func()
-                .ok_or_else(|| JobBuilderServiceError::FunctionNameNotFound {
-                    func_name: self.function_name.clone(),
-                })?;
+        let func = extern_type
+            .func()
+            .ok_or_else(|| Error::FunctionNameNotFound {
+                func_name: self.function_name.clone(),
+            })?;
 
         let p = self
             .params
@@ -89,18 +85,18 @@ impl<'a> JobBuilder<'a> {
                 match parsed {
                     Some(Ok(val)) => Ok(val),
                     Some(Err(e)) => Err(e),
-                    None => Err(JobBuilderServiceError::ParamTypeNotFound),
+                    None => Err(Error::ParamTypeNotFound),
                 }
             })
-            .collect::<Result<Vec<Vec<u8>>, JobBuilderServiceError>>()?;
+            .collect::<Result<Vec<Vec<u8>>, Error>>()?;
 
         Ok(p)
     }
 
-    fn parse<T: FromStr + Encode>(&self, t: &str) -> Result<Vec<u8>, JobBuilderServiceError> {
+    fn parse<T: FromStr + Encode>(&self, t: &str) -> Result<Vec<u8>, Error> {
         match t.parse::<T>() {
             Ok(val) => Ok(val.encode()),
-            Err(_) => Err(JobBuilderServiceError::ParseParam {
+            Err(_) => Err(Error::ParseParam {
                 err: format!("Unable to parse param '{}' into {}", t, type_name::<T>()),
             }),
         }
@@ -128,6 +124,11 @@ impl RawParams {
 #[derive(Debug, thiserror::Error)]
 pub enum JobBuilderServiceError {
     #[error("{source}")]
+    JobBuilder {
+        #[from]
+        source: Error,
+    },
+    #[error("{source}")]
     StdIo {
         #[from]
         source: std::io::Error,
@@ -140,10 +141,13 @@ pub enum JobBuilderServiceError {
     },
 
     #[error("")]
-    CodeFileNotFound,
-
-    #[error("")]
     WasmModule { err: String },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("")]
+    CodeFileNotFound,
 
     #[error("Function {func_name} not defined in job")]
     FunctionNameNotFound { func_name: String },

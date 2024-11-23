@@ -1,5 +1,5 @@
 use super::{
-    job_builder::{JobBuilder, JobBuilderServiceError, RawParams},
+    job_builder::{Error, JobBuilder, RawParams},
     Encode,
 };
 use crate::services::job::wat::*;
@@ -51,7 +51,7 @@ fn returns_error_if_unable_to_parse_into_type() {
 
     let err = job_builder.parse_params(&module).err().unwrap();
 
-    if let JobBuilderServiceError::ParseParam { err } = err {
+    if let Error::ParseParam { err } = err {
         assert_eq!(err, format!("Unable to parse param '{}' into i32", val));
     } else {
         panic!("Returned unexpected error")
