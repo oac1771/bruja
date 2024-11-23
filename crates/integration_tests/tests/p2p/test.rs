@@ -213,7 +213,7 @@ mod tests {
         client_1.subscribe(&topic).await.unwrap();
 
         if let Err(NetworkClientError::Network {
-            source: NetworkError::PublishError { source },
+            source: NetworkError::Publish { source },
         }) = client_1.publish_message(&topic, msg).await
         {
             if let libp2p::gossipsub::PublishError::InsufficientPeers = source {

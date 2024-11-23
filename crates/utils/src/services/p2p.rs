@@ -6,7 +6,7 @@ use libp2p::{
         self, InboundRequestId, Message as RequestResponseMessage, OutboundRequestId,
         ProtocolSupport, ResponseChannel,
     },
-    swarm::{DialError, NetworkBehaviour, SwarmEvent},
+    swarm::{NetworkBehaviour, SwarmEvent},
     PeerId, StreamProtocol, Swarm,
 };
 use serde::{Deserialize, Serialize};
@@ -736,42 +736,36 @@ pub enum NetworkClientError {
 #[derive(Debug, thiserror::Error)]
 pub enum NetworkError {
     #[error("{source}")]
-    Infallible {
-        #[from]
-        source: std::convert::Infallible,
-    },
-
-    #[error("{source}")]
     Rcgen {
         #[from]
         source: libp2p::tls::certificate::GenError,
     },
 
     #[error("{source}")]
-    TransportError {
+    Transport {
         #[from]
         source: libp2p::TransportError<std::io::Error>,
     },
 
     #[error("{source}")]
-    MultiAddrError {
+    MultiAddr {
         #[from]
         source: libp2p::multiaddr::Error,
     },
 
     #[error("{source}")]
-    SubscriptionError {
+    Subscription {
         #[from]
         source: libp2p::gossipsub::SubscriptionError,
     },
 
     #[error("{source}")]
-    PublishError {
+    Publish {
         #[from]
         source: libp2p::gossipsub::PublishError,
     },
 
-    #[error("")]
+    #[error("Unable to receive response from node")]
     NodeResponse {
         #[from]
         source: oneshot::error::RecvError,
@@ -792,15 +786,6 @@ pub enum NetworkError {
     #[error("")]
     ChannelNotFoundForGivenRequestId,
 
-    #[error("")]
-    DialPeerError { err: DialError },
-
-    #[error("")]
-    InboundRequestIdNotFound,
-
     #[error("{err}")]
     SendClientRequest { err: String },
-
-    #[error("{err}")]
-    Other { err: String },
 }
