@@ -9,7 +9,7 @@ mod tests {
     };
     use subxt::{
         config::Config,
-        error::{Error, RpcError},
+        error::{Error as SubxtError, RpcError},
         tx::TxClient,
         utils::{AccountId32, MultiAddress},
         OnlineClient, SubstrateConfig,
@@ -18,7 +18,7 @@ mod tests {
     use tokio::time::{error::Elapsed, sleep, timeout, Duration, Instant};
     use utils::{
         chain,
-        services::contract_client::{Client, ContractClientError},
+        services::contract_client::{Client, Error},
     };
     use worker::{commands::start::StartCmd, config::Config as ConfigW};
 
@@ -107,8 +107,8 @@ mod tests {
                 Ok(addr) => {
                     break addr;
                 }
-                Err(ContractClientError::Subxt {
-                    source: Error::Rpc(RpcError::ClientError(client_err)),
+                Err(Error::Subxt {
+                    source: SubxtError::Rpc(RpcError::ClientError(client_err)),
                 }) => {
                     if client_err.to_string().contains("Priority is too low:") {
                         wait_for_account_nonce(&tx_client, &signer.public_key().to_account_id())
@@ -139,8 +139,8 @@ mod tests {
                 .await
                 {
                     Ok(client) => break client,
-                    Err(ContractClientError::Subxt {
-                        source: Error::Rpc(RpcError::ClientError(_)),
+                    Err(Error::Subxt {
+                        source: SubxtError::Rpc(RpcError::ClientError(_)),
                     }) => {
                         if let None = Instant::now().checked_duration_since(start_time).and_then(
                             |elapsed_time| {
@@ -181,7 +181,7 @@ mod tests {
                     tx_progress.wait_for_finalized_success().await.unwrap();
                     break;
                 }
-                Err(Error::Rpc(RpcError::ClientError(client_err))) => {
+                Err(SubxtError::Rpc(RpcError::ClientError(client_err))) => {
                     if client_err.to_string().contains("Priority is too low:") {
                         wait_for_account_nonce(
                             &chain_client.tx(),

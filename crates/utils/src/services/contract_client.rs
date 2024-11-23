@@ -100,16 +100,12 @@ where
             .try_flatten()
             .try_filter_map(|ext: ExtrinsicDetails<C, OnlineClient<C>>| async move {
                 match ext.events().await {
-                    Ok(ev) => Ok(Some(ev)),
+                    Ok(ev) => Ok(Some(iter(
+                        ev.find::<ContractEmitted>()
+                            .collect::<Vec<Result<ContractEmitted, subxt::Error>>>(),
+                    ))),
                     Err(err) => Err(err),
                 }
-            })
-            .try_filter_map(|ev: ExtrinsicEvents<C>| async move {
-                let event_stream = iter(
-                    ev.find::<ContractEmitted>()
-                        .collect::<Vec<Result<ContractEmitted, subxt::Error>>>(),
-                );
-                Ok(Some(event_stream))
             })
             .try_flatten()
             .try_filter_map({
