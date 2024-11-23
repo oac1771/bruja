@@ -4,9 +4,7 @@ use codec::Encode;
 use std::fmt::Display;
 use subxt::{ext::futures::StreamExt, Config};
 use tokio::{
-    pin, select,
-    signal::ctrl_c,
-    task::JoinHandle,
+    pin,
     time::{sleep, Duration},
 };
 use tracing::{error, info};
@@ -51,24 +49,9 @@ where
         }
     }
 
-    pub async fn start(&self, node_handle: JoinHandle<Result<(), <NC as NetworkClient>::Err>>) {
+    pub async fn listen(&self) -> Result<(), WorkerControllerError> {
         info!("Starting Worker Controller");
 
-        select! {
-            _ = node_handle => {},
-            result = self.listen() => {
-                match result {
-                    Err(err) => error!("Error: {}", err),
-                    Ok(()) => info!("Shutting down...")
-                };
-            }
-            _ = ctrl_c() => {
-                info!("Shutting down...")
-            }
-        };
-    }
-
-    async fn listen(&self) -> Result<(), WorkerControllerError> {
         let ev_stream = self
             .contract_client
             .contract_event_sub(self.contract_address.clone())

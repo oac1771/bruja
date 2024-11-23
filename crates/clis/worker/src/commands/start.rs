@@ -4,12 +4,12 @@ use ink_env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
-use tokio::task::JoinHandle;
-use tracing::instrument;
+use tokio::{select, signal::ctrl_c, task::JoinHandle};
+use tracing::{error, info, instrument};
 use utils::services::{
     contract_client::Client,
     job::job_runner::WasmJobRunner,
-    p2p::{NetworkClientError, NodeBuilder, NodeClient},
+    p2p::{NetworkError, NodeBuilder, NodeClient},
 };
 
 #[derive(Debug, Parser)]
@@ -33,14 +33,19 @@ impl StartCmd {
 
         let job_runner = WasmJobRunner;
 
-        let worker_controller = WorkerController::new(
+        let worker_controller: WorkerController<
+            SubstrateConfig,
+            Client<'_, SubstrateConfig, DefaultEnvironment, Keypair>,
+            NodeClient,
+            WasmJobRunner,
+        > = WorkerController::new(
             contract_client,
             contract_address,
             network_client,
             job_runner,
         );
 
-        worker_controller.start(handle).await;
+        self.start(worker_controller, handle).await?;
 
         Ok(())
     }
@@ -48,11 +53,52 @@ impl StartCmd {
     async fn join_network(
         &self,
         address: String,
-    ) -> Result<(JoinHandle<Result<(), NetworkClientError>>, NodeClient), NetworkClientError> {
+    ) -> Result<(JoinHandle<Result<(), NetworkError>>, NodeClient), NetworkError> {
         let node = NodeBuilder::build()?;
         let (handle, network_client) = node.start()?;
         network_client.subscribe(&address).await?;
 
         Ok((handle, network_client))
+    }
+
+    async fn start(
+        &self,
+        controller: WorkerController<
+            SubstrateConfig,
+            Client<'_, SubstrateConfig, DefaultEnvironment, Keypair>,
+            NodeClient,
+            WasmJobRunner,
+        >,
+        handle: JoinHandle<Result<(), NetworkError>>,
+    ) -> Result<(), Error> {
+        select! {
+            handle_result = handle => {
+                let result = match handle_result {
+                    Ok(_) => {
+                        error!("Network handler stopped unexpectedly");
+                        Err(Error::NetworkHandlerStopped)
+                    },
+                    Err(err) => {
+                        error!("Network handler stopped and returned err: {}", err);
+                        Err(Error::from(err))
+                    }
+                };
+                result
+            },
+            controller_result = controller.listen() => {
+                let result = match controller_result {
+                    Ok(_) => Err(Error::WorkerStoppedUnexpectedly),
+                    Err(err) => Err(Error::from(err))
+                };
+                result
+
+            },
+            _ = ctrl_c() => {
+                info!("Shutting down...");
+                Ok(())
+            }
+        }?;
+
+        Ok(())
     }
 }

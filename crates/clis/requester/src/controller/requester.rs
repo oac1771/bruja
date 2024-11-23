@@ -2,7 +2,6 @@ use catalog::catalog::{HashId, JobRequest, JobRequestSubmitted};
 use clis::{Gossip, Request, Response};
 use codec::Encode;
 use subxt::{ext::futures::StreamExt, Config};
-use tokio::{select, signal::ctrl_c, task::JoinHandle};
 use tracing::{error, info};
 use utils::services::{
     contract_client::{ContractClient, ContractClientError},
@@ -44,29 +43,7 @@ where
         }
     }
 
-    pub async fn start(
-        &self,
-        handle: JoinHandle<Result<(), <NC as NetworkClient>::Err>>,
-    ) -> Result<(), RequesterControllerError> {
-        select! {
-            _ = handle => {},
-            result = self.run() => {
-                match result {
-                    Err(err) => error!("Encountered error: {}", err),
-                    Ok(result) => {
-                        info!("Received results!\n{:?}", result)
-                    }
-                };
-            },
-            _ = ctrl_c() => {
-                info!("Shutting down...")
-            }
-        };
-
-        Ok(())
-    }
-
-    async fn run(&self) -> Result<Vec<Vec<u8>>, RequesterControllerError> {
+    pub async fn run(&self) -> Result<Vec<Vec<u8>>, RequesterControllerError> {
         let job = self.job_builder_service.build_job().await?;
         let job_request = JobRequest::new(job.code_ref(), job.params_ref());
 

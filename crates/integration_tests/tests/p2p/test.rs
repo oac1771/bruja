@@ -14,7 +14,7 @@ mod tests {
     };
     use tracing::instrument;
     use utils::services::p2p::{
-        Error, GossipMessageT, NetworkClient, NetworkClientError, NodeBuilder, NodeClient,
+        GossipMessageT, NetworkClient, NetworkClientError, NetworkError, NodeBuilder, NodeClient,
         RequestT, ResponseT,
     };
 
@@ -29,7 +29,7 @@ mod tests {
         }
 
         #[instrument(skip(self), fields(label = %self.name))]
-        fn start(&self) -> (JoinHandle<Result<(), NetworkClientError>>, NodeClient) {
+        fn start(&self) -> (JoinHandle<Result<(), NetworkError>>, NodeClient) {
             let node = NodeBuilder::build().unwrap();
             let (handle, node_client) = node.start().unwrap();
 
@@ -212,8 +212,8 @@ mod tests {
         let (_, client_1) = node_1.start();
         client_1.subscribe(&topic).await.unwrap();
 
-        if let Err(NetworkClientError::NetworkError {
-            source: Error::PublishError { source },
+        if let Err(NetworkClientError::Network {
+            source: NetworkError::PublishError { source },
         }) = client_1.publish_message(&topic, msg).await
         {
             if let libp2p::gossipsub::PublishError::InsufficientPeers = source {

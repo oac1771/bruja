@@ -4,12 +4,12 @@ use ink_env::DefaultEnvironment;
 use std::str::FromStr;
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
-use tokio::task::JoinHandle;
-use tracing::instrument;
+use tokio::{select, signal::ctrl_c, task::JoinHandle};
+use tracing::{error, info, instrument};
 use utils::services::{
     contract_client::Client,
     job::job_builder::JobBuilder,
-    p2p::{NetworkClientError, NodeBuilder, NodeClient},
+    p2p::{NetworkError, NodeBuilder, NodeClient},
 };
 
 #[derive(Debug, Parser)]
@@ -56,7 +56,7 @@ impl SubmitJobCmd {
             network_client,
         );
 
-        submit_job_controller.start(handle).await?;
+        self.start(submit_job_controller, handle).await?;
 
         Ok(())
     }
@@ -64,11 +64,57 @@ impl SubmitJobCmd {
     async fn join_network(
         &self,
         address: String,
-    ) -> Result<(JoinHandle<Result<(), NetworkClientError>>, NodeClient), NetworkClientError> {
+    ) -> Result<(JoinHandle<Result<(), NetworkError>>, NodeClient), NetworkError> {
         let node = NodeBuilder::build()?;
         let (handle, network_client) = node.start()?;
         network_client.subscribe(&address).await?;
 
         Ok((handle, network_client))
+    }
+
+    async fn start(
+        &self,
+        controller: RequesterController<
+            SubstrateConfig,
+            Client<'_, SubstrateConfig, DefaultEnvironment, Keypair>,
+            JobBuilder<'_>,
+            NodeClient,
+        >,
+        handle: JoinHandle<Result<(), NetworkError>>,
+    ) -> Result<(), Error> {
+        select! {
+            handle_result = handle => {
+                let result = match handle_result {
+                    Ok(_) => {
+                        error!("Network handler stopped unexpectedly");
+                        Err(Error::NetworkHandlerStopped)
+                    },
+                    Err(err) => {
+                        error!("Network handler stopped and returned err: {}", err);
+                        Err(Error::from(err))
+                    }
+                };
+                result
+            },
+            controller_result = controller.run() => {
+                let result = match controller_result {
+                    Ok(result) => {
+                        info!("Received results!\n{:?}", result);
+                        Ok(result)
+                    },
+                    Err(err) => {
+                        error!("Encountered error while submitting job: {}", err);
+                        Err(Error::from(err))
+                    }
+                };
+                result
+            },
+            _ = ctrl_c() => {
+                info!("Shutting down...");
+                Ok(vec![])
+            }
+        }?;
+
+        Ok(())
     }
 }

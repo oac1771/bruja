@@ -87,7 +87,7 @@ pub struct NodeClient {
 }
 
 impl NodeBuilder {
-    pub fn build() -> Result<Node, NetworkClientError> {
+    pub fn build() -> Result<Node, NetworkError> {
         let swarm = libp2p::SwarmBuilder::with_new_identity()
             .with_tokio()
             .with_tcp(
@@ -130,7 +130,7 @@ impl NodeBuilder {
                     request_response,
                 })
             })
-            .map_err(|err| Error::Other {
+            .map_err(|err| NetworkError::Behavior {
                 err: err.to_string(),
             })?
             .with_swarm_config(|cfg| {
@@ -150,7 +150,7 @@ impl NodeBuilder {
 impl Node {
     pub fn start(
         mut self,
-    ) -> Result<(JoinHandle<Result<(), NetworkClientError>>, NodeClient), NetworkClientError> {
+    ) -> Result<(JoinHandle<Result<(), NetworkError>>, NodeClient), NetworkError> {
         let (req_tx, req_rx) = mpsc::channel::<ClientRequest>(100);
         let (inbound_req_tx, inbound_req_rx) = mpsc::channel::<InboundP2pRequest>(100);
         let (inbound_resp_tx, inbound_resp_rx) = mpsc::channel::<InboundP2pResponse>(100);
@@ -167,7 +167,7 @@ impl Node {
                     .await
                 {
                     Ok(_) => Ok(()),
-                    Err(err) => Err(NetworkClientError::from(err)),
+                    Err(err) => Err(err),
                 }
             }
             .instrument(info_span!("")),
@@ -189,7 +189,7 @@ impl Node {
         inbound_req_tx: &Sender<InboundP2pRequest>,
         inbound_resp_tx: &Sender<InboundP2pResponse>,
         gossip_msg_tx: &Sender<GossipMessage>,
-    ) -> Result<(), Error> {
+    ) -> Result<(), NetworkError> {
         loop {
             select! {
                 Some(request) = req_rx.recv() => self.handle_client_request(request),
@@ -206,7 +206,7 @@ impl Node {
                 let result =
                     if let Err(err) = self.swarm.behaviour_mut().gossipsub.publish(tpc, msg) {
                         error!("Publishing Error: {}", err);
-                        Err(Error::from(err))
+                        Err(NetworkError::from(err))
                     } else {
                         info!("Successfully published message to {} topic", topic);
                         Ok(ClientResponse::Publish)
@@ -219,7 +219,7 @@ impl Node {
                 let result =
                     if let Err(err) = self.swarm.behaviour_mut().gossipsub.subscribe(&topic) {
                         error!("Subscription Error: {}", err);
-                        Err(Error::from(err))
+                        Err(NetworkError::from(err))
                     } else {
                         info!("Subscribed to topic: {}", topic);
                         Ok(ClientResponse::Subscribe)
@@ -252,10 +252,10 @@ impl Node {
                         Ok(ClientResponse::ResponseSent)
                     } else {
                         error!("Send Response Error");
-                        Err(Error::SendResponseError)
+                        Err(NetworkError::SendResponseError)
                     }
                 } else {
-                    Err(Error::ChannelNotFoundForGivenRequestId)
+                    Err(NetworkError::ChannelNotFoundForGivenRequestId)
                 };
 
                 Self::send_client_response(result, sender);
@@ -284,8 +284,8 @@ impl Node {
     }
 
     fn send_client_response(
-        result: Result<ClientResponse, Error>,
-        sender: oneshot::Sender<Result<ClientResponse, Error>>,
+        result: Result<ClientResponse, NetworkError>,
+        sender: oneshot::Sender<Result<ClientResponse, NetworkError>>,
     ) {
         if sender.send(result).is_err() {
             error!("Error sending response to client. The receiver has been dropped");
@@ -417,7 +417,7 @@ impl NetworkClient for NodeClient {
         if let ClientResponse::NetworkId { network_id } = self.send_client_request(payload).await? {
             return Ok(network_id);
         }
-        Err(Error::UnexpectedClientResponse.into())
+        Err(NetworkError::UnexpectedClientResponse.into())
     }
 
     async fn send_request(
@@ -435,7 +435,7 @@ impl NetworkClient for NodeClient {
 
             return Ok(id);
         }
-        Err(Error::UnexpectedClientResponse.into())
+        Err(NetworkError::UnexpectedClientResponse.into())
     }
 
     async fn send_response(&self, id: Self::Id, payload: Vec<u8>) -> Result<(), Self::Err> {
@@ -456,7 +456,7 @@ impl NetworkClient for NodeClient {
         {
             return Ok(gossip_nodes.into_iter());
         }
-        Err(Error::UnexpectedClientResponse.into())
+        Err(NetworkError::UnexpectedClientResponse.into())
     }
 
     async fn req_stream(&self) -> impl Stream<Item = Self::Request> {
@@ -505,7 +505,7 @@ impl NodeClient {
         }
     }
 
-    pub async fn subscribe(&self, topic: &str) -> Result<(), Error> {
+    pub async fn subscribe(&self, topic: &str) -> Result<(), NetworkError> {
         let payload = ClientRequestPayload::Subscribe {
             topic: topic.trim().to_string(),
         };
@@ -517,14 +517,14 @@ impl NodeClient {
     async fn send_client_request(
         &self,
         payload: ClientRequestPayload,
-    ) -> Result<ClientResponse, Error> {
-        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, Error>>();
+    ) -> Result<ClientResponse, NetworkError> {
+        let (sender, receiver) = oneshot::channel::<Result<ClientResponse, NetworkError>>();
         let req = ClientRequest { payload, sender };
 
         self.req_tx
             .send(req)
             .await
-            .map_err(|err| Error::SendClientRequest {
+            .map_err(|err| NetworkError::SendClientRequest {
                 err: err.to_string(),
             })?;
 
@@ -535,11 +535,11 @@ impl NodeClient {
 
     async fn recv_node_response(
         &self,
-        receiver: oneshot::Receiver<Result<ClientResponse, Error>>,
-    ) -> Result<ClientResponse, Error> {
+        receiver: oneshot::Receiver<Result<ClientResponse, NetworkError>>,
+    ) -> Result<ClientResponse, NetworkError> {
         let result = select! {
             _ = sleep(TokioDuration::from_secs(5)) => {
-                Err(Error::TimedOutWaitingForNodeResponse)
+                Err(NetworkError::TimedOutWaitingForNodeResponse)
             },
             msg = receiver => {
                 match msg {
@@ -554,7 +554,7 @@ impl NodeClient {
 }
 struct ClientRequest {
     payload: ClientRequestPayload,
-    sender: oneshot::Sender<Result<ClientResponse, Error>>,
+    sender: oneshot::Sender<Result<ClientResponse, NetworkError>>,
 }
 pub enum ClientRequestPayload {
     Publish {
@@ -727,9 +727,24 @@ struct Behavior {
 #[derive(Debug, thiserror::Error)]
 pub enum NetworkClientError {
     #[error("")]
-    NetworkError {
+    Network {
         #[from]
-        source: Error,
+        source: NetworkError,
+    },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum NetworkError {
+    #[error("{source}")]
+    Infallible {
+        #[from]
+        source: std::convert::Infallible,
+    },
+
+    #[error("{source}")]
+    Rcgen {
+        #[from]
+        source: libp2p::tls::certificate::GenError,
     },
 
     #[error("{source}")]
@@ -742,27 +757,6 @@ pub enum NetworkClientError {
     MultiAddrError {
         #[from]
         source: libp2p::multiaddr::Error,
-    },
-
-    #[error("{source}")]
-    RcgenError {
-        #[from]
-        source: libp2p::tls::certificate::GenError,
-    },
-
-    #[error("")]
-    PeerIdParse {
-        #[from]
-        source: libp2p::identity::ParseError,
-    },
-}
-
-#[derive(Debug, thiserror::Error)]
-pub enum Error {
-    #[error("{source}")]
-    Infallible {
-        #[from]
-        source: std::convert::Infallible,
     },
 
     #[error("{source}")]
@@ -782,6 +776,9 @@ pub enum Error {
         #[from]
         source: oneshot::error::RecvError,
     },
+
+    #[error("{err}")]
+    Behavior { err: String },
 
     #[error("")]
     TimedOutWaitingForNodeResponse,
