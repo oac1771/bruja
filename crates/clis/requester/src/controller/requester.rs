@@ -186,10 +186,10 @@ where
     ) -> Result<(), RequesterControllerError> {
         let parsed_results = self.job_handler_service.unpack_results(results).await?;
 
-        info!(
-            "\n**************************\nResults: {}\n**************************",
-            parsed_results
-        );
+        let results = format!("Results: {}", parsed_results);
+        let stars = vec!["*"; results.len() + 4].join("");
+
+        info!("\n{}\n  {}  \n{}", stars.clone(), results, stars.clone());
 
         Ok(())
     }
