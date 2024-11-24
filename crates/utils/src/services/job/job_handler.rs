@@ -8,7 +8,7 @@ use std::{
     str::FromStr,
 };
 use tokio::{fs::File, io::AsyncReadExt};
-use wasmtime::{Engine, ExternType, Module, ValType};
+use wasmtime::{Engine, ExternType, FuncType, Module, ValType};
 
 pub trait JobHandlerService {
     type Err;
@@ -26,7 +26,7 @@ pub trait JobHandlerService {
 pub struct JobHandler {
     params: RawParams,
     function_name: String,
-    module: Module,
+    func_type: FuncType,
     path: PathBuf,
 }
 
@@ -45,19 +45,8 @@ impl JobHandlerService for JobHandler {
     }
 
     async fn unpack_results(&self, results: Self::RawResults) -> Result<Self::Results, Self::Err> {
-        let func = self.module.get_export(&self.function_name).ok_or_else(|| {
-            Error::FunctionExportNotFound {
-                func_name: self.function_name.clone(),
-            }
-        })?;
-
-        let f = if let ExternType::Func(f) = func {
-            Ok(f)
-        } else {
-            Err(Error::FuncTypeNotFound)
-        }?;
-
-        let r = f
+        let r = self
+            .func_type
             .results()
             .zip(results.to_vec())
             .map(|(val_type, res)| {
@@ -98,33 +87,35 @@ impl JobHandler {
         let module = Module::new(&engine, code.as_slice())
             .map_err(|e| Error::WasmModule { err: e.to_string() })?;
 
+        let extern_type =
+            module
+                .get_export(function_name)
+                .ok_or_else(|| Error::FunctionExportNotFound {
+                    func_name: function_name.to_string(),
+                })?;
+
+        let func_type = if let ExternType::Func(f) = extern_type {
+            Ok(f)
+        } else {
+            Err(Error::FuncTypeNotFound)
+        }?;
+
         let params = RawParams::new(parameters);
 
         Ok(Self {
             params,
             function_name: function_name.to_string(),
-            module,
+            func_type,
             path,
         })
     }
 
     pub(crate) fn parse_params(&self) -> Result<Vec<Vec<u8>>, Error> {
-        let extern_type = self.module.get_export(&self.function_name).ok_or_else(|| {
-            Error::FunctionExportNotFound {
-                func_name: self.function_name.clone(),
-            }
-        })?;
-        let func = extern_type
-            .func()
-            .ok_or_else(|| Error::FunctionNameNotFound {
-                func_name: self.function_name.clone(),
-            })?;
-
         let p = self
             .params
             .to_vec()
             .iter()
-            .zip(func.params())
+            .zip(self.func_type.params())
             .map(|(param, ty)| {
                 let parsed = match ty {
                     ValType::I32 => Some(self.parse::<i32>(param)),
@@ -236,8 +227,22 @@ impl JobHandler {
         let params = RawParams::new(parameters);
         let path = PathBuf::new();
 
+        let extern_type = module
+            .get_export(function_name)
+            .ok_or_else(|| Error::FunctionExportNotFound {
+                func_name: function_name.to_string(),
+            })
+            .unwrap();
+
+        let func_type = if let ExternType::Func(f) = extern_type {
+            Ok(f)
+        } else {
+            Err(Error::FuncTypeNotFound)
+        }
+        .unwrap();
+
         Self {
-            module,
+            func_type,
             params,
             function_name: function_name.to_string(),
             path,

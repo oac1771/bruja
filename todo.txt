@@ -1,4 +1,5 @@
-refactor job builder to job handler so it can unpack results to desired result types
+figure out why cannot submit multiple jobs without restarting worker...
+make result pring dynamic to take into account length of results
 
 refactor job runner to create task that has builder pattern to build up job and execute
     so it can be in its own task::spawn()
