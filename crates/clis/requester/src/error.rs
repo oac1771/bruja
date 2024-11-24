@@ -13,9 +13,9 @@ pub enum Error {
     },
 
     #[error("{source}")]
-    JobBuilder {
+    JobHandler {
         #[from]
-        source: utils::services::job::job_builder::Error,
+        source: utils::services::job::job_handler::Error,
     },
 
     #[error("")]

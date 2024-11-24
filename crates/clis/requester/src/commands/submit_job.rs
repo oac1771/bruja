@@ -8,7 +8,7 @@ use tokio::{select, signal::ctrl_c, task::JoinHandle};
 use tracing::{error, info, instrument};
 use utils::services::{
     contract_client::Client,
-    job::job_builder::JobBuilder,
+    job::job_handler::JobHandler,
     p2p::{NetworkError, NodeBuilder, NodeClient},
 };
 
@@ -40,7 +40,7 @@ impl SubmitJobCmd {
         )
         .await?;
 
-        let job_service = JobBuilder::new(
+        let job_handler_service = JobHandler::new(
             &self.code_path,
             self.parameters.clone(),
             &self.function_name,
@@ -52,7 +52,7 @@ impl SubmitJobCmd {
         let submit_job_controller = RequesterController::new(
             contract_client,
             contract_address,
-            job_service,
+            job_handler_service,
             network_client,
         );
 
@@ -77,12 +77,12 @@ impl SubmitJobCmd {
         controller: RequesterController<
             SubstrateConfig,
             Client<'_, SubstrateConfig, DefaultEnvironment, Keypair>,
-            JobBuilder<'_>,
+            JobHandler,
             NodeClient,
         >,
         handle: JoinHandle<Result<(), NetworkError>>,
     ) -> Result<(), Error> {
-        select! {
+        let result = select! {
             handle_result = handle => {
                 let result = match handle_result {
                     Ok(_) => {
@@ -97,24 +97,19 @@ impl SubmitJobCmd {
                 result
             },
             controller_result = controller.run() => {
-                let result = match controller_result {
-                    Ok(result) => {
-                        info!("Received results!\n{:?}", result);
-                        Ok(result)
-                    },
-                    Err(err) => {
-                        error!("Encountered error while submitting job: {}", err);
-                        Err(Error::from(err))
-                    }
-                };
-                result
+                if let Err(err) = controller_result {
+                    error!("Encountered error while submitting job: {}", err);
+                    Err(Error::from(err))
+                } else {
+                    Ok(())
+                }
             },
             _ = ctrl_c() => {
                 info!("Shutting down...");
-                Ok(vec![])
+                Ok(())
             }
         }?;
 
-        Ok(())
+        Ok(result)
     }
 }

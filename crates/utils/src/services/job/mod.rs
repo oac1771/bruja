@@ -1,13 +1,8 @@
-pub mod job_builder;
+pub mod job_handler;
 pub mod job_runner;
 
-#[cfg(test)]
-mod test_job_builder;
-#[cfg(test)]
-mod test_job_runner;
-
 use codec::{Decode, Encode};
-use std::string::FromUtf8Error;
+use std::{fmt, string::FromUtf8Error};
 
 pub trait JobT: Encode + Decode {
     fn code_ref(&self) -> &[u8];
@@ -62,6 +57,63 @@ impl JobT for Job {
     }
 }
 
+pub trait RawResultsT {
+    fn from_vec(v: Vec<Vec<u8>>) -> Self;
+    fn to_vec(self) -> Vec<Vec<u8>>;
+}
+
+pub struct RawResults(Vec<Vec<u8>>);
+pub struct Results(Vec<Val>);
+
+impl RawResultsT for RawResults {
+    fn from_vec(v: Vec<Vec<u8>>) -> Self {
+        Self(v)
+    }
+
+    fn to_vec(self) -> Vec<Vec<u8>> {
+        self.0
+    }
+}
+
+impl fmt::Display for Results {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        for v in &self.0 {
+            write!(f, "{} ", v)?;
+        }
+        Ok(())
+    }
+}
+
+pub enum Val {
+    I32(i32),
+    I64(i64),
+}
+
+impl fmt::Display for Val {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            Self::I32(val) => write!(f, "{}", val.to_string()),
+            Self::I64(val) => write!(f, "{}", val.to_string()),
+        }
+    }
+}
+
+impl From<i32> for Val {
+    fn from(value: i32) -> Self {
+        Self::I32(value)
+    }
+}
+
+impl From<i64> for Val {
+    fn from(value: i64) -> Self {
+        Self::I64(value)
+    }
+}
+
+#[cfg(test)]
+mod test_job_handler;
+#[cfg(test)]
+mod test_job_runner;
 #[cfg(test)]
 mod wat {
     pub const ADD_ONE: &'static str = r#"

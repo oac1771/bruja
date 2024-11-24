@@ -1,12 +1,13 @@
-use super::{Job, JobT};
+use super::{Job, JobT, RawResults, RawResultsT};
 use codec::{Decode, Encode};
 use wasmtime::{Engine, ExternType, FuncType, Instance, Linker, Module, Store, Val, ValType};
 
 pub trait WasmJobRunnerService {
     type Err;
     type Job: JobT;
+    type RawResults: RawResultsT;
 
-    fn start_job(&self, job: Self::Job) -> Result<Vec<Vec<u8>>, Self::Err>;
+    fn start_job(&self, job: Self::Job) -> Result<Self::RawResults, Self::Err>;
 }
 
 pub struct WasmJobRunner;
@@ -14,8 +15,9 @@ pub struct WasmJobRunner;
 impl WasmJobRunnerService for WasmJobRunner {
     type Err = WasmJobRunnerServiceError;
     type Job = Job;
+    type RawResults = RawResults;
 
-    fn start_job(&self, job: Self::Job) -> Result<Vec<Vec<u8>>, Self::Err> {
+    fn start_job(&self, job: Self::Job) -> Result<Self::RawResults, Self::Err> {
         let engine = Engine::default();
         let mut linker: Linker<()> = Linker::new(&engine);
         let mut store: Store<()> = Store::new(&engine, ());
@@ -32,7 +34,7 @@ impl WasmJobRunnerService for WasmJobRunner {
 
         let r = self.prepare_results(res);
 
-        Ok(r)
+        Ok(RawResults::from_vec(r))
     }
 }
 

@@ -1,5 +1,5 @@
 use super::{
-    job_builder::{Error, JobBuilder, RawParams},
+    job_handler::{Error, JobHandler, RawParams},
     Encode,
 };
 use crate::services::job::wat::*;
@@ -30,9 +30,9 @@ fn successfully_parse_params_into_encoded_values() {
     let engine = Engine::default();
     let module = Module::new(&engine, code).unwrap();
 
-    let job_builder = JobBuilder::test(parameters, "add_one");
+    let job_builder = JobHandler::test(parameters, "add_one", module);
 
-    let res = job_builder.parse_params(&module).unwrap();
+    let res = job_builder.parse_params().unwrap();
 
     assert_eq!(res.len(), 1);
     assert_eq!(res[0], val.encode());
@@ -47,9 +47,9 @@ fn returns_error_if_unable_to_parse_into_type() {
     let engine = Engine::default();
     let module = Module::new(&engine, code).unwrap();
 
-    let job_builder = JobBuilder::test(parameters, "add_one");
+    let job_builder = JobHandler::test(parameters, "add_one", module);
 
-    let err = job_builder.parse_params(&module).err().unwrap();
+    let err = job_builder.parse_params().err().unwrap();
 
     if let Error::ParseParam { err } = err {
         assert_eq!(err, format!("Unable to parse param '{}' into i32", val));

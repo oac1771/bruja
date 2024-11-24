@@ -6,45 +6,45 @@ use tracing::{error, info};
 use utils::services::{
     contract_client::{ContractClient, ContractClientError},
     job::{
-        job_builder::{JobBuilderService, JobBuilderServiceError},
-        JobT,
+        job_handler::{JobHandlerService, JobHandlerServiceError},
+        JobT, RawResultsT,
     },
     p2p::{GossipMessageT, NetworkClient, NetworkClientError, NetworkIdT, RequestT, ResponseT},
 };
 
-pub struct RequesterController<C: Config, CC, JB, NC> {
+pub struct RequesterController<C: Config, CC, JH, NC> {
     contract_client: CC,
     contract_address: <C as Config>::AccountId,
-    job_builder_service: JB,
+    job_handler_service: JH,
     network_client: NC,
 }
 
-impl<C, CC, JB, NC> RequesterController<C, CC, JB, NC>
+impl<C, CC, JH, NC> RequesterController<C, CC, JH, NC>
 where
     C: Config,
     CC: ContractClient<C = C>,
-    JB: JobBuilderService,
+    JH: JobHandlerService,
     NC: NetworkClient,
     RequesterControllerError: From<<NC as NetworkClient>::Err>
         + From<<CC as ContractClient>::Err>
-        + From<<JB as JobBuilderService>::Err>,
+        + From<<JH as JobHandlerService>::Err>,
 {
     pub fn new(
         contract_client: CC,
         contract_address: <C as Config>::AccountId,
-        job_builder_service: JB,
+        job_handler_service: JH,
         network_client: NC,
     ) -> Self {
         Self {
             contract_client,
             contract_address,
-            job_builder_service,
+            job_handler_service,
             network_client,
         }
     }
 
-    pub async fn run(&self) -> Result<Vec<Vec<u8>>, RequesterControllerError> {
-        let job = self.job_builder_service.build_job().await?;
+    pub async fn run(&self) -> Result<(), RequesterControllerError> {
+        let job = self.job_handler_service.build_job().await?;
         let job_request = JobRequest::new(job.code_ref(), job.params_ref());
 
         self.submit_job(&job_request).await?;
@@ -52,8 +52,10 @@ where
             .wait_for_job_acceptance(&job_request)
             .await
             .ok_or_else(|| RequesterControllerError::JobNeverAccepted)?;
+
         self.send_job(msg.network_id(), job).await?;
         self.wait_for_job_acknowledgement(job_request.id()).await;
+
         let (req_id, results) = self
             .wait_for_job_results(job_request.id())
             .await
@@ -61,7 +63,9 @@ where
         self.send_result_acknowledgement(req_id, job_request.id())
             .await?;
 
-        Ok(results)
+        self.display_results(results).await?;
+
+        Ok(())
     }
 
     async fn submit_job(&self, job_request: &JobRequest) -> Result<(), RequesterControllerError> {
@@ -139,14 +143,18 @@ where
     async fn wait_for_job_results(
         &self,
         id: HashId,
-    ) -> Option<(<NC as NetworkClient>::Id, Vec<Vec<u8>>)> {
+    ) -> Option<(
+        <NC as NetworkClient>::Id,
+        <JH as JobHandlerService>::RawResults,
+    )> {
         let req_stream = self.network_client.req_stream().await;
         tokio::pin!(req_stream);
         while let Some(req) = req_stream.next().await {
             if let Ok(Request::Result { result, job_id }) = Request::decode(req.body_ref()) {
                 if job_id == id {
                     info!("Received results");
-                    return Some((req.id(), result));
+                    let r = <JH as JobHandlerService>::RawResults::from_vec(result);
+                    return Some((req.id(), r));
                 }
             } else {
                 error!("Unable to decode request");
@@ -171,6 +179,20 @@ where
 
         Ok(())
     }
+
+    async fn display_results(
+        &self,
+        results: <JH as JobHandlerService>::RawResults,
+    ) -> Result<(), RequesterControllerError> {
+        let parsed_results = self.job_handler_service.unpack_results(results).await?;
+
+        info!(
+            "\n**************************\nResults: {}\n**************************",
+            parsed_results
+        );
+
+        Ok(())
+    }
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -182,9 +204,9 @@ pub enum RequesterControllerError {
     },
 
     #[error("{source}")]
-    JobBuilderService {
+    JobHandlerService {
         #[from]
-        source: JobBuilderServiceError,
+        source: JobHandlerServiceError,
     },
 
     #[error("{source}")]

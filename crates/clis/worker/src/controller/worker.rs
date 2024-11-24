@@ -12,7 +12,7 @@ use utils::services::{
     contract_client::{ContractClient, ContractClientError, ContractEmittedT},
     job::{
         job_runner::{WasmJobRunnerService, WasmJobRunnerServiceError},
-        JobT,
+        JobT, RawResultsT,
     },
     p2p::{NetworkClient, NetworkClientError, NetworkIdT, RequestT, ResponseT},
 };
@@ -185,7 +185,7 @@ where
     async fn start_job(
         &self,
         job: <JR as WasmJobRunnerService>::Job,
-    ) -> Result<Vec<Vec<u8>>, WorkerControllerError> {
+    ) -> Result<<JR as WasmJobRunnerService>::RawResults, WorkerControllerError> {
         let result = self.job_runner.start_job(job)?;
 
         Ok(result)
@@ -193,11 +193,14 @@ where
 
     async fn send_result(
         &self,
-        result: Vec<Vec<u8>>,
+        result: <JR as WasmJobRunnerService>::RawResults,
         job_id: HashId,
         who: <NC as NetworkClient>::NetworkId,
     ) -> Result<(), WorkerControllerError> {
-        let req = Request::Result { result, job_id };
+        let req = Request::Result {
+            result: result.to_vec(),
+            job_id,
+        };
 
         self.network_client.send_request(who, req.encode()).await?;
         info!("Results sent");
