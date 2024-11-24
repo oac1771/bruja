@@ -1,9 +1,11 @@
-use tracing_subscriber::{filter::LevelFilter, fmt::layer, prelude::*};
+use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use worker::cli::run;
 
 #[tokio::main]
 pub async fn main() {
-    let info_layer = layer().with_filter(LevelFilter::INFO);
-    tracing_subscriber::registry().with(info_layer).init();
+    tracing_subscriber::registry()
+        .with(fmt::layer())
+        .with(EnvFilter::from_default_env().add_directive("worker=info".parse().unwrap()))
+        .init();
     run().await;
 }
