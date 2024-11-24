@@ -1,11 +1,5 @@
-figure out why cannot submit multiple jobs without restarting worker...
-make result pring dynamic to take into account length of results
-
 refactor job runner to create task that has builder pattern to build up job and execute
     so it can be in its own task::spawn()
-
-might not need async_stream -> try without
-    - use recvstream tokio struct
 
 figure out env logging and make p2p stuff debug to declutter output
 refactor contract client so that it calls subxt client

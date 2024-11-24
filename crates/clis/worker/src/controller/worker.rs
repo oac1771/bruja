@@ -61,7 +61,7 @@ where
         while let Some(stream_result) = ev_stream.next().await {
             match stream_result {
                 Ok(ev) => self.handle_event(ev).await,
-                Err(err) => error!("Error retreiving event: {}", err),
+                Err(err) => error!("Error reading event stream: {}", err),
             }
         }
 
@@ -79,7 +79,7 @@ where
         };
 
         if let Err(e) = res {
-            error!("Error while handling event: {}", e);
+            error!("Error while handling event: {:?}", e);
         }
     }
 
@@ -215,7 +215,8 @@ where
         while let Some(resp) = resp_stream.next().await {
             if let Ok(Response::AcknowledgeResult { job_id }) = Response::decode(&resp.body_ref()) {
                 if id == job_id {
-                    info!("Result acknowledged by requester")
+                    info!("Result acknowledged by requester");
+                    break;
                 }
             }
         }
