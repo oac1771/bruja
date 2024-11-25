@@ -14,7 +14,7 @@ fn get_func_type_returns_func_type() {
     let module = Module::new(&engine, code.clone()).unwrap();
 
     let job = Job::new(code.clone(), vec![], "add_one");
-    let runner = WasmJobRunner;
+    let runner = WasmJobRunner::new();
 
     runner.get_func_type(&job, &module).unwrap();
 }
@@ -28,7 +28,7 @@ fn get_func_type_returns_error_if_not_found() {
     let module = Module::new(&engine, code.clone()).unwrap();
 
     let job = Job::new(code.clone(), vec![], &function_name);
-    let runner = WasmJobRunner;
+    let runner = WasmJobRunner::new();
 
     let err = runner.get_func_type(&job, &module).err().unwrap();
 
@@ -50,7 +50,7 @@ fn build_params_returns_wasm_val() {
     let module = Module::new(&engine, code.clone()).unwrap();
 
     let job = Job::new(code.clone(), params, func_name);
-    let runner = WasmJobRunner;
+    let runner = WasmJobRunner::new();
 
     let func = runner.get_func_type(&job, &module).unwrap();
     let params = runner.build_params(&job, &func).unwrap();
@@ -70,7 +70,7 @@ fn build_params_errors_if_cannot_parse_param() {
     let module = Module::new(&engine, code.clone()).unwrap();
 
     let job = Job::new(code.clone(), params, func_name);
-    let runner = WasmJobRunner;
+    let runner = WasmJobRunner::new();
 
     let func = runner.get_func_type(&job, &module).unwrap();
     let err = runner.build_params(&job, &func).err().unwrap();
@@ -92,7 +92,7 @@ fn build_params_returns_empty_vec_if_init_params_is_empty() {
     let module = Module::new(&engine, code.clone()).unwrap();
 
     let job = Job::new(code.clone(), params, func_name);
-    let runner = WasmJobRunner;
+    let runner = WasmJobRunner::new();
 
     let func = runner.get_func_type(&job, &module).unwrap();
     let res = runner.build_params(&job, &func).unwrap();
@@ -114,14 +114,15 @@ fn execute_export_fn_works() {
     let instance = linker.instantiate(&mut store, &module).unwrap();
 
     let job = Job::new(code.clone(), params, func_name);
-    let runner = WasmJobRunner;
+    let runner = WasmJobRunner::new();
 
-    let func = runner.get_func_type(&job, &module).unwrap();
-    let params = runner.build_params(&job, &func).unwrap();
-    let results = runner.build_results(&func);
+    let func_type = runner.get_func_type(&job, &module).unwrap();
+    let params = runner.build_params(&job, &func_type).unwrap();
+    let results = runner.build_results(&func_type);
+    let func = runner.get_func(&job, instance, &mut store).unwrap();
 
     let res = runner
-        .execute_export_function(store, instance, &job, params.as_slice(), results)
+        .execute_export_function(func, params.as_slice(), results, store)
         .unwrap();
 
     assert_eq!(res[0].i32().unwrap(), 11);

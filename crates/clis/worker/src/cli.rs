@@ -1,5 +1,6 @@
 use crate::{commands::start::StartCmd, config::Config};
 use clap::{Parser, Subcommand};
+use tracing::error;
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -22,6 +23,6 @@ pub async fn run() {
     };
 
     if let Err(err) = result {
-        panic!("Error: {:?}", err);
+        error!("Error: {:?}", err);
     }
 }

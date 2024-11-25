@@ -1,6 +1,6 @@
 use super::{Job, JobT, RawResults, RawResultsT};
 use codec::{Decode, Encode};
-use wasmtime::{Engine, ExternType, FuncType, Instance, Linker, Module, Store, Val, ValType};
+use wasmtime::{Engine, ExternType, Func, FuncType, Instance, Linker, Module, Store, Val, ValType};
 
 pub trait WasmJobRunnerService {
     type Err;
@@ -10,7 +10,9 @@ pub trait WasmJobRunnerService {
     fn start_job(&self, job: Self::Job) -> Result<Self::RawResults, Self::Err>;
 }
 
-pub struct WasmJobRunner;
+pub struct WasmJobRunner {
+    engine: Engine,
+}
 
 impl WasmJobRunnerService for WasmJobRunner {
     type Err = WasmJobRunnerServiceError;
@@ -18,19 +20,17 @@ impl WasmJobRunnerService for WasmJobRunner {
     type RawResults = RawResults;
 
     fn start_job(&self, job: Self::Job) -> Result<Self::RawResults, Self::Err> {
-        let engine = Engine::default();
-        let mut linker: Linker<()> = Linker::new(&engine);
-        let mut store: Store<()> = Store::new(&engine, ());
-        let module = Module::new(&engine, job.code_ref())
+        let module = Module::new(&self.engine, job.code_ref())
             .map_err(|e| WasmJobRunnerServiceError::WasmModule { err: e.to_string() })?;
+        let mut linker: Linker<()> = Linker::new(&self.engine);
+        let mut store = Store::new(&self.engine, ());
         let instance = linker.instantiate(&mut store, &module)?;
 
-        self.define_host_fn(&module, &mut linker)?;
-        let func = self.get_func_type(&job, &module)?;
-        let params = self.build_params(&job, &func)?;
-        let results = self.build_results(&func);
-        let res =
-            self.execute_export_function(store, instance, &job, params.as_slice(), results)?;
+        let func = self.get_func(&job, instance, &mut store)?;
+
+        let (params, results) = self.prepare_job(&module, &job, &mut linker)?;
+
+        let res = self.execute_export_function(func, params.as_slice(), results, store)?;
 
         let r = self.prepare_results(res);
 
@@ -39,7 +39,27 @@ impl WasmJobRunnerService for WasmJobRunner {
 }
 
 impl WasmJobRunner {
-    fn define_host_fn<T>(&self, module: &Module, linker: &mut Linker<T>) -> Result<(), Error> {
+    pub fn new() -> Self {
+        let engine = Engine::default();
+
+        Self { engine }
+    }
+
+    fn prepare_job(
+        &self,
+        module: &Module,
+        job: &Job,
+        linker: &mut Linker<()>,
+    ) -> Result<(Vec<Val>, Vec<Val>), Error> {
+        let func = self.get_func_type(job, module)?;
+        let params = self.build_params(job, &func)?;
+        let results = self.build_results(&func);
+        self.define_host_fn(&module, linker)?;
+
+        Ok((params, results))
+    }
+
+    fn define_host_fn(&self, module: &Module, linker: &mut Linker<()>) -> Result<(), Error> {
         module.imports().try_for_each(|i| match i.ty() {
             ExternType::Func(func) => {
                 linker.func_new(i.module(), i.name(), func, |_, _, _| Ok(()))?;
@@ -69,6 +89,21 @@ impl WasmJobRunner {
         }?;
 
         Ok(res)
+    }
+
+    pub(crate) fn get_func(
+        &self,
+        job: &<WasmJobRunner as WasmJobRunnerService>::Job,
+        instance: Instance,
+        store: &mut Store<()>,
+    ) -> Result<Func, Error> {
+        let name = job.func_name_string().unwrap();
+
+        let func = instance
+            .get_func(store, &name)
+            .ok_or_else(|| Error::FunctionExportNotFound { func_name: name })?;
+
+        Ok(func)
     }
 
     pub(crate) fn build_params(
@@ -110,20 +145,14 @@ impl WasmJobRunner {
         results
     }
 
-    pub(crate) fn execute_export_function<T>(
+    pub(crate) fn execute_export_function(
         &self,
-        mut store: Store<T>,
-        instance: Instance,
-        job: &<WasmJobRunner as WasmJobRunnerService>::Job,
+        func: Func,
         params: &[Val],
         mut results: Vec<Val>,
+        store: Store<()>,
     ) -> Result<Vec<Val>, Error> {
-        let name = job.func_name_string().unwrap();
-        instance
-            .get_func(&mut store, &name)
-            .ok_or_else(|| Error::FunctionExportNotFound { func_name: name })?
-            .call(store, params, &mut results)
-            .unwrap();
+        func.call(store, params, &mut results)?;
 
         Ok(results.clone())
     }

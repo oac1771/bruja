@@ -31,7 +31,7 @@ impl StartCmd {
 
         let (handle, network_client) = self.join_network(contract_address.to_string()).await?;
 
-        let job_runner = WasmJobRunner;
+        let job_runner = WasmJobRunner::new();
 
         let worker_controller: WorkerController<
             SubstrateConfig,
