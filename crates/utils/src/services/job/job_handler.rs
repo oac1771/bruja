@@ -21,6 +21,7 @@ pub trait JobHandlerService {
         &self,
         results: Self::RawResults,
     ) -> impl Future<Output = Result<Self::Results, Self::Err>> + Send;
+    fn validate_params(&self) -> Result<(), Self::Err>;
 }
 
 pub struct JobHandler {
@@ -38,6 +39,8 @@ impl JobHandlerService for JobHandler {
 
     async fn build_job(&self) -> Result<Self::Job, Self::Err> {
         let code = Self::get_code(&self.path).await?;
+
+        self.validate_params()?;
         let params = self.parse_params()?;
         let job = Job::new(code, params, &self.function_name);
 
@@ -66,6 +69,14 @@ impl JobHandlerService for JobHandler {
 
         let results = Results(r);
         Ok(results)
+    }
+
+    fn validate_params(&self) -> Result<(), Self::Err> {
+        if self.func_type.params().len() != self.params.to_vec().len() {
+            return Err(Self::Err::InvalidParameterNumber);
+        }
+
+        Ok(())
     }
 }
 
@@ -183,6 +194,9 @@ pub enum JobHandlerServiceError {
         #[from]
         source: Error,
     },
+
+    #[error("")]
+    InvalidParameterNumber,
 }
 
 #[derive(Debug, thiserror::Error)]

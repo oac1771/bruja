@@ -98,7 +98,7 @@ impl SubmitJobCmd {
             },
             controller_result = controller.run() => {
                 if let Err(err) = controller_result {
-                    error!("Encountered error while submitting job: {}", err);
+                    error!("Encountered error while submitting job: {:?}", err);
                     Err(Error::from(err))
                 } else {
                     Ok(())

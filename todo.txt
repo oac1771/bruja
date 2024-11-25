@@ -10,9 +10,6 @@ create derive macro for mock stuff
         - look into module.resources_required()
     - look for available workers, and send preferred worker in submit job request
 
-- worker
-    - refactor error handling and logging 
-
 - catalog
     - make contract upgradeable 
 
