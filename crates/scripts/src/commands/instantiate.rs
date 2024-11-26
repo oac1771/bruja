@@ -19,7 +19,9 @@ impl InstantiateCmd {
         let signer = Keypair::from_uri(&SecretUri::from_str(&self.suri).unwrap()).unwrap();
 
         let client: Client<SubstrateConfig, DefaultEnvironment, Keypair> =
-            Client::new(&self.file, &signer).await.unwrap();
+            Client::new(&self.file, &signer, "ws://127.0.0.1:9944")
+                .await
+                .unwrap();
 
         let contract_address = client.instantiate("new").await.unwrap();
 

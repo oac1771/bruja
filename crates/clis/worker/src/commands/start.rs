@@ -26,6 +26,7 @@ impl StartCmd {
         let contract_client = Client::<SubstrateConfig, DefaultEnvironment, Keypair>::new(
             &config.artifact_file_path,
             &config.signer,
+            &config.url,
         )
         .await?;
 

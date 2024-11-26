@@ -26,6 +26,7 @@ mod tests {
     const CLIENT_WAIT_TIMEOUT: u64 = 30;
     const ACCOUNT_FUNDER: &'static str = "//Charlie";
     const CONTRACT_INSTANTIATOR: &'static str = "//Bob";
+    const URL: &'static str = "ws://127.0.0.1:9944";
 
     #[test_macro::test]
     async fn submit_job(log_buffer: Arc<Mutex<Vec<u8>>>) {
@@ -133,6 +134,7 @@ mod tests {
                 match Client::<SubstrateConfig, DefaultEnvironment, Keypair>::new(
                     CONTRACT_FILE_PATH,
                     signer,
+                    URL,
                 )
                 .await
                 {
@@ -235,6 +237,7 @@ mod tests {
             let config = ConfigW {
                 signer,
                 artifact_file_path: CONTRACT_FILE_PATH.to_string(),
+                url: URL.to_string(),
             };
 
             Self {
@@ -273,6 +276,7 @@ mod tests {
             let config = ConfigR {
                 signer,
                 artifact_file_path: CONTRACT_FILE_PATH.to_string(),
+                url: URL.to_string(),
             };
             Self {
                 config,

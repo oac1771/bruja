@@ -30,9 +30,9 @@ impl WasmJobRunnerService for WasmJobRunner {
 
         let (params, results) = self.prepare_job(&module, &job, &mut linker)?;
 
-        let res = self.execute_export_function(func, params.as_slice(), results, store)?;
+        let results = self.execute_export_function(func, params.as_slice(), results, store)?;
 
-        let r = self.prepare_results(res);
+        let r = self.prepare_results(results);
 
         Ok(RawResults::from_vec(r))
     }
@@ -97,7 +97,7 @@ impl WasmJobRunner {
         instance: Instance,
         store: &mut Store<()>,
     ) -> Result<Func, Error> {
-        let name = job.func_name_string().unwrap();
+        let name = job.func_name_string()?;
 
         let func = instance
             .get_func(store, &name)

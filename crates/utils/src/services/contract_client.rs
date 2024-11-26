@@ -162,12 +162,12 @@ where
         From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default,
     E::Balance: Default + EncodeAsType + Serialize + From<u128>,
 {
-    pub async fn new(artifact_file: &'a str, signer: &'a S) -> Result<Self, Error> {
+    pub async fn new(artifact_file: &'a str, signer: &'a S, url: &'a str) -> Result<Self, Error> {
         let file = File::open(artifact_file)?;
         let reader = BufReader::new(file);
         let ink_project: InkProject = serde_json::from_reader(reader)?;
 
-        let rpc_client = RpcClient::from_insecure_url("ws://127.0.0.1:9944").await?;
+        let rpc_client = RpcClient::from_insecure_url(url).await?;
 
         Ok(Self {
             ink_project,
