@@ -60,7 +60,7 @@ cargo run -p worker start --address <contract address>
 In the same terminal which you used to instantiate the contract, run the following command to submit a job to the network:
 
 ```
-cargo run -p requester submit-job --address $CONTRACT_ADDRESS --path crates/tests/tests/work_bg.wasm --params 10 --func-name foo
+cargo run -p requester submit-job --address $CONTRACT_ADDRESS --code-path crates/integration_tests/tests/requester_worker/work_bg.wasm --parameters 10,14 --function-name add
 ```
 
 # Testing
