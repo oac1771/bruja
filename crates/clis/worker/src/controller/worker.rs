@@ -186,7 +186,7 @@ where
         &self,
         job: <JR as WasmJobRunnerService>::Job,
     ) -> Result<<JR as WasmJobRunnerService>::RawResults, WorkerControllerError> {
-        let result = self.job_runner.start_job(job)?;
+        let result = self.job_runner.start_job(job).await?;
 
         Ok(result)
     }

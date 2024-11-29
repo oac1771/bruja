@@ -1,6 +1,6 @@
 use super::{
     job_runner::{Error, WasmJobRunner},
-    Encode, Job,
+    Encode, Job, RawResultsT,
 };
 use crate::services::job::wat::*;
 use wabt::wat2wasm;
@@ -100,8 +100,8 @@ fn build_params_returns_empty_vec_if_init_params_is_empty() {
     assert_eq!(res.len(), 0);
 }
 
-#[test]
-fn execute_export_fn_works() {
+#[tokio::test]
+async fn execute_export_fn_works() {
     let code = wat2wasm(ADD_ONE).unwrap();
     let func_name = "add_one";
     let val: i32 = 10;
@@ -122,8 +122,12 @@ fn execute_export_fn_works() {
     let func = runner.get_func(&job, instance, &mut store).unwrap();
 
     let res = runner
-        .execute_export_function(func, params.as_slice(), results, store)
+        .run_job(func, params, results, store)
+        .await
+        .unwrap()
+        .await
+        .unwrap()
         .unwrap();
 
-    assert_eq!(res[0].i32().unwrap(), 11);
+    assert_eq!(res.to_vec()[0], 11.encode());
 }

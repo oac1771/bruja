@@ -55,8 +55,8 @@ mod tests {
         requester_runner
             .submit_job(
                 "tests/requester_worker/work_bg.wasm",
-                "foo",
-                Some(String::from("10")),
+                "add",
+                Some(String::from("10,10")),
             )
             .await;
 

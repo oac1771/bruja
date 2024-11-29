@@ -1,5 +1,7 @@
 use super::{Job, JobT, RawResults, RawResultsT};
 use codec::{Decode, Encode};
+use futures::Future;
+use tokio::task::JoinHandle;
 use wasmtime::{Engine, ExternType, Func, FuncType, Instance, Linker, Module, Store, Val, ValType};
 
 pub trait WasmJobRunnerService {
@@ -7,7 +9,10 @@ pub trait WasmJobRunnerService {
     type Job: JobT;
     type RawResults: RawResultsT;
 
-    fn start_job(&self, job: Self::Job) -> Result<Self::RawResults, Self::Err>;
+    fn start_job(
+        &self,
+        job: Self::Job,
+    ) -> impl Future<Output = Result<Self::RawResults, Self::Err>> + Send;
 }
 
 pub struct WasmJobRunner {
@@ -19,22 +24,19 @@ impl WasmJobRunnerService for WasmJobRunner {
     type Job = Job;
     type RawResults = RawResults;
 
-    fn start_job(&self, job: Self::Job) -> Result<Self::RawResults, Self::Err> {
+    async fn start_job(&self, job: Self::Job) -> Result<Self::RawResults, Self::Err> {
         let module = Module::new(&self.engine, job.code_ref())
             .map_err(|e| WasmJobRunnerServiceError::WasmModule { err: e.to_string() })?;
         let mut linker: Linker<()> = Linker::new(&self.engine);
         let mut store = Store::new(&self.engine, ());
         let instance = linker.instantiate(&mut store, &module)?;
-
         let func = self.get_func(&job, instance, &mut store)?;
 
         let (params, results) = self.prepare_job(&module, &job, &mut linker)?;
+        let handle = self.run_job(func, params, results, store).await?;
+        let result = handle.await??;
 
-        let results = self.execute_export_function(func, params.as_slice(), results, store)?;
-
-        let r = self.prepare_results(results);
-
-        Ok(RawResults::from_vec(r))
+        Ok(result)
     }
 }
 
@@ -43,6 +45,31 @@ impl WasmJobRunner {
         let engine = Engine::default();
 
         Self { engine }
+    }
+
+    pub(crate) async fn run_job(
+        &self,
+        func: Func,
+        params: Vec<Val>,
+        mut results: Vec<Val>,
+        store: Store<()>,
+    ) -> Result<JoinHandle<anyhow::Result<RawResults>>, Error> {
+        let job_handle: JoinHandle<anyhow::Result<RawResults>> = tokio::spawn(async move {
+            func.call(store, &params, &mut results)?;
+            let result = results
+                .iter()
+                .map(|v| match v {
+                    Val::I32(t) => t.encode(),
+                    Val::I64(t) => t.encode(),
+                    _ => vec![],
+                })
+                .collect::<Vec<Vec<u8>>>();
+            let r = RawResults::from_vec(result);
+
+            Ok(r)
+        });
+
+        Ok(job_handle)
     }
 
     fn prepare_job(
@@ -145,33 +172,10 @@ impl WasmJobRunner {
         results
     }
 
-    pub(crate) fn execute_export_function(
-        &self,
-        func: Func,
-        params: &[Val],
-        mut results: Vec<Val>,
-        store: Store<()>,
-    ) -> Result<Vec<Val>, Error> {
-        func.call(store, params, &mut results)?;
-
-        Ok(results.clone())
-    }
-
     fn decode_param<P: Decode + Into<Val>>(&self, mut p: &[u8]) -> Result<Val, Error> {
         let param = <P as Decode>::decode(&mut p)?;
         let val: Val = param.into();
         Ok(val)
-    }
-
-    fn prepare_results(&self, results: Vec<Val>) -> Vec<Vec<u8>> {
-        results
-            .iter()
-            .map(|v| match v {
-                Val::I32(t) => t.encode(),
-                Val::I64(t) => t.encode(),
-                _ => vec![],
-            })
-            .collect::<Vec<Vec<u8>>>()
     }
 }
 
@@ -187,6 +191,12 @@ pub enum WasmJobRunnerServiceError {
     WasmTime {
         #[from]
         source: wasmtime::Error,
+    },
+
+    #[error("")]
+    Join {
+        #[from]
+        source: tokio::task::JoinError,
     },
 
     #[error("")]
