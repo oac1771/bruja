@@ -35,7 +35,4 @@ pub enum Error {
 
     #[error("")]
     NetworkHandlerStopped,
-
-    #[error(transparent)]
-    Unknown(#[from] anyhow::Error),
 }

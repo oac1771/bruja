@@ -27,7 +27,6 @@ wasmtime = { workspace = true }
 pallet-contracts = { workspace = true, default-features = false }
 sp-runtime = { workspace = true, default-features = false }
 sp-weights = { workspace = true, default-features = false }
-anyhow = { workspace = true}
 
 catalog = { workspace = true }
 async-stream = "0.3.6"

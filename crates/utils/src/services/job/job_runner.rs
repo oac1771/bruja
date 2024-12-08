@@ -53,9 +53,10 @@ impl WasmJobRunner {
         params: Vec<Val>,
         mut results: Vec<Val>,
         store: Store<()>,
-    ) -> Result<JoinHandle<anyhow::Result<RawResults>>, Error> {
-        let job_handle: JoinHandle<anyhow::Result<RawResults>> = tokio::spawn(async move {
-            func.call(store, &params, &mut results)?;
+    ) -> Result<JoinHandle<Result<RawResults, Error>>, Error> {
+        let job_handle: JoinHandle<Result<RawResults, Error>> = tokio::spawn(async move {
+            func.call(store, &params, &mut results)
+                .map_err(|e| Error::JobError { err: e.to_string() })?;
             let result = results
                 .iter()
                 .map(|v| match v {
@@ -222,6 +223,9 @@ pub enum Error {
         #[from]
         source: codec::Error,
     },
+
+    #[error("{err}")]
+    JobError { err: String },
 
     #[error("")]
     FuncTypeNotFound,

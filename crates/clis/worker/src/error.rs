@@ -32,7 +32,4 @@ pub enum Error {
 
     #[error("")]
     WorkerStoppedUnexpectedly,
-
-    #[error(transparent)]
-    Unknown(#[from] anyhow::Error),
 }
