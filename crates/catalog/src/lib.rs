@@ -7,7 +7,7 @@ pub mod catalog {
     use ink::{
         env::{
             hash::{HashOutput, Keccak256},
-            hash_bytes,
+            hash_bytes, DefaultEnvironment, Environment as InkEnv,
         },
         prelude::{vec, vec::Vec},
         storage::Mapping,
@@ -15,7 +15,7 @@ pub mod catalog {
 
     pub type HashId = <Keccak256 as HashOutput>::Type;
     type Workers = Mapping<AccountId, u32>;
-    type Requests = Mapping<AccountId, Vec<HashId>>;
+    type JobMetaData = Mapping<AccountId, Vec<(HashId, <DefaultEnvironment as InkEnv>::Balance)>>;
 
     #[derive(Debug, PartialEq, Eq, Encode, Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
@@ -69,7 +69,7 @@ pub mod catalog {
     #[ink(storage)]
     pub struct Catalog {
         workers: Workers,
-        requests: Requests,
+        job_metadata: JobMetaData,
     }
 
     impl Default for Catalog {
@@ -83,7 +83,7 @@ pub mod catalog {
         pub fn new() -> Self {
             Self {
                 workers: Mapping::new(),
-                requests: Mapping::new(),
+                job_metadata: Mapping::new(),
             }
         }
 
@@ -102,19 +102,20 @@ pub mod catalog {
             self.env().emit_event(WorkerRegistered { who: caller, val });
         }
 
-        #[ink(message)]
+        #[ink(message, payable)]
         pub fn submit_job_request(&mut self, job_request: JobRequest) {
             let who = self.env().caller();
             let id = job_request.id();
+            let value = self.env().transferred_value();
 
-            let ids = if let Some(mut ids) = self.requests.get(who) {
-                ids.push(id);
-                ids
+            let metadatas = if let Some(mut metadatas) = self.job_metadata.get(who) {
+                metadatas.push((id, value));
+                metadatas
             } else {
-                vec![id]
+                vec![(id, value)]
             };
 
-            self.requests.insert(who, &ids);
+            self.job_metadata.insert(who, &metadatas);
             self.env().emit_event(JobRequestSubmitted { who, id });
         }
     }
@@ -129,7 +130,10 @@ pub mod catalog {
     mod tests {
         use super::*;
         use ink::{
-            env::test::{recorded_events, EmittedEvent},
+            env::{
+                pay_with_call,
+                test::{recorded_events, EmittedEvent},
+            },
             primitives::AccountId,
             scale::Decode,
         };
@@ -165,26 +169,29 @@ pub mod catalog {
             let who = AccountId::from([1; 32]);
             let mut catalog = Catalog::default();
             let code = vec![1, 2, 3, 4];
+            let value = 100;
 
             let job_request = JobRequest::test(code.clone());
 
-            catalog.submit_job_request(job_request.clone());
+            pay_with_call!(catalog.submit_job_request(job_request.clone()), value);
 
             let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
             let job_submitted_event =
                 <JobRequestSubmitted as Decode>::decode(&mut emitted_events[0].data.as_slice())
                     .unwrap();
-            let job_ids = catalog.requests.get(who).unwrap();
+            let metadatas = catalog.job_metadata.get(who).unwrap();
 
             assert_eq!(job_submitted_event.who, who);
             assert_eq!(job_submitted_event.id, job_request.id());
-            assert_eq!(job_ids[0], job_request.id());
+            assert_eq!(metadatas[0].0, job_request.id());
+            assert_eq!(metadatas[0].1, value);
         }
 
         #[ink::test]
         fn submit_job_request_appends_to_existing_jobs() {
             let who = AccountId::from([1; 32]);
             let mut catalog = Catalog::default();
+            let value = 100;
 
             let code_1 = vec![1, 2, 3, 4];
             let code_2 = vec![1, 2, 3, 5];
@@ -192,8 +199,8 @@ pub mod catalog {
             let job_1_request = JobRequest::test(code_1.clone());
             let job_2_request = JobRequest::test(code_2.clone());
 
-            catalog.submit_job_request(job_1_request.clone());
-            catalog.submit_job_request(job_2_request.clone());
+            pay_with_call!(catalog.submit_job_request(job_1_request.clone()), value);
+            pay_with_call!(catalog.submit_job_request(job_2_request.clone()), value);
 
             let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
 
@@ -203,14 +210,17 @@ pub mod catalog {
             let job_submitted_event_2 =
                 <JobRequestSubmitted as Decode>::decode(&mut emitted_events[1].data.as_slice())
                     .unwrap();
-            let jobs = catalog.requests.get(who).unwrap();
+            let jobs = catalog.job_metadata.get(who).unwrap();
 
             assert_eq!(job_submitted_event_1.id, job_1_request.id());
             assert_eq!(job_submitted_event_2.id, job_2_request.id());
 
             assert_eq!(jobs.len(), 2);
-            assert_eq!(jobs[0], job_1_request.id());
-            assert_eq!(jobs[1], job_2_request.id());
+            assert_eq!(jobs[0].0, job_1_request.id());
+            assert_eq!(jobs[0].1, value);
+
+            assert_eq!(jobs[1].0, job_2_request.id());
+            assert_eq!(jobs[1].1, value);
         }
     }
 }
