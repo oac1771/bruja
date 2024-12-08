@@ -34,6 +34,8 @@ mod tests {
         let worker_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
         let requester_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
 
+        let value = 100_000;
+
         let worker_account_id = worker_key_pair.public_key().to_account_id();
         let requester_account_id = requester_key_pair.public_key().to_account_id();
 
@@ -57,6 +59,7 @@ mod tests {
                 "tests/requester_worker/work_bg.wasm",
                 "add",
                 Some(String::from("10,10")),
+                value,
             )
             .await;
 
@@ -102,7 +105,7 @@ mod tests {
         let tx_client = contract_client.online_client().await.unwrap().tx();
 
         let address = loop {
-            match contract_client.instantiate("new").await {
+            match contract_client.instantiate("new", 0).await {
                 Ok(addr) => {
                     break addr;
                 }
@@ -285,9 +288,16 @@ mod tests {
             }
         }
 
-        async fn submit_job(&self, path: &str, func_name: &str, parameters: Option<String>) {
+        async fn submit_job(
+            &self,
+            path: &str,
+            func_name: &str,
+            parameters: Option<String>,
+            value: u128,
+        ) {
             let submit_job_cmd = SubmitJobCmd {
                 address: self.contract_address.to_string(),
+                value,
                 code_path: path.to_string(),
                 function_name: func_name.to_string(),
                 parameters,

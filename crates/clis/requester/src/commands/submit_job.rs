@@ -1,6 +1,7 @@
 use crate::{config::Config, controller::requester::RequesterController, error::Error};
 use clap::Parser;
 use ink_env::DefaultEnvironment;
+use ink_env::Environment;
 use std::str::FromStr;
 use subxt::{utils::AccountId32, SubstrateConfig};
 use subxt_signer::sr25519::Keypair;
@@ -23,6 +24,9 @@ pub struct SubmitJobCmd {
     #[arg(long)]
     pub function_name: String,
 
+    #[arg(long)]
+    pub value: u128,
+
     /// A comma seperated list of paramameters to pass to your function
     #[arg(long)]
     pub parameters: Option<String>,
@@ -33,6 +37,8 @@ impl SubmitJobCmd {
     pub async fn handle(&self, config: Config) -> Result<(), Error> {
         let contract_address =
             AccountId32::from_str(&self.address).map_err(|_| Error::ParsingContractAddress)?;
+
+        let value: <DefaultEnvironment as Environment>::Balance = self.value;
 
         let contract_client = Client::<SubstrateConfig, DefaultEnvironment, Keypair>::new(
             &config.artifact_file_path,
@@ -51,8 +57,9 @@ impl SubmitJobCmd {
         let (handle, network_client) = self.join_network(contract_address.to_string()).await?;
 
         let submit_job_controller = RequesterController::new(
-            contract_client,
             contract_address,
+            value,
+            contract_client,
             job_handler_service,
             network_client,
         );
@@ -77,6 +84,7 @@ impl SubmitJobCmd {
         &self,
         controller: RequesterController<
             SubstrateConfig,
+            DefaultEnvironment,
             Client<'_, SubstrateConfig, DefaultEnvironment, Keypair>,
             JobHandler,
             NodeClient,

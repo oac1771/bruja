@@ -1,6 +1,7 @@
 use catalog::catalog::{HashId, JobRequest, JobRequestSubmitted};
 use clis::{Gossip, Request, Response};
 use codec::Encode;
+use ink_env::Environment;
 use subxt::{ext::futures::StreamExt, Config};
 use tracing::{error, info};
 use utils::services::{
@@ -12,17 +13,19 @@ use utils::services::{
     p2p::{GossipMessageT, NetworkClient, NetworkClientError, NetworkIdT, RequestT, ResponseT},
 };
 
-pub struct RequesterController<C: Config, CC, JH, NC> {
-    contract_client: CC,
+pub struct RequesterController<C: Config, E: Environment, CC, JH, NC> {
     contract_address: <C as Config>::AccountId,
+    value: <E as Environment>::Balance,
+    contract_client: CC,
     job_handler_service: JH,
     network_client: NC,
 }
 
-impl<C, CC, JH, NC> RequesterController<C, CC, JH, NC>
+impl<C, E, CC, JH, NC> RequesterController<C, E, CC, JH, NC>
 where
     C: Config,
-    CC: ContractClient<C = C>,
+    E: Environment,
+    CC: ContractClient<C = C, E = E>,
     JH: JobHandlerService,
     NC: NetworkClient,
     RequesterControllerError: From<<NC as NetworkClient>::Err>
@@ -30,14 +33,16 @@ where
         + From<<JH as JobHandlerService>::Err>,
 {
     pub fn new(
-        contract_client: CC,
         contract_address: <C as Config>::AccountId,
+        value: <E as Environment>::Balance,
+        contract_client: CC,
         job_handler_service: JH,
         network_client: NC,
     ) -> Self {
         Self {
-            contract_client,
             contract_address,
+            value,
+            contract_client,
             job_handler_service,
             network_client,
         }
@@ -74,6 +79,7 @@ where
                 self.contract_address.clone(),
                 "submit_job_request",
                 job_request,
+                self.value,
             )
             .await?;
 

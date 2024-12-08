@@ -29,6 +29,7 @@ use subxt::{
 
 pub trait ContractClient {
     type C: Config;
+    type E: Environment;
     type Err: From<codec::Error>;
     type ContractEmitted: ContractEmittedT;
 
@@ -44,6 +45,7 @@ pub trait ContractClient {
         address: <Self::C as Config>::AccountId,
         message: &str,
         args: &Args,
+        value: <Self::E as Environment>::Balance,
     ) -> impl Future<Output = Result<Ev, Self::Err>> + Send;
 
     fn decode_event<Ev: Decode>(&self, mut ev_data: &[u8]) -> Result<Ev, Self::Err> {
@@ -74,9 +76,10 @@ where
         + Into<AccountId32>,
     <<C as Config>::ExtrinsicParams as ExtrinsicParams<C>>::Params:
         From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default + Send + Sync,
-    E::Balance: Default + EncodeAsType + Serialize + From<u128>,
+    E::Balance: Default + EncodeAsType + Serialize + Send + Into<u128>,
 {
     type C = C;
+    type E = E;
     type Err = ContractClientError;
     type ContractEmitted = ContractEmitted;
 
@@ -126,6 +129,7 @@ where
         address: <C as Config>::AccountId,
         message: &str,
         args: &Args,
+        value: <Self::E as Environment>::Balance,
     ) -> Result<Ev, ContractClientError> {
         let message = self.ink_project.get_message(message)?;
         let mut data = message.get_selector()?;
@@ -136,10 +140,13 @@ where
             .await?
             .gas_required;
 
-        let call_tx =
-            chain::tx()
-                .contracts()
-                .call(address.clone().into(), 0, gas_limit.into(), None, data);
+        let call_tx = chain::tx().contracts().call(
+            address.clone().into(),
+            value.into(),
+            gas_limit.into(),
+            None,
+            data,
+        );
 
         let events = self.submit_extrinsic(call_tx).await?;
 
@@ -160,7 +167,7 @@ where
         Display + IntoVisitor + Decode + EncodeAsType + Into<MultiAddress<AccountId32, ()>>,
     <<C as Config>::ExtrinsicParams as ExtrinsicParams<C>>::Params:
         From<<DefaultExtrinsicParams<C> as ExtrinsicParams<C>>::Params> + Default,
-    E::Balance: Default + EncodeAsType + Serialize + From<u128>,
+    E::Balance: Default + EncodeAsType + Serialize,
 {
     pub async fn new(artifact_file: &'a str, signer: &'a S, url: &'a str) -> Result<Self, Error> {
         let file = File::open(artifact_file)?;
@@ -178,7 +185,11 @@ where
         })
     }
 
-    pub async fn instantiate(&self, constructor: &str) -> Result<AccountId32, Error> {
+    pub async fn instantiate(
+        &self,
+        constructor: &str,
+        value: <E as Environment>::Balance,
+    ) -> Result<AccountId32, Error> {
         let salt = rand::random::<[u8; 8]>().to_vec();
         let code = self.ink_project.code()?;
 
@@ -190,7 +201,7 @@ where
         let gas_limit = self
             .estimate_gas_instantiate(
                 self.signer.account_id(),
-                0_u128.into(),
+                value,
                 code.clone(),
                 data.clone(),
                 salt.clone(),

@@ -23,7 +23,7 @@ impl InstantiateCmd {
                 .await
                 .unwrap();
 
-        let contract_address = client.instantiate("new").await.unwrap();
+        let contract_address = client.instantiate("new", 0).await.unwrap();
 
         println!("{}", contract_address);
     }
