@@ -213,7 +213,7 @@ where
         tokio::pin!(resp_stream);
 
         while let Some(resp) = resp_stream.next().await {
-            if let Ok(Response::AcknowledgeResult { job_id }) = Response::decode(&resp.body_ref()) {
+            if let Ok(Response::AcknowledgeResult { job_id }) = Response::decode(resp.body_ref()) {
                 if id == job_id {
                     info!("Result acknowledged by requester");
                     break;

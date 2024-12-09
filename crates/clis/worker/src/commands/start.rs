@@ -74,7 +74,7 @@ impl StartCmd {
     ) -> Result<(), Error> {
         select! {
             handle_result = handle => {
-                let result = match handle_result {
+                match handle_result {
                     Ok(_) => {
                         error!("Network handler stopped unexpectedly");
                         Err(Error::NetworkHandlerStopped)
@@ -83,15 +83,13 @@ impl StartCmd {
                         error!("Network handler stopped and returned err: {}", err);
                         Err(Error::from(err))
                     }
-                };
-                result
+                }
             },
             controller_result = controller.listen() => {
-                let result = match controller_result {
+                match controller_result {
                     Ok(_) => Err(Error::WorkerStoppedUnexpectedly),
                     Err(err) => Err(Error::from(err))
-                };
-                result
+                }
 
             },
             _ = ctrl_c() => {

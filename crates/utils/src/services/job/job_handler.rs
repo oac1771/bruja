@@ -54,8 +54,8 @@ impl JobHandlerService for JobHandler {
             .zip(results.to_vec())
             .map(|(val_type, res)| {
                 let decoded = match val_type {
-                    ValType::I32 => Some(self.decode_result::<i32>(&mut res.as_slice())),
-                    ValType::I64 => Some(self.decode_result::<i64>(&mut res.as_slice())),
+                    ValType::I32 => Some(self.decode_result::<i32>(res.as_slice())),
+                    ValType::I64 => Some(self.decode_result::<i64>(res.as_slice())),
                     _ => None,
                 };
 

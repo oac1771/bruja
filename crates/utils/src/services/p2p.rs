@@ -441,7 +441,7 @@ impl NetworkClient for NodeClient {
     async fn send_response(&self, id: Self::Id, payload: Vec<u8>) -> Result<(), Self::Err> {
         let payload = ClientRequestPayload::SendResponse { payload, id };
         self.send_client_request(payload).await?;
-        return Ok(());
+        Ok(())
     }
 
     async fn get_gossip_nodes(

@@ -92,8 +92,8 @@ pub enum Val {
 impl fmt::Display for Val {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            Self::I32(val) => write!(f, "{}", val.to_string()),
-            Self::I64(val) => write!(f, "{}", val.to_string()),
+            Self::I32(val) => write!(f, "{}", val),
+            Self::I64(val) => write!(f, "{}", val),
         }
     }
 }

@@ -19,6 +19,12 @@ pub struct WasmJobRunner {
     engine: Engine,
 }
 
+impl Default for WasmJobRunner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WasmJobRunnerService for WasmJobRunner {
     type Err = WasmJobRunnerServiceError;
     type Job = Job;
@@ -82,7 +88,7 @@ impl WasmJobRunner {
         let func = self.get_func_type(job, module)?;
         let params = self.build_params(job, &func)?;
         let results = self.build_results(&func);
-        self.define_host_fn(&module, linker)?;
+        self.define_host_fn(module, linker)?;
 
         Ok((params, results))
     }

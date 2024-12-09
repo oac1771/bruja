@@ -137,7 +137,7 @@ pub mod catalog {
             let mut who = self
                 .job_metadata
                 .get(caller)
-                .ok_or_else(|| CatalogError::AccountNotFoud)?;
+                .ok_or(CatalogError::AccountNotFoud)?;
 
             let value = who.iter().find(|(id, _)| id == &job_id).map(|(_, val)| val);
 

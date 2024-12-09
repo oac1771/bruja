@@ -91,9 +91,9 @@ impl SubmitJobCmd {
         >,
         handle: JoinHandle<Result<(), NetworkError>>,
     ) -> Result<(), Error> {
-        let result = select! {
+        select! {
             handle_result = handle => {
-                let result = match handle_result {
+                match handle_result {
                     Ok(_) => {
                         error!("Network handler stopped unexpectedly");
                         Err(Error::NetworkHandlerStopped)
@@ -102,8 +102,7 @@ impl SubmitJobCmd {
                         error!("Network handler stopped and returned err: {}", err);
                         Err(Error::from(err))
                     }
-                };
-                result
+                }
             },
             controller_result = controller.run() => {
                 if let Err(err) = controller_result {
@@ -119,6 +118,6 @@ impl SubmitJobCmd {
             }
         }?;
 
-        Ok(result)
+        Ok(())
     }
 }
