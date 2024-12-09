@@ -12,3 +12,4 @@ codec = { workspace = true }
 utils = { workspace = true }
 catalog = { workspace = true }
 libp2p = { workspace = true }
+subxt = { workspace = true }

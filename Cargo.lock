@@ -1479,6 +1479,7 @@ dependencies = [
  "catalog",
  "libp2p 0.54.1",
  "parity-scale-codec",
+ "subxt 0.35.3",
  "utils",
 ]
 

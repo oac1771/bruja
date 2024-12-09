@@ -95,6 +95,8 @@ mod tests {
         worker_runner
             .assert_info_log_entry("Result acknowledged by requester")
             .await;
+
+        requester_runner.assert_info_log_entry("Paid Worker!").await;
         requester_runner.assert_info_log_contains("Results: ").await;
     }
 

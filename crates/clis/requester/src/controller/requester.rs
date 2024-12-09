@@ -1,4 +1,4 @@
-use catalog::catalog::{HashId, JobRequest, JobRequestSubmitted};
+use catalog::catalog::{HashId, JobRequest, JobRequestSubmitted, PaidWorker};
 use clis::{Gossip, Request, Response};
 use codec::Encode;
 use ink_env::Environment;
@@ -25,6 +25,7 @@ impl<C, E, CC, JH, NC> RequesterController<C, E, CC, JH, NC>
 where
     C: Config,
     E: Environment,
+    E::Balance: From<u128>,
     CC: ContractClient<C = C, E = E>,
     JH: JobHandlerService,
     NC: NetworkClient,
@@ -51,6 +52,7 @@ where
     pub async fn run(&self) -> Result<(), RequesterControllerError> {
         let job = self.job_handler_service.build_job().await?;
         let job_request = JobRequest::new(job.code_ref(), job.params_ref());
+        let job_id = job_request.id();
 
         self.submit_job(&job_request).await?;
         let msg = self
@@ -59,14 +61,14 @@ where
             .ok_or_else(|| RequesterControllerError::JobNeverAccepted)?;
 
         self.send_job(msg.network_id(), job).await?;
-        self.wait_for_job_acknowledgement(job_request.id()).await;
+        self.wait_for_job_acknowledgement(job_id).await;
 
-        let (req_id, results) = self
-            .wait_for_job_results(job_request.id())
+        let (req_id, results, worker) = self
+            .wait_for_job_results(job_id)
             .await
             .ok_or_else(|| RequesterControllerError::ResultsNeverReceived)?;
-        self.send_result_acknowledgement(req_id, job_request.id())
-            .await?;
+        self.send_result_acknowledgement(req_id, job_id).await?;
+        self.pay_worker(worker, job_id).await?;
 
         self.display_results(results).await?;
 
@@ -152,15 +154,21 @@ where
     ) -> Option<(
         <NC as NetworkClient>::Id,
         <JH as JobHandlerService>::RawResults,
+        [u8; 32],
     )> {
         let req_stream = self.network_client.req_stream().await;
         tokio::pin!(req_stream);
         while let Some(req) = req_stream.next().await {
-            if let Ok(Request::Result { result, job_id }) = Request::decode(req.body_ref()) {
+            if let Ok(Request::Result {
+                result,
+                job_id,
+                worker,
+            }) = Request::decode(req.body_ref())
+            {
                 if job_id == id {
                     info!("Received results");
-                    let r = <JH as JobHandlerService>::RawResults::from_vec(result);
-                    return Some((req.id(), r));
+                    let result = <JH as JobHandlerService>::RawResults::from_vec(result);
+                    return Some((req.id(), result, worker));
                 }
             } else {
                 error!("Unable to decode request");
@@ -196,6 +204,28 @@ where
         let stars = vec!["*"; results.len() + 4].join("");
 
         info!("\n{}\n  {}  \n{}", stars.clone(), results, stars.clone());
+
+        Ok(())
+    }
+
+    async fn pay_worker(
+        &self,
+        worker: [u8; 32],
+        job_id: HashId,
+    ) -> Result<(), RequesterControllerError> {
+        let args = (worker, job_id);
+        let value: <E as Environment>::Balance = 0_u128.into();
+
+        self.contract_client
+            .write::<PaidWorker, ([u8; 32], HashId)>(
+                self.contract_address.clone(),
+                "pay_worker",
+                &args,
+                value,
+            )
+            .await?;
+
+        info!("Paid Worker!");
 
         Ok(())
     }

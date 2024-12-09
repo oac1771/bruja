@@ -2,32 +2,37 @@ use catalog::catalog::{HashId, JobRequest, JobRequestSubmitted};
 use clis::{Gossip, Request, Response};
 use codec::Encode;
 use std::fmt::Display;
-use subxt::{ext::futures::StreamExt, Config};
+use subxt::{ext::futures::StreamExt, tx::Signer, Config};
 use tokio::{
     pin,
     time::{sleep, Duration},
 };
 use tracing::{error, info};
-use utils::services::{
-    contract_client::{ContractClient, ContractClientError, ContractEmittedT},
-    job::{
-        job_runner::{WasmJobRunnerService, WasmJobRunnerServiceError},
-        JobT, RawResultsT,
+use utils::{
+    services::{
+        contract_client::{ContractClient, ContractClientError, ContractEmittedT},
+        job::{
+            job_runner::{WasmJobRunnerService, WasmJobRunnerServiceError},
+            JobT, RawResultsT,
+        },
+        p2p::{NetworkClient, NetworkClientError, NetworkIdT, RequestT, ResponseT},
     },
-    p2p::{NetworkClient, NetworkClientError, NetworkIdT, RequestT, ResponseT},
+    Wallet,
 };
 
-pub struct WorkerController<C: Config, CC, NC, JR> {
-    contract_client: CC,
+pub struct WorkerController<C: Config, S: Signer<C>, CC, NC, JR> {
     contract_address: <C as Config>::AccountId,
+    signer: S,
+    contract_client: CC,
     network_client: NC,
     job_runner: JR,
 }
 
-impl<C, CC, NC, JR> WorkerController<C, CC, NC, JR>
+impl<C, S, CC, NC, JR> WorkerController<C, S, CC, NC, JR>
 where
     C: Config,
     <C as Config>::AccountId: Display,
+    S: Signer<C> + Wallet,
     CC: ContractClient<C = C>,
     NC: NetworkClient,
     JR: WasmJobRunnerService,
@@ -36,13 +41,15 @@ where
         + From<<JR as WasmJobRunnerService>::Err>,
 {
     pub fn new(
-        contract_client: CC,
         contract_address: <C as Config>::AccountId,
+        signer: S,
+        contract_client: CC,
         network_client: NC,
         job_runner: JR,
     ) -> Self {
         Self {
             contract_address,
+            signer,
             contract_client,
             network_client,
             job_runner,
@@ -197,9 +204,11 @@ where
         job_id: HashId,
         who: <NC as NetworkClient>::NetworkId,
     ) -> Result<(), WorkerControllerError> {
+        let worker = self.signer.public_key();
         let req = Request::Result {
             result: result.to_vec(),
             job_id,
+            worker,
         };
 
         self.network_client.send_request(who, req.encode()).await?;

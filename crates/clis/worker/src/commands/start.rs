@@ -36,12 +36,14 @@ impl StartCmd {
 
         let worker_controller: WorkerController<
             SubstrateConfig,
+            Keypair,
             Client<'_, SubstrateConfig, DefaultEnvironment, Keypair>,
             NodeClient,
             WasmJobRunner,
         > = WorkerController::new(
-            contract_client,
             contract_address,
+            config.signer.clone(),
+            contract_client,
             network_client,
             job_runner,
         );
@@ -66,6 +68,7 @@ impl StartCmd {
         &self,
         controller: WorkerController<
             SubstrateConfig,
+            Keypair,
             Client<'_, SubstrateConfig, DefaultEnvironment, Keypair>,
             NodeClient,
             WasmJobRunner,

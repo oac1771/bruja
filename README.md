@@ -60,7 +60,7 @@ cargo run -p worker start --address <contract address>
 In the same terminal which you used to instantiate the contract, run the following command to submit a job to the network:
 
 ```
-cargo run -p requester submit-job --address $CONTRACT_ADDRESS --code-path crates/integration_tests/tests/requester_worker/work_bg.wasm --parameters 10,14 --function-name add
+cargo run -p requester submit-job --address $CONTRACT_ADDRESS --code-path crates/integration_tests/tests/requester_worker/work_bg.wasm --parameters 10,14 --function-name add --value 100
 ```
 
 # Testing
@@ -77,15 +77,14 @@ Run the following command to run smart contract integration tests:
 cargo make contract-tests
 ```
 
-
-To run project integration tests, start a local substrate node in one terminal:
-
-```
-cargo make local-node
-```
-
-In a seperate terminal, run the following command to perform Requester - Worker Integration tests:
+Run the following command to perform Requester - Worker Integration tests:
 
 ```
-cargo make integration-tests
+cargo make requester-worker
+```
+
+Run the following command to perform P2P Integration tests:
+
+```
+cargo make p2p-tests
 ```
