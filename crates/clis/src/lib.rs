@@ -41,11 +41,11 @@ impl Request {
 }
 
 impl Request {
-    pub fn build_job_req(value: (Vec<u8>, Vec<Vec<u8>>, Vec<u8>), who: Vec<u8>) -> Self {
+    pub fn build_job_req(components: (Vec<u8>, Vec<Vec<u8>>, Vec<u8>), who: Vec<u8>) -> Self {
         Self::Job {
-            code: value.0,
-            params: value.1,
-            func_name: value.2,
+            code: components.0,
+            params: components.1,
+            func_name: components.2,
             who,
         }
     }

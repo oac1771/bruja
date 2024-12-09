@@ -20,7 +20,9 @@ pub mod catalog {
     #[derive(Debug, PartialEq, Eq, Encode, Decode)]
     #[cfg_attr(feature = "std", derive(scale_info::TypeInfo))]
     pub enum CatalogError {
-        WorkerNotFound,
+        AccountNotFoud,
+        FailedTransfer,
+        JobNotFound,
     }
 
     #[derive(Debug)]
@@ -41,6 +43,12 @@ pub mod catalog {
         pub fn id(&self) -> HashId {
             self.id
         }
+    }
+
+    #[derive(Debug)]
+    #[ink(event)]
+    pub struct PaidWorker {
+        pub destination: AccountId,
     }
 
     #[derive(Debug, Encode, Decode, PartialEq, Clone)]
@@ -117,6 +125,34 @@ pub mod catalog {
 
             self.job_metadata.insert(who, &metadatas);
             self.env().emit_event(JobRequestSubmitted { who, id });
+        }
+
+        #[ink(message)]
+        pub fn pay_worker(
+            &mut self,
+            destination: AccountId,
+            job_id: HashId,
+        ) -> Result<(), CatalogError> {
+            let caller = self.env().caller();
+            let mut who = self
+                .job_metadata
+                .get(caller)
+                .ok_or_else(|| CatalogError::AccountNotFoud)?;
+
+            let value = who.iter().find(|(id, _)| id == &job_id).map(|(_, val)| val);
+
+            if let Some(val) = value {
+                self.env()
+                    .transfer(destination, *val)
+                    .map_err(|_| CatalogError::FailedTransfer)?;
+                who.retain(|(id, _)| id != &job_id);
+                self.job_metadata.insert(caller, &who);
+                self.env().emit_event(PaidWorker { destination });
+            } else {
+                return Err(CatalogError::JobNotFound);
+            }
+
+            Ok(())
         }
     }
 
@@ -221,6 +257,32 @@ pub mod catalog {
 
             assert_eq!(jobs[1].0, job_2_request.id());
             assert_eq!(jobs[1].1, value);
+        }
+
+        #[ink::test]
+        fn pay_worker_emits_event_and_updates_storage() {
+            let requester = AccountId::from([1; 32]);
+            let worker = AccountId::from([3; 32]);
+            let mut catalog = Catalog::default();
+
+            let job_request = JobRequest::test(vec![1, 2, 3, 4]);
+            let value = 100;
+            let job_id = job_request.id();
+
+            catalog
+                .job_metadata
+                .insert(requester, &vec![(job_id, value)]);
+            catalog.pay_worker(worker, job_id).unwrap();
+
+            let metadata_after = catalog.job_metadata.get(requester).unwrap();
+
+            let emitted_events = recorded_events().collect::<Vec<EmittedEvent>>();
+
+            let paid_event =
+                <PaidWorker as Decode>::decode(&mut emitted_events[0].data.as_slice()).unwrap();
+
+            assert_eq!(paid_event.destination, worker);
+            assert!(metadata_after.len() == 0);
         }
     }
 }

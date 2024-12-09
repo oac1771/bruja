@@ -125,7 +125,7 @@ where
             .send_request(network_id, req.encode())
             .await?;
 
-        info!("Job sent to peer: {:?}", network_id.to_vec());
+        info!("Job sent to peer: {}", network_id);
 
         Ok(())
     }

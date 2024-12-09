@@ -2,11 +2,6 @@ refactor contract client so that it calls subxt client
 
 create derive macro for mock stuff
 
-- requester
-    - payment
-        - look into module.resources_required()
-    - look for available workers, and send preferred worker in submit job request
-
 - catalog
     - make contract upgradeable 
 
