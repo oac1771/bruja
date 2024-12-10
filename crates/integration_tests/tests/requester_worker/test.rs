@@ -10,6 +10,7 @@ mod tests {
     use subxt::{
         config::Config,
         error::{Error as SubxtError, RpcError},
+        ext::scale_value::{Composite, Value, ValueDef},
         tx::TxClient,
         utils::{AccountId32, MultiAddress},
         OnlineClient, SubstrateConfig,
@@ -34,13 +35,14 @@ mod tests {
         let worker_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
         let requester_key_pair = Keypair::from_seed(rand::random::<[u8; 32]>()).unwrap();
 
+        let fund_amount = 1_000_000_000_000;
         let value = 100_000;
 
         let worker_account_id = worker_key_pair.public_key().to_account_id();
         let requester_account_id = requester_key_pair.public_key().to_account_id();
 
-        fund_account(worker_account_id, 1_000_000_000_000).await;
-        fund_account(requester_account_id, 1_000_000_000_000).await;
+        fund_account(worker_account_id.clone(), fund_amount).await;
+        fund_account(requester_account_id.clone(), fund_amount).await;
 
         let requester_runner = RequesterRunner::new(
             contract_address.clone(),
@@ -98,6 +100,12 @@ mod tests {
 
         requester_runner.assert_info_log_entry("Paid Worker!").await;
         requester_runner.assert_info_log_contains("Results: ").await;
+
+        let worker_balance = get_balance(&worker_account_id).await;
+        let requester_balance = get_balance(&requester_account_id).await;
+
+        assert_eq!(worker_balance - fund_amount, value);
+        assert!(requester_balance < fund_amount);
     }
 
     async fn instantiate_contract() -> AccountId32 {
@@ -219,6 +227,50 @@ mod tests {
 
         timeout(Duration::from_secs(10), nonce_check).await?;
         Ok(())
+    }
+
+    async fn get_balance(account: &<SubstrateConfig as Config>::AccountId) -> u128 {
+        let signer = Keypair::from_uri(&SecretUri::from_str(ACCOUNT_FUNDER).unwrap()).unwrap();
+        let contract_client = get_contract_client(&signer).await;
+        let account_addr =
+            subxt::dynamic::storage("System", "Account", vec![Value::from_bytes(&account)]);
+
+        let latest_block = contract_client
+            .online_client()
+            .await
+            .unwrap()
+            .blocks()
+            .at_latest()
+            .await
+            .unwrap();
+        let account = contract_client
+            .online_client()
+            .await
+            .unwrap()
+            .storage()
+            .at(latest_block.hash())
+            .fetch(&account_addr)
+            .await
+            .unwrap()
+            .unwrap()
+            .to_value()
+            .unwrap();
+
+        let acc_data = get_composite_field_value(&account, "data").unwrap();
+        let balance = get_composite_field_value(&acc_data, "free").unwrap();
+
+        balance.as_u128().unwrap()
+    }
+
+    fn get_composite_field_value<'a, T>(
+        value: &'a Value<T>,
+        field_name: &str,
+    ) -> Option<&'a Value<T>> {
+        if let ValueDef::Composite(Composite::Named(fields)) = &value.value {
+            let (_, field) = fields.iter().find(|(name, _)| name == field_name).unwrap();
+            return Some(field);
+        }
+        None
     }
 
     struct WorkerRunner {
