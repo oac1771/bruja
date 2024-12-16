@@ -1,6 +1,6 @@
-refactor contract client so that it calls subxt client
-
 create derive macro for mock stuff
+
+refactor contract client so that it calls subxt client
 
 - catalog
     - make contract upgradeable 
@@ -16,3 +16,20 @@ larger refactor:
     - figure out how to use substrate wasm builder for ink contract to not need to use cargo contract cli
         to build wasm binary
 
+
+proc macro to describe iac state
+    - one mod macro like substrate pallet with inner attribute macros as resource objects
+    - can build dependcy tree from resource name mapping to instance of resource objects name:
+        
+        #[name("Alice")]
+        struct User;
+
+        #[name("Bob")]
+        struct User;
+
+        #[name("Admin")]
+        struct UserGroup {
+            ids = [Alice.id, Bob.id]
+        }
+    
+        // UserGroup depends on Users

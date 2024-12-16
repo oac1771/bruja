@@ -1,9 +1,11 @@
 use super::{Job, JobT, RawResults, RawResultsT};
 use codec::{Decode, Encode};
 use futures::Future;
+use mockall::automock;
 use tokio::task::JoinHandle;
 use wasmtime::{Engine, ExternType, Func, FuncType, Instance, Linker, Module, Store, Val, ValType};
 
+#[automock(type Job=Job; type RawResults=RawResults; type Err=WasmJobRunnerServiceError;)]
 pub trait WasmJobRunnerService {
     type Err;
     type Job: JobT;

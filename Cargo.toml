@@ -12,7 +12,7 @@ members = [
 	"crates/node",
 	"crates/runtime",
 	"crates/catalog",
-	"crates/utils", 
+	"crates/utils",
 	"crates/scripts", 
 	"crates/integration_tests",
 	"crates/integration_tests/test_macro",

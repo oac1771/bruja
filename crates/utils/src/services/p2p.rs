@@ -40,7 +40,7 @@ pub trait NetworkClient {
         &self,
         topic: &str,
         msg: Vec<u8>,
-    ) -> impl Future<Output = Result<(), Self::Err>>;
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     fn send_request(
         &self,
@@ -788,4 +788,244 @@ pub enum NetworkError {
 
     #[error("{err}")]
     SendClientRequest { err: String },
+}
+
+#[cfg(test)]
+mod test {
+    use stream::iter;
+
+    use super::*;
+    use std::{
+        any::Any,
+        collections::HashMap,
+        marker::{Send, Sync},
+    };
+
+    struct Expectation<T> {
+        func: Option<Box<dyn Fn() -> T + Send + Sync>>,
+    }
+
+    impl<T> Expectation<T> {
+        fn _returns(&mut self, func: Box<dyn Fn() -> T + Send + Sync>) {
+            self.func = Some(func);
+        }
+    }
+
+    struct MockNodeClient {
+        expectations: HashMap<String, Box<dyn Any>>,
+    }
+
+    impl MockNodeClient {
+        fn _expect_publish_message(&mut self) -> &mut Expectation<Result<(), NetworkClientError>> {
+            self.expectations
+                .entry("publish_message".to_string())
+                .or_insert_with(|| {
+                    Box::new(Expectation::<Result<(), NetworkClientError>> { func: None })
+                })
+                .downcast_mut::<Expectation<Result<(), NetworkClientError>>>()
+                .unwrap()
+        }
+
+        fn _expect_send_request(&mut self) -> &mut Expectation<Result<u64, NetworkClientError>> {
+            self.expectations
+                .entry("send_request".to_string())
+                .or_insert_with(|| {
+                    Box::new(Expectation::<Result<u64, NetworkClientError>> { func: None })
+                })
+                .downcast_mut::<Expectation<Result<u64, NetworkClientError>>>()
+                .unwrap()
+        }
+
+        fn _expect_send_response(&mut self) -> &mut Expectation<Result<(), NetworkClientError>> {
+            self.expectations
+                .entry("send_response".to_string())
+                .or_insert_with(|| {
+                    Box::new(Expectation::<Result<(), NetworkClientError>> { func: None })
+                })
+                .downcast_mut::<Expectation<Result<(), NetworkClientError>>>()
+                .unwrap()
+        }
+
+        fn _expect_get_gossip_nodes(
+            &mut self,
+        ) -> &mut Expectation<Result<Vec<NetworkId>, NetworkClientError>> {
+            self.expectations
+                .entry("get_gossip_nodes".to_string())
+                .or_insert_with(|| {
+                    Box::new(Expectation::<Result<Vec<NetworkId>, NetworkClientError>> {
+                        func: None,
+                    })
+                })
+                .downcast_mut::<Expectation<Result<Vec<NetworkId>, NetworkClientError>>>()
+                .unwrap()
+        }
+
+        fn _expect_get_local_network_id(
+            &mut self,
+        ) -> &mut Expectation<Result<NetworkId, NetworkClientError>> {
+            self.expectations
+                .entry("get_local_network_id".to_string())
+                .or_insert_with(|| {
+                    Box::new(Expectation::<Result<NetworkId, NetworkClientError>> { func: None })
+                })
+                .downcast_mut::<Expectation<Result<NetworkId, NetworkClientError>>>()
+                .unwrap()
+        }
+
+        fn _expect_gossip_msg_stream(&mut self) -> &mut Expectation<Vec<GossipMessage>> {
+            self.expectations
+                .entry("expect_gossip_msg_stream".to_string())
+                .or_insert_with(|| Box::new(Expectation::<Vec<GossipMessage>> { func: None }))
+                .downcast_mut::<Expectation<Vec<GossipMessage>>>()
+                .unwrap()
+        }
+
+        fn _expect_req_stream(&mut self) -> &mut Expectation<Vec<InboundP2pRequest>> {
+            self.expectations
+                .entry("expect_req_stream".to_string())
+                .or_insert_with(|| Box::new(Expectation::<Vec<InboundP2pRequest>> { func: None }))
+                .downcast_mut::<Expectation<Vec<InboundP2pRequest>>>()
+                .unwrap()
+        }
+
+        fn _expect_resp_stream(&mut self) -> &mut Expectation<Vec<InboundP2pResponse>> {
+            self.expectations
+                .entry("expect_resp_stream".to_string())
+                .or_insert_with(|| Box::new(Expectation::<Vec<InboundP2pResponse>> { func: None }))
+                .downcast_mut::<Expectation<Vec<InboundP2pResponse>>>()
+                .unwrap()
+        }
+    }
+
+    impl NetworkClient for MockNodeClient {
+        type Err = NetworkClientError;
+        type Id = u64;
+        type NetworkId = NetworkId;
+        type GossipMessage = GossipMessage;
+        type Request = InboundP2pRequest;
+        type Response = InboundP2pResponse;
+
+        fn publish_message(
+            &self,
+            _topic: &str,
+            _msg: Vec<u8>,
+        ) -> impl Future<Output = Result<(), Self::Err>> + Send {
+            let expectation = self
+                .expectations
+                .get("publish_message")
+                .and_then(|e| e.downcast_ref::<Expectation<Result<(), NetworkClientError>>>())
+                .unwrap();
+
+            let func = expectation.func.as_ref().unwrap();
+
+            async { func() }
+        }
+
+        fn send_request(
+            &self,
+            _network_id: Self::NetworkId,
+            _payload: Vec<u8>,
+        ) -> impl Future<Output = Result<Self::Id, Self::Err>> + Send {
+            let expectation = self
+                .expectations
+                .get("send_request")
+                .and_then(|e| e.downcast_ref::<Expectation<Result<u64, NetworkClientError>>>())
+                .unwrap();
+
+            let func = expectation.func.as_ref().unwrap();
+
+            async { func() }
+        }
+
+        fn send_response(
+            &self,
+            _id: Self::Id,
+            _payload: Vec<u8>,
+        ) -> impl Future<Output = Result<(), Self::Err>> + Send {
+            let expectation = self
+                .expectations
+                .get("send_response")
+                .and_then(|e| e.downcast_ref::<Expectation<Result<(), NetworkClientError>>>())
+                .unwrap();
+
+            let func = expectation.func.as_ref().unwrap();
+
+            async { func() }
+        }
+
+        fn get_gossip_nodes(
+            &self,
+            _topic: &str,
+        ) -> impl Future<Output = Result<impl Iterator<Item = Self::NetworkId>, Self::Err>> + Send
+        {
+            let expectation = self
+                .expectations
+                .get("get_gossip_nodes")
+                .and_then(|e| {
+                    e.downcast_ref::<Expectation<Result<Vec<NetworkId>, NetworkClientError>>>()
+                })
+                .unwrap();
+
+            let func = expectation.func.as_ref().unwrap()().and_then(|x| Ok(x.into_iter()));
+
+            async { func }
+        }
+
+        fn get_local_network_id(
+            &self,
+        ) -> impl Future<Output = Result<Self::NetworkId, Self::Err>> + Send {
+            let expectation = self
+                .expectations
+                .get("get_local_network_id")
+                .and_then(|e| {
+                    e.downcast_ref::<Expectation<Result<NetworkId, NetworkClientError>>>()
+                })
+                .unwrap();
+
+            let func = expectation.func.as_ref().unwrap();
+
+            async { func() }
+        }
+
+        fn gossip_msg_stream(
+            &self,
+        ) -> impl Future<Output = impl Stream<Item = Self::GossipMessage>> + Send {
+            let expectation = self
+                .expectations
+                .get("expect_gossip_msg_stream")
+                .and_then(|e| e.downcast_ref::<Expectation<Vec<GossipMessage>>>())
+                .unwrap();
+
+            let func = expectation.func.as_ref().unwrap()().into_iter();
+            let stream = iter(func);
+
+            async { stream }
+        }
+
+        fn req_stream(&self) -> impl Future<Output = impl Stream<Item = Self::Request>> + Send {
+            let expectation = self
+                .expectations
+                .get("expect_req_stream")
+                .and_then(|e| e.downcast_ref::<Expectation<Vec<InboundP2pRequest>>>())
+                .unwrap();
+
+            let func = expectation.func.as_ref().unwrap()().into_iter();
+            let stream = iter(func);
+
+            async { stream }
+        }
+
+        fn resp_stream(&self) -> impl Future<Output = impl Stream<Item = Self::Response>> + Send {
+            let expectation = self
+                .expectations
+                .get("expect_resp_stream")
+                .and_then(|e| e.downcast_ref::<Expectation<Vec<InboundP2pResponse>>>())
+                .unwrap();
+
+            let func = expectation.func.as_ref().unwrap()().into_iter();
+            let stream = iter(func);
+
+            async { stream }
+        }
+    }
 }

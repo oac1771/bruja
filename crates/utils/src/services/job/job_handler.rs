@@ -1,5 +1,6 @@
 use super::{Job, JobT, RawResults, RawResultsT, Results, Val};
 use codec::{Decode, Encode};
+use mockall::automock;
 use std::{
     any::type_name,
     fmt::Display,
@@ -10,6 +11,7 @@ use std::{
 use tokio::{fs::File, io::AsyncReadExt};
 use wasmtime::{Engine, ExternType, FuncType, Module, ValType};
 
+#[automock(type Job=Job; type RawResults=RawResults; type Err=JobHandlerServiceError; type Results=Results;)]
 pub trait JobHandlerService {
     type Err;
     type Job: JobT;
