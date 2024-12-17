@@ -23,6 +23,10 @@ fn raw_params_parses_some_option_to_vec_strings() {
 
 #[test]
 fn successfully_parse_params_into_encoded_values() {
+    // let mut foo = job_handler::MockJobHandlerService::new();
+
+    // let bar = foo.expect_unpack_results().returning(|x| 10);
+
     let val = 10;
     let parameters = Some(String::from(val.clone().to_string()));
     let code = wat2wasm(ADD_ONE).unwrap();

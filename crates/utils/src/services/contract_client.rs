@@ -30,17 +30,17 @@ use subxt::{
 pub trait ContractClient {
     type C: Config;
     type E: Environment;
-    type Err: From<codec::Error>;
+    type Err: From<codec::Error> + From<subxt::Error>;
     type ContractEmitted: ContractEmittedT;
 
     fn contract_event_sub(
         &self,
         contract_address: <Self::C as Config>::AccountId,
     ) -> impl Future<
-        Output = Result<impl Stream<Item = Result<Self::ContractEmitted, subxt::Error>>, Self::Err>,
+        Output = Result<impl Stream<Item = Result<Self::ContractEmitted, Self::Err>>, Self::Err>,
     > + Send;
 
-    fn write<Ev: Decode, Args: Encode + Sync + Send>(
+    fn write<Ev: Decode + 'static, Args: Encode + Sync + Send>(
         &self,
         address: <Self::C as Config>::AccountId,
         message: &str,
@@ -86,7 +86,7 @@ where
     async fn contract_event_sub(
         &self,
         contract_address: <Self::C as Config>::AccountId,
-    ) -> Result<impl Stream<Item = Result<Self::ContractEmitted, subxt::Error>>, Self::Err> {
+    ) -> Result<impl Stream<Item = Result<Self::ContractEmitted, Self::Err>>, Self::Err> {
         let client = self.online_client().await?;
         let addr: AccountId32 = contract_address.into();
 
@@ -105,7 +105,8 @@ where
                 match ext.events().await {
                     Ok(ev) => Ok(Some(iter(
                         ev.find::<ContractEmitted>()
-                            .collect::<Vec<Result<ContractEmitted, subxt::Error>>>(),
+                            .map(|r| r.map_err(|e| <Self as ContractClient>::Err::from(e)))
+                            .collect::<Vec<Result<ContractEmitted, Self::Err>>>(),
                     ))),
                     Err(err) => Err(err),
                 }
@@ -560,5 +561,100 @@ impl ContractEmittedT for ContractEmitted {
 
     fn data(self) -> Vec<u8> {
         self.data
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    use ink::env::DefaultEnvironment;
+    use std::{any::Any, collections::HashMap, marker::Send, sync::Mutex};
+    use subxt::SubstrateConfig;
+
+    use crate::services::test::Expectation;
+
+    struct MockContractClient {
+        expectations: Mutex<HashMap<String, Box<dyn Any>>>,
+    }
+
+    impl MockContractClient {
+        fn _expect_contract_event_sub(
+            &mut self,
+        ) -> &mut Expectation<Result<Vec<Result<ContractEmitted, subxt::Error>>, ContractClientError>>
+        {
+            self._expectation::<Result<Vec<Result<ContractEmitted, subxt::Error>>, ContractClientError>>("contract_event_sub")
+        }
+
+        fn _expect_write<Ev: Decode + 'static>(
+            &mut self,
+        ) -> &mut Expectation<Result<Ev, ContractClientError>> {
+            self._expectation::<Result<Ev, ContractClientError>>("write")
+        }
+
+        fn _expectation<T: 'static>(&mut self, entry: &str) -> &mut Expectation<T> {
+            self.expectations
+                .get_mut()
+                .unwrap()
+                .entry(entry.to_string())
+                .or_insert_with(|| {
+                    let expectation: Expectation<T> = Expectation::new();
+                    Box::new(Some(expectation))
+                })
+                .downcast_mut::<Expectation<T>>()
+                .unwrap()
+        }
+
+        fn into_expectation<T: 'static>(&self, entry: &str) -> Box<Expectation<T>> {
+            self.expectations
+                .lock()
+                .unwrap()
+                .remove(entry)
+                .unwrap()
+                .downcast::<Expectation<T>>()
+                .unwrap()
+        }
+    }
+
+    impl ContractClient for MockContractClient {
+        type C = SubstrateConfig;
+        type E = DefaultEnvironment;
+        type Err = ContractClientError;
+        type ContractEmitted = ContractEmitted;
+
+        fn contract_event_sub(
+            &self,
+            _contract_address: <Self::C as Config>::AccountId,
+        ) -> impl Future<
+            Output = Result<
+                impl Stream<Item = Result<Self::ContractEmitted, Self::Err>>,
+                Self::Err,
+            >,
+        > + Send {
+            let expectation = self
+                .into_expectation::<Result<Vec<Result<ContractEmitted, ContractClientError>>, ContractClientError>>(
+                    "publish_message",
+                );
+            let res = expectation.func().unwrap()().map(|i| iter(i.into_iter()));
+
+            async { res }
+        }
+
+        fn write<Ev: Decode + 'static, Args: Encode + Sync + Send>(
+            &self,
+            _address: <Self::C as Config>::AccountId,
+            _message: &str,
+            _args: &Args,
+            _value: <Self::E as Environment>::Balance,
+        ) -> impl Future<Output = Result<Ev, Self::Err>> + Send {
+            let expectation = self.into_expectation::<Result<Ev, ContractClientError>>("write");
+            let func = expectation.func().unwrap();
+            async move { func() }
+        }
+
+        fn decode_event<Ev: Decode>(&self, mut ev_data: &[u8]) -> Result<Ev, Self::Err> {
+            let result = <Ev as Decode>::decode(&mut ev_data)?;
+            Ok(result)
+        }
     }
 }

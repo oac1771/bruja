@@ -34,6 +34,7 @@ where
     <C as Config>::AccountId: Display,
     S: Signer<C> + Wallet,
     CC: ContractClient<C = C>,
+    CC::Err: Display,
     NC: NetworkClient,
     JR: WasmJobRunnerService,
     WorkerControllerError: From<<NC as NetworkClient>::Err>
