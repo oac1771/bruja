@@ -54,10 +54,10 @@ jobs:
         run: |
           cargo make cargo-build
 
-      # - name: check node
-      #   shell: bash
-      #   run: |
-      #     cargo make local-node
+      - name: check node
+        shell: bash
+        run: |
+          cargo make local-node
 
       - name: Unit Tests
         shell: bash
@@ -72,6 +72,6 @@ jobs:
         shell: bash
         run: cargo make p2p-tests
 
-      # - name: Requester Worker Tests
-      #   shell: bash
-      #   run: cargo make requester-worker
+      - name: Requester Worker Tests
+        shell: bash
+        run: cargo make requester-worker
