@@ -54,6 +54,11 @@ jobs:
         run: |
           cargo make cargo-build
 
+      - name: check node
+        shell: bash
+        run: |
+          cargo make local-node
+          
       - name: Unit Tests
         shell: bash
         run: |
