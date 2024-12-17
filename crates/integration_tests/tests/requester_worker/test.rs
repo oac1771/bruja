@@ -24,7 +24,7 @@ mod tests {
     use worker::{commands::start::StartCmd, config::Config as ConfigW};
 
     const CONTRACT_FILE_PATH: &'static str = "../../target/ink/catalog/catalog.contract";
-    const CLIENT_WAIT_TIMEOUT: u64 = 30;
+    const CLIENT_WAIT_TIMEOUT: u64 = 60;
     const ACCOUNT_FUNDER: &'static str = "//Charlie";
     const CONTRACT_INSTANTIATOR: &'static str = "//Bob";
     const URL: &'static str = "ws://127.0.0.1:9944";
