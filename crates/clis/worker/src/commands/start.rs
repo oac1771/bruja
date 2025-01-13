@@ -1,4 +1,4 @@
-use crate::{config::Config, controller::worker::WorkerController, error::Error};
+use crate::{config::Config, error::Error, worker::WorkerController};
 use clap::Parser;
 use ink_env::DefaultEnvironment;
 use std::str::FromStr;

@@ -50,17 +50,6 @@ impl Request {
     }
 }
 
-// impl Request {
-//     pub fn build_job_req(components: (Vec<u8>, Vec<Vec<u8>>, Vec<u8>), who: Vec<u8>) -> Self {
-//         Self::Job {
-//             code: components.0,
-//             params: components.1,
-//             func_name: components.2,
-//             who,
-//         }
-//     }
-// }
-
 impl Response {
     pub fn decode(mut resp: &[u8]) -> Result<Self, codec::Error> {
         let res = <Response as Decode>::decode(&mut resp)?;

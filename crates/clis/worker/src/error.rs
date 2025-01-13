@@ -3,7 +3,7 @@ pub enum Error {
     #[error("{source}")]
     WorkerController {
         #[from]
-        source: crate::controller::worker::WorkerControllerError,
+        source: crate::worker::WorkerControllerError,
     },
 
     #[error("{source}")]

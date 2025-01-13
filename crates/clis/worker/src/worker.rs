@@ -1,4 +1,4 @@
-use catalog::catalog::{HashId, JobRequest, JobRequestSubmitted};
+use catalog::catalog::{HashId, JobRequest, JobRequestSubmitted, PaidWorker};
 use clis::{Gossip, Request, Response};
 use codec::Encode;
 use std::fmt::Display;
@@ -82,6 +82,13 @@ where
             .decode_event::<JobRequestSubmitted>(ev.data_ref())
         {
             self.handle_job_request(job_request).await
+        } else if let Ok(paid_worker) = self
+            .contract_client
+            .decode_event::<PaidWorker>(ev.data_ref())
+        {
+            let destination = paid_worker.destination;
+            info!("Worker {:?} has been paid", destination);
+            Ok(())
         } else {
             Err(WorkerControllerError::DecodeContractEvent { data: ev.data() })
         };

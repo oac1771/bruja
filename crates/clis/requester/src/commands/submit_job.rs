@@ -1,4 +1,4 @@
-use crate::{config::Config, controller::requester::RequesterController, error::Error};
+use crate::{config::Config, error::Error, requester::RequesterController};
 use clap::Parser;
 use ink_env::DefaultEnvironment;
 use ink_env::Environment;
